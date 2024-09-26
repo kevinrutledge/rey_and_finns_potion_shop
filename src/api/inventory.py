@@ -15,21 +15,16 @@ router = APIRouter(
 def get_inventory():
     """ """
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT num_green_potions, num_green_ml, gold FROM global_inventory"))
+        result = connection.execute(sqlalchemy.text("SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"))
         row = result.fetchone()
-        if row:
-            num_green_potions = row.num_green_potions
-            num_green_ml = row.num_green_ml
-            gold = row.gold
-        else:
-            num_green_potions = 0
-            num_green_ml = 0
-            gold = 100
+        num_potions = row['num_green_potions']
+        ml_in_barrels = row['num_green_ml']
+        gold = row['gold']
 
     return {
-        "number_of_potions": num_green_potions,
-        "ml_in_barrels": num_green_ml,
-        "gold": gold,
+        "number_of_potions": num_potions,
+        "ml_in_barrels": ml_in_barrels,
+        "gold": gold
     }
 
 # Gets called once a day
@@ -39,11 +34,10 @@ def get_capacity_plan():
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
-
     return {
         "potion_capacity": 0,
         "ml_capacity": 0
-        }
+    }
 
 class CapacityPurchase(BaseModel):
     potion_capacity: int

@@ -11,6 +11,9 @@ router = APIRouter(
     dependencies=[Depends(auth.get_api_key)],
 )
 
+carts = {}
+cart_items = {}
+
 class search_sort_options(str, Enum):
     customer_name = "customer_name"
     item_sku = "item_sku"
@@ -87,11 +90,9 @@ def post_visits(visit_id: int, customers: list[Customer]):
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
-    global cart_id_counter
-    global carts
-    cart_id = cart_id_counter
-    cart_id_counter += 1
-    carts[cart_id] = {"customer": new_cart, "items": {}}
+    cart_id = len(carts) + 1
+    carts[cart_id] = new_cart
+    cart_items[cart_id] = {}
     return {"cart_id": cart_id}
 
 
@@ -103,13 +104,10 @@ class CartItem(BaseModel):
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
     if cart_id in carts:
-        if item_sku == "GREEN_POTION_0":
-            carts[cart_id]["items"][item_sku] = cart_item.quantity
-            return {"success": True}
-        else:
-            return {"error": f"Item {item_sku} is not available in catalog"}
+        cart_items[cart_id][item_sku] = cart_item.quantity
+        return "OK"
     else:
-        return {"error": "Cart not found"}
+        return "Error"
 
 
 class CartCheckout(BaseModel):
@@ -119,46 +117,27 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     if cart_id in carts:
-        cart = carts[cart_id]
         total_potions_bought = 0
         total_gold_paid = 0
 
         with db.engine.begin() as connection:
-            result = connection.execute(
-                sqlalchemy.text("SELECT num_green_potions, gold FROM global_inventory")
-            )
-            row = result.fetchone()
-            if row:
-                num_green_potions = row.num_green_potions
-                gold = row.gold
+            result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory;"))
+            num_green_potions = result.fetchone()['num_green_potions']
+
+            for sku, quantity in cart_items[cart_id].items():
+                if sku == "GREEN_POTION_0":
+                    total_potions_bought += quantity
+                    total_gold_paid += quantity * 50
+
+            if total_potions_bought <= num_green_potions:
+                connection.execute(sqlalchemy.text(
+                    f"UPDATE global_inventory SET num_green_potions = num_green_potions - {total_potions_bought};"
+                ))
+                return {
+                    "total_potions_bought": total_potions_bought,
+                    "total_gold_paid": total_gold_paid
+                }
             else:
-                num_green_potions = 0
-                gold = 0
-
-            for item_sku, quantity in cart["items"].items():
-                if item_sku == "GREEN_POTION_0":
-                    if quantity > num_green_potions:
-                        purchasable_qty = num_green_potions
-                    else:
-                        purchasable_qty = quantity
-                    num_green_potions -= purchasable_qty
-                    total_potions_bought += purchasable_qty
-                    total_gold_paid += purchasable_qty * 50
-                else:
-                    continue
-
-            connection.execute(
-                sqlalchemy.text(
-                    "UPDATE global_inventory SET num_green_potions = :num_potions, gold = gold + :gold_received"
-                ),
-                {"num_potions": num_green_potions, "gold_received": total_gold_paid},
-            )
-
-        del carts[cart_id]
-
-        return {
-            "total_potions_bought": total_potions_bought,
-            "total_gold_paid": total_gold_paid,
-        }
+                return "Error"
     else:
-        return {"error": "Cart not found"}
+        return "Error"
