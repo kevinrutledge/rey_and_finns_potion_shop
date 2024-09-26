@@ -88,6 +88,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
 def create_cart(new_cart: Customer):
     """ """
     global cart_id_counter
+    global carts
     cart_id = cart_id_counter
     cart_id_counter += 1
     carts[cart_id] = {"customer": new_cart, "items": {}}
