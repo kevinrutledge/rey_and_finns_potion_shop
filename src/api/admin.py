@@ -19,7 +19,6 @@ def reset():
     """
     carts.clear()
     cart_items.clear()
-    # Reset the database inventory as well
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text("UPDATE global_inventory SET num_green_potions = 0, num_green_ml = 0, gold = 100;"))
 
