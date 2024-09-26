@@ -14,12 +14,15 @@ def get_catalog():
         result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory;"))
         num_green_potions = result.mappings().one()['num_green_potions']
 
-    return [
-        {
-            "sku": "GREEN_POTION_0",
-            "name": "green potion",
-            "quantity": num_green_potions,
-            "price": 50,
-            "potion_type": [0, 100, 0, 0],
-        }
-    ]
+    if num_green_potions > 0:
+        return [
+            {
+                "sku": "GREEN_POTION_0",
+                "name": "green potion",
+                "quantity": num_green_potions,
+                "price": 50,
+                "potion_type": [0, 100, 0, 0],
+            }
+        ]
+    else:
+        return []
