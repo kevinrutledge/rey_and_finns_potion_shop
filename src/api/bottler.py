@@ -57,16 +57,16 @@ def get_bottle_plan():
         else:
             num_green_ml = 0
 
-    num_potions = num_green_ml // 100  # Each potion requires 100 ml
+    num_potions = num_green_ml // 100
 
     plan = []
     if num_potions > 0:
         plan = [
-            {
-                "potion_type" = [0, 100, 0, 0]
-                "quanitity": num_potions
-            }
-        ]
+                {
+                    "potion_type": [0, 100, 0, 0],
+                    "quanitity": num_potions,
+                }
+            ]
 
     return plan
 
