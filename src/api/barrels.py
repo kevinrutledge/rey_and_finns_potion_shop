@@ -45,7 +45,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory;"))
-        num_green_potions = result.fetchone()['num_green_potions']
+        num_green_potions = result.mappings().one()['num_green_potions']
 
     purchase_plan = []
 

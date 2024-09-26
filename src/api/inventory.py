@@ -16,7 +16,7 @@ def get_inventory():
     """ """
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"))
-        row = result.fetchone()
+        row = result.mappings().one()
         num_potions = row['num_green_potions']
         ml_in_barrels = row['num_green_ml']
         gold = row['gold']
