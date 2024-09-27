@@ -24,7 +24,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
     with db.engine.begin() as connection:
         for barrel in barrels_delivered:
-            if barrel.potion_type == 1:
+            if barrel.potion_type == [0, 100, 0, 0]:
                 ml_added = barrel.ml_per_barrel * barrel.quantity
 
                 sqlStatementMl = sqlalchemy.text("""
