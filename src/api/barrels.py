@@ -55,7 +55,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     if num_green_potions < 10:
         for barrel in wholesale_catalog:
-            if barrel.potion_type == 1 and barrel.sku == "SMALL_GREEN_BARREL":
+            if barrel.sku == "SMALL_GREEN_BARREL":
                 purchase_plan.append({
                     "sku": barrel.sku,
                     "quantity": 1
