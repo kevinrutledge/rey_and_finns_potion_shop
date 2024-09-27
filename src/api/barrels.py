@@ -27,15 +27,19 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             if barrel.potion_type == 1:
                 ml_added = barrel.ml_per_barrel * barrel.quantity
 
-                connection.execute(sqlalchemy.text(
-                    f"UPDATE global_inventory SET num_green_ml = num_green_ml + {ml_added};"
-                ))
+                sqlStatementMl = sqlalchemy.text("""
+                    UPDATE global_inventory
+                    SET num_green_ml = num_green_ml + :ml_added
+                """)
+                connection.execute(sqlStatementMl, {'ml_added': ml_added})
 
                 gold_spent = barrel.price * barrel.quantity
 
-                connection.execute(sqlalchemy.text(
-                    f"UPDATE global_inventory SET gold = gold - {gold_spent};"
-                ))
+                sqlStatementGold = sqlalchemy.text("""
+                    UPDATE global_inventory
+                    SET gold = gold - :gold_spent
+                """)
+                connection.execute(sqlStatementGold, {'gold_spent': gold_spent})
 
     return "OK"
 
@@ -57,4 +61,5 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                     "quantity": 1
                 })
                 break
+
     return purchase_plan
