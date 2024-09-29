@@ -1,4 +1,5 @@
 import sqlalchemy
+import logging
 from src import database as db
 from fastapi import APIRouter, Depends
 from enum import Enum
@@ -18,6 +19,9 @@ class PotionInventory(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
+    logging.debug(f"Potions delivered: {potions_delivered}")
+    logging.debug(f"Order Id: {order_id}")
+
     with db.engine.begin() as connection:
         for potion in potions_delivered:
             if potion.potion_type == [0, 100, 0, 0]:
@@ -63,6 +67,8 @@ def get_bottle_plan():
                 "quantity": num_potions
             }
         ]
+    
+    logging.debug(f"Number of potions: {num_potions}")
 
     return []
 

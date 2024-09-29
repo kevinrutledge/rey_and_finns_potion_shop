@@ -1,4 +1,5 @@
 import sqlalchemy
+import logging
 from src import database as db
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -50,5 +51,7 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
+    logging.debug(f"Capacity Purchase: {capacity_purchase}")
+    logging.debug(f"Order Id: {order_id}")
 
     return "OK"

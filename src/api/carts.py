@@ -1,4 +1,5 @@
 import sqlalchemy
+import logging
 from src import database as db
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
@@ -103,6 +104,10 @@ class CartItem(BaseModel):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
+    logging.debug(f"Cart Id: {cart_id}")
+    logging.debug(f"Item SKU: {item_sku}")
+    logging.debug(f"Cart Item: {cart_item}")
+
     if cart_id in carts:
         cart_items[cart_id][item_sku] = cart_item.quantity
         return "OK"
@@ -116,6 +121,9 @@ class CartCheckout(BaseModel):
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
+    logging.debug(f"Cart Id: {cart_id}")
+    logging.debug(f"Cart Checkout: {cart_checkout}")
+
     if cart_id in carts:
         total_potions_bought = 0
         total_gold_paid = 0
@@ -130,11 +138,20 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                     total_gold_paid += quantity * 50
 
             if total_potions_bought <= num_green_potions:
-                sqlStatement = sqlalchemy.text("""
+                sql_update_potions = sqlalchemy.text("""
                     UPDATE global_inventory
                     SET num_green_potions = num_green_potions - :total_potions_bought
                 """)
-                connection.execute(sqlStatement, {'total_potions_bought': total_potions_bought})
+                connection.execute(sql_update_potions, {'total_potions_bought': total_potions_bought})
+
+                sql_update_gold = sqlalchemy.text("""
+                    UPDATE global_inventory
+                    SET gold = gold + :total_gold_paid
+                """)
+                connection.execute(sql_update_gold, {'total_gold_paid': total_gold_paid})
+
+                logging.debug(f"Total Potions Bough: {total_potions_bought}")
+                logging.debug(f"Total Gold Paid: {total_gold_paid}")
 
                 return {
                     "total_potions_bought": total_potions_bought,

@@ -1,4 +1,5 @@
 import sqlalchemy
+import logging
 from src import database as db
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel

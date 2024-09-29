@@ -1,4 +1,5 @@
 import sqlalchemy
+import logging
 from src import database as db
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -22,9 +23,12 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
+    logging.debug(f"Barrels delivered: {barrels_delivered}")
+    logging.debug(f"Order Id: {order_id}")
+
     with db.engine.begin() as connection:
         for barrel in barrels_delivered:
-            if barrel.potion_type == [0, 100, 0, 0]:
+            if barrel.potion_type == [0, 1, 0, 0]:
                 ml_added = barrel.ml_per_barrel * barrel.quantity
 
                 sqlStatementMl = sqlalchemy.text("""
@@ -47,6 +51,8 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
+    logging.debug(f"Wholesale catalog: {wholesale_catalog}")
+
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory;"))
         num_green_potions = result.mappings().one()['num_green_potions']
@@ -61,5 +67,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                     "quantity": 1
                 })
                 break
+    
+    logging.debug(f"Purchase plan: {purchase_plan}")
 
     return purchase_plan
