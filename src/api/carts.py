@@ -6,10 +6,7 @@ from pydantic import BaseModel
 from src.api import auth
 from enum import Enum
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/carts",
@@ -88,9 +85,9 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     Which customers visited the shop today?
     """
-    logging.debug("carts/visits/visit_id - in")
-    logging.debug(f"Visit ID: {visit_id}")
-    logging.debug(f"Customers: {customers}")
+    logger.debug("carts/visits/visit_id - in")
+    logger.debug(f"Visit ID: {visit_id}")
+    logger.debug(f"Customers: {customers}")
 
     return "OK"
 
@@ -98,15 +95,15 @@ def post_visits(visit_id: int, customers: list[Customer]):
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
-    logging.debug("carts/ Create Cart - in")
-    logging.debug(f"New Cart: {Customer}")
+    logger.debug("carts/ Create Cart - in")
+    logger.debug(f"New Cart: {Customer}")
 
     cart_id = len(carts) + 1
     carts[cart_id] = new_cart
     cart_items[cart_id] = {}
 
-    logging.debug("carts/ Create Cart - out")
-    logging.debug(f"Cart ID: {cart_id}")
+    logger.debug("carts/ Create Cart - out")
+    logger.debug(f"Cart ID: {cart_id}")
     return {"cart_id": cart_id}
 
 
@@ -117,10 +114,10 @@ class CartItem(BaseModel):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
-    logging.debug("carts/cart_id/items/item_sku - in")
-    logging.debug(f"Cart Id: {cart_id}")
-    logging.debug(f"Item SKU: {item_sku}")
-    logging.debug(f"Cart Item: {cart_item}")
+    logger.debug("carts/cart_id/items/item_sku - in")
+    logger.debug(f"Cart Id: {cart_id}")
+    logger.debug(f"Item SKU: {item_sku}")
+    logger.debug(f"Cart Item: {cart_item}")
 
     if cart_id in carts:
         cart_items[cart_id][item_sku] = cart_item.quantity
@@ -135,17 +132,20 @@ class CartCheckout(BaseModel):
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
-    logging.debug("carts/cart_id/checkout - in")
-    logging.debug(f"Cart Id: {cart_id}")
-    logging.debug(f"Cart Checkout: {cart_checkout}")
+    logger.debug("carts/cart_id/checkout - in")
+    logger.debug(f"Cart Id: {cart_id}")
+    logger.debug(f"Cart Checkout: {cart_checkout}")
 
     if cart_id in carts:
         total_potions_bought = 0
         total_gold_paid = 0
 
         with db.engine.begin() as connection:
-            result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory;"))
-            num_green_potions = result.mappings().one()['num_green_potions']
+            sql_statement_select = "SELECT num_green_potions FROM global_inventory;"
+            result = connection.execute(sqlalchemy.text(sql_statement_select))
+            row = result.mappings().one()
+
+            num_green_potions = row['num_green_potions']
 
             for sku, quantity in cart_items[cart_id].items():
                 if sku == "GREEN_POTION_0":
@@ -165,15 +165,17 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 """)
                 connection.execute(sql_update_gold, {'total_gold_paid': total_gold_paid})
 
-                logging.debug("carts/cart_id/checkout - out")
-                logging.debug(f"Total Potions Bough: {total_potions_bought}")
-                logging.debug(f"Total Gold Paid: {total_gold_paid}")
+                logger.debug("carts/cart_id/checkout - out")
+                logger.debug(f"Total Potions Bough: {total_potions_bought}")
+                logger.debug(f"Total Gold Paid: {total_gold_paid}")
 
                 return {
                     "total_potions_bought": total_potions_bought,
                     "total_gold_paid": total_gold_paid
                 }
             else:
-                return "Error"
+                logger.error("Not enough potions in inventory.")
+                raise HTTPException(status_code=400, detail="Not enough potions in inventory.")
     else:
-        return "Error"
+        logger.error(f"Cart {cart_id} not found.")
+        raise HTTPException(status_code=404, detail="Cart not found.")

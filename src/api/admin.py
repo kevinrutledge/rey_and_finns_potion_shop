@@ -6,10 +6,7 @@ from pydantic import BaseModel
 from src.api import auth
 from src.api.carts import carts, cart_items
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/admin",
@@ -40,13 +37,15 @@ def reset():
 
         sql_statement_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
         result = connection.execute(sqlalchemy.text(sql_statement_select))
-        num_green_potions = result.mappings().one()['num_green_potions']
-        num_green_ml = result.mappings().one()['num_green_ml']
-        gold = result.mappings().one()['gold']
+        row = result.mappings().one()
 
-    logging.debug("admin/reset - out")
-    logging.debug(f"Num Green Potions: {num_green_potions}")
-    logging.debug(f"Num Green ml: {num_green_ml}")
-    logging.debug(f"Gold: {gold}")
+        num_green_potions = row['num_green_potions']
+        num_green_ml = row['num_green_ml']
+        gold = row['gold']
+
+    logger.debug("admin/reset - out")
+    logger.debug(f"Num Green Potions: {num_green_potions}")
+    logger.debug(f"Num Green ml: {num_green_ml}")
+    logger.debug(f"Gold: {gold}")
 
     return "OK"

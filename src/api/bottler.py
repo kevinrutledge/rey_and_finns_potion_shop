@@ -6,10 +6,7 @@ from enum import Enum
 from pydantic import BaseModel
 from src.api import auth
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/bottler",
@@ -24,15 +21,26 @@ class PotionInventory(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
-    logging.debug("bottler/deliver - in")
-    logging.debug(f"Potions delivered: {potions_delivered}")
-    logging.debug(f"Order Id: {order_id}")
+    logger.debug("bottler/deliver - in")
+    logger.debug(f"Potions delivered: {potions_delivered}")
+    logger.debug(f"Order Id: {order_id}")
 
     with db.engine.begin() as connection:
         for potion in potions_delivered:
             if potion.potion_type == [0, 100, 0, 0]:
                 num_potions = potion.quantity
                 ml_used = num_potions * 100
+
+                sql_statement_select = "SELECT num_green_potions, num_green_ml FROM global_inventory;"
+                result = connection.execute(sqlalchemy.text(sql_statement_select))
+                row = result.mappings().one()
+
+                num_green_potions = row['num_green_potions']
+                num_green_ml = row['num_green_ml']
+
+                if ml_used > num_green_ml:
+                    logger.error("Not enough ml to brew potions.")
+                    raise HTTPException(status_code=400, detail="Not enough ml to brew potions.")
 
                 sql_statement_potions = sqlalchemy.text("""
                     UPDATE global_inventory
@@ -46,14 +54,9 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 """)
                 connection.execute(sql_statement_ml, {'ml_used': ml_used})
 
-    sql_statement_select = "SELECT num_green_potions, num_green_ml FROM global_inventory;"
-    result = connection.execute(sqlalchemy.text(sql_statement_select))
-    num_green_potions = result.mappings().one()['num_green_potions']
-    num_green_ml = result.mappings().one()['num_green_ml']
-    
-    logging.debug("bottler/deliver - out")
-    logging.debug(f"Num Green Potions: {num_green_potions}")
-    logging.debug(f"Num Green ml: {num_green_ml}")
+    logger.debug("bottler/deliver - out")
+    logger.debug(f"Num Green Potions: {num_green_potions}")
+    logger.debug(f"Num Green ml: {num_green_ml}")
 
     return "OK"
 
@@ -79,8 +82,8 @@ def get_bottle_plan():
     if num_potions > 0:
         return return_plan
     
-    logging.debug("bottler/plan - out")
-    logging.debug(f"Number of potions: {return_plan}")
+    logger.debug("bottler/plan - out")
+    logger.debug(f"Number of potions: {return_plan}")
 
     return []
 

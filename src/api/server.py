@@ -7,6 +7,14 @@ import logging
 import sys
 from starlette.middleware.cors import CORSMiddleware
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
 description = """
 Central Coast Cauldrons is the premier ecommerce site for all your alchemical desires.
 """

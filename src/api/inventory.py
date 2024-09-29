@@ -6,10 +6,7 @@ from pydantic import BaseModel
 from src.api import auth
 import math
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/inventory",
@@ -21,8 +18,10 @@ router = APIRouter(
 def get_inventory():
     """ """
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"))
+        sql_statement_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
+        result = connection.execute(sqlalchemy.text(sql_statement_select))
         row = result.mappings().one()
+        
         num_potions = row['num_green_potions']
         ml_in_barrels = row['num_green_ml']
         gold = row['gold']
@@ -33,8 +32,8 @@ def get_inventory():
         "gold": gold
     }
 
-    logging.debug("inventory/audit - out")
-    logging.debug(f"Inventory: {return_inventory}")
+    logger.debug("inventory/audit - out")
+    logger.debug(f"Inventory: {return_inventory}")
 
     return return_inventory
 
@@ -47,8 +46,8 @@ def get_capacity_plan():
     """
     return_capacity_plan = {"potion_capacity": 0, "ml_capacity": 0}
 
-    logging.debug("inventory/plan Get Capacity Plan - out")
-    logging.debug(f"Capacity Plan: {return_capacity_plan}")
+    logger.debug("inventory/plan Get Capacity Plan - out")
+    logger.debug(f"Capacity Plan: {return_capacity_plan}")
 
     return return_capacity_plan
 
@@ -63,8 +62,8 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
-    logging.debug("inventory/deliver/order_id - Deliver Capacity Plan - in")
-    logging.debug(f"Capacity Purchase: {capacity_purchase}")
-    logging.debug(f"Order Id: {order_id}")
+    logger.debug("inventory/deliver/order_id - Deliver Capacity Plan - in")
+    logger.debug(f"Capacity Purchase: {capacity_purchase}")
+    logger.debug(f"Order Id: {order_id}")
 
     return "OK"
