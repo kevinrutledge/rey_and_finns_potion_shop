@@ -79,11 +79,11 @@ def get_bottle_plan():
     num_potions = num_green_ml // 100
     return_plan = [{"potion_type": [0, 100, 0, 0], "quantity": num_potions}]
 
-    if num_potions > 0:
-        return return_plan
-    
     logger.debug("bottler/plan - out")
     logger.debug(f"Number of potions: {return_plan}")
+
+    if num_potions > 0:
+        return return_plan
 
     return []
 
