@@ -20,12 +20,6 @@ class Barrel(BaseModel):
     price: int
     quantity: int
 
-    @validator('potion_type')
-    def potion_type_must_sum_to_100(cls, potion_type_value):
-        if sum(potion_type_value) != 100:
-            raise ValueError('potion_type must sum to 100')
-        return potion_type_value
-
     @validator('ml_per_barrel', 'price', 'quantity')
     def values_must_be_positive(cls, field_value, field):
         if field_value < 0:
