@@ -88,7 +88,9 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     Which customers visited the shop today?
     """
-    print(customers)
+    logging.debug("carts/visits/visit_id - in")
+    logging.debug(f"Visit ID: {visit_id}")
+    logging.debug(f"Customers: {customers}")
 
     return "OK"
 
@@ -96,9 +98,15 @@ def post_visits(visit_id: int, customers: list[Customer]):
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
+    logging.debug("carts/ Create Cart - in")
+    logging.debug(f"New Cart: {Customer}")
+
     cart_id = len(carts) + 1
     carts[cart_id] = new_cart
     cart_items[cart_id] = {}
+
+    logging.debug("carts/ Create Cart - out")
+    logging.debug(f"Cart ID: {cart_id}")
     return {"cart_id": cart_id}
 
 
@@ -109,6 +117,7 @@ class CartItem(BaseModel):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
+    logging.debug("carts/cart_id/items/item_sku - in")
     logging.debug(f"Cart Id: {cart_id}")
     logging.debug(f"Item SKU: {item_sku}")
     logging.debug(f"Cart Item: {cart_item}")
@@ -126,6 +135,7 @@ class CartCheckout(BaseModel):
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
+    logging.debug("carts/cart_id/checkout - in")
     logging.debug(f"Cart Id: {cart_id}")
     logging.debug(f"Cart Checkout: {cart_checkout}")
 
@@ -155,6 +165,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 """)
                 connection.execute(sql_update_gold, {'total_gold_paid': total_gold_paid})
 
+                logging.debug("carts/cart_id/checkout - out")
                 logging.debug(f"Total Potions Bough: {total_potions_bought}")
                 logging.debug(f"Total Gold Paid: {total_gold_paid}")
 

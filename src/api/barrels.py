@@ -28,6 +28,7 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
+    logging.debug("Barrels/deliver - in")
     logging.debug(f"Barrels delivered: {barrels_delivered}")
     logging.debug(f"Order Id: {order_id}")
 
@@ -49,6 +50,10 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                     SET gold = gold - :gold_spent
                 """)
                 connection.execute(sqlStatementGold, {'gold_spent': gold_spent})
+    
+    logging.debug(f"Barrels/deliver - out")
+    logging.debug(f"ml added: {ml_added}")
+    logging.debug(f"Gold spent: {gold_spent}")
 
     return "OK"
 
@@ -56,6 +61,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
+    logging.debug("barrles/plan - in")
     logging.debug(f"Wholesale catalog: {wholesale_catalog}")
 
     with db.engine.begin() as connection:
@@ -73,6 +79,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 })
                 break
     
+    logging.debug("barrels/plan - out")
     logging.debug(f"Purchase plan: {purchase_plan}")
 
     return purchase_plan

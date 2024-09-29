@@ -21,7 +21,7 @@ def get_catalog():
         num_green_potions = result.mappings().one()['num_green_potions']
 
     if num_green_potions > 0:
-        return [
+        return_catalog = [
             {
                 "sku": "GREEN_POTION_0",
                 "name": "green potion",
@@ -31,4 +31,9 @@ def get_catalog():
             }
         ]
     else:
-        return []
+        return_catalog = []
+
+    logging.debug("catalog/ Get Catalog - out")
+    logging.debug(f"Catalog: {return_catalog}")
+
+    return return_catalog

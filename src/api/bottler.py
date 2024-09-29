@@ -24,6 +24,7 @@ class PotionInventory(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
+    logging.debug("bottler/deliver - in")
     logging.debug(f"Potions delivered: {potions_delivered}")
     logging.debug(f"Order Id: {order_id}")
 
@@ -33,17 +34,26 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 num_potions = potion.quantity
                 ml_used = num_potions * 100
 
-                sqlStatementPotions = sqlalchemy.text("""
+                sql_statement_potions = sqlalchemy.text("""
                     UPDATE global_inventory
                     SET num_green_potions = num_green_potions + :num_potions
                 """)
-                connection.execute(sqlStatementPotions, {'num_potions': num_potions})
+                connection.execute(sql_statement_potions, {'num_potions': num_potions})
 
-                sqlStatementMl = sqlalchemy.text("""
+                sql_statement_ml = sqlalchemy.text("""
                     UPDATE global_inventory
                     SET num_green_ml = num_green_ml - :ml_used
                 """)
-                connection.execute(sqlStatementMl, {'ml_used': ml_used})
+                connection.execute(sql_statement_ml, {'ml_used': ml_used})
+
+    sql_statement_select = "SELECT num_green_potions, num_green_ml FROM global_inventory;"
+    result = connection.execute(sqlalchemy.text(sql_statement_select))
+    num_green_potions = result.mappings().one()['num_green_potions']
+    num_green_ml = result.mappings().one()['num_green_ml']
+    
+    logging.debug("bottler/deliver - out")
+    logging.debug(f"Num Green Potions: {num_green_potions}")
+    logging.debug(f"Num Green ml: {num_green_ml}")
 
     return "OK"
 
@@ -64,16 +74,13 @@ def get_bottle_plan():
         num_green_ml = result.mappings().one()['num_green_ml']
 
     num_potions = num_green_ml // 100
+    return_plan = [{"potion_type": [0, 100, 0, 0], "quantity": num_potions}]
 
     if num_potions > 0:
-        return [
-            {
-                "potion_type": [0, 100, 0, 0],
-                "quantity": num_potions
-            }
-        ]
+        return return_plan
     
-    logging.debug(f"Number of potions: {num_potions}")
+    logging.debug("bottler/plan - out")
+    logging.debug(f"Number of potions: {return_plan}")
 
     return []
 
