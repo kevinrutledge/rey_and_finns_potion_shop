@@ -6,6 +6,11 @@ from pydantic import BaseModel
 from src.api import auth
 from enum import Enum
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 router = APIRouter(
     prefix="/carts",
     tags=["cart"],

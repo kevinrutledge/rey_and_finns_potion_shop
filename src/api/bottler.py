@@ -6,6 +6,11 @@ from enum import Enum
 from pydantic import BaseModel
 from src.api import auth
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 router = APIRouter(
     prefix="/bottler",
     tags=["bottler"],

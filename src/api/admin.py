@@ -6,6 +6,11 @@ from pydantic import BaseModel
 from src.api import auth
 from src.api.carts import carts, cart_items
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 router = APIRouter(
     prefix="/admin",
     tags=["admin"],

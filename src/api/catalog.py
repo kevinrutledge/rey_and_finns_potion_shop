@@ -3,6 +3,11 @@ import logging
 from src import database as db
 from fastapi import APIRouter
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 router = APIRouter()
 
 

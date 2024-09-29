@@ -6,6 +6,11 @@ from pydantic import BaseModel
 from src.api import auth
 import math
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 router = APIRouter(
     prefix="/inventory",
     tags=["inventory"],
