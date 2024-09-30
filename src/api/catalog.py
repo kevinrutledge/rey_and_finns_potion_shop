@@ -18,8 +18,8 @@ def get_catalog():
 
     try:
         with db.engine.begin() as connection:
-            sql_statement_select = "SELECT num_green_potions FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_statement_select))
+            sql_select = "SELECT num_green_potions FROM global_inventory;"
+            result = connection.execute(sqlalchemy.text(sql_select))
             row = result.mappings().one_or_none()
 
             if row is None:

@@ -14,14 +14,23 @@ router = APIRouter(
     dependencies=[Depends(auth.get_api_key)],
 )
 
+POTION_TYPE_MAP = {
+    tuple([100, 0, 0, 0]): 'red',    # Red Potion
+    tuple([0, 100, 0, 0]): 'green',  # Green Potion
+    tuple([0, 0, 100, 0]): 'blue',   # Blue Potion
+    tuple([0, 0, 0, 100]): 'dark',   # Dark Potion
+}
+
 class PotionInventory(BaseModel):
     potion_type: list[int]
     quantity: int
 
     @validator('potion_type')
     def potion_type_must_sum_to_100(cls, potion_type_value):
+        if len(potion_type_value) != 4:
+            raise ValueError('potion_type must have exactly four elements.')
         if sum(potion_type_value) != 100:
-            raise ValueError('potion_type must sum to 100')
+            raise ValueError('potion_type must sum to 100.')
         return potion_type_value
 
     @validator('quantity')
@@ -39,49 +48,78 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     logger.debug(f"Potions delivered: {potions_delivered}")
     logger.debug(f"Order Id: {order_id}")
 
+    total_potions_added = {}
+    total_ml_used = {}
+
     try:
         with db.engine.begin() as connection:
+            # Fetch current inventory once
+            sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
+            result = connection.execute(sqlalchemy.text(sql_select))
+            inventory = result.mappings().one_or_none()
+
+            if inventory is None:
+                logger.error("No inventory record found.")
+                raise HTTPException(status_code=500, detail="Inventory record not found.")
+
+            logger.debug(f"Current Inventory: {inventory}")
+
+            # Initialize totals
+            for potion_key in POTION_TYPE_MAP.values():
+                total_potions_added[potion_key] = 0
+                total_ml_used[potion_key] = 0
+
+            # Process each delivered potion
             for potion in potions_delivered:
-                if potion.potion_type == [0, 100, 0, 0]:
-                    num_potions = potion.quantity
-                    ml_used = num_potions * 100
+                potion_key = tuple(potion.potion_type)
+                potion_category = POTION_TYPE_MAP.get(potion_key, None)
 
-                    # Fetch current inventory
-                    sql_statement_select = "SELECT num_green_potions, num_green_ml FROM global_inventory;"
-                    result = connection.execute(sqlalchemy.text(sql_statement_select))
-                    row = result.mappings().one_or_none()
+                if potion_category is None:
+                    logger.error(f"Unknown potion type: {potion.potion_type}")
+                    raise HTTPException(status_code=400, detail=f"Unknown potion type: {potion.potion_type}")
 
-                    if row is None:
-                        logger.error("No inventory record found.")
-                        raise HTTPException(status_code=500, detail="Inventory record not found.")
+                num_potions = potion.quantity
+                ml_used = num_potions * 100  # Assuming each potion uses 100 ml
 
-                    num_green_potions = row['num_green_potions']
-                    num_green_ml = row['num_green_ml']
-                    logger.debug(f"Current Inventory - Potions: {num_green_potions}, ML: {num_green_ml}")
+                total_potions_added[potion_category] += num_potions
+                total_ml_used[potion_category] += ml_used
 
-                    if ml_used > num_green_ml:
-                        logger.error("Not enough volume to make potions.")
-                        raise HTTPException(status_code=400, detail="Not enough volume to make potions.")
+                logger.debug(f"Processing {num_potions} {potion_category} potions, using {ml_used} ml.")
 
+            # Check inventory for each potion
+            for category, ml_used in total_ml_used.items():
+                current_ml = inventory.get(f"num_{category}_ml", 0)
+                if ml_used > current_ml:
+                    logger.error(f"Not enough volume to make {category} potions.")
+                    raise HTTPException(status_code=400, detail=f"Not enough volume to make {category} potions.")
+
+            # Update inventory for each potion
+            for category, potions_added in total_potions_added.items():
+                if potions_added > 0:
                     # Update potions
-                    sql_statement_potions = sqlalchemy.text("""
+                    sql_update_potions = sqlalchemy.text(f"""
                         UPDATE global_inventory
-                        SET num_green_potions = num_green_potions + :num_potions
+                        SET num_{category}_potions = num_{category}_potions + :potions_added
+                        WHERE id = :inventory_id
                     """)
-                    connection.execute(sql_statement_potions, {'num_potions': num_potions})
-                    logger.debug(f"Updated Potions: Added {num_potions} green potions.")
+                    connection.execute(sql_update_potions, {'potions_added': potions_added, 'inventory_id': inventory['id']})
+                    logger.debug(f"Updated Potions: Added {potions_added} {category} potions.")
 
+            for category, ml_used in total_ml_used.items():
+                if ml_used > 0:
                     # Subtract used volume
-                    sql_statement_ml = sqlalchemy.text("""
+                    sql_update_ml = sqlalchemy.text(f"""
                         UPDATE global_inventory
-                        SET num_green_ml = num_green_ml - :ml_used
+                        SET num_{category}_ml = num_{category}_ml - :ml_used
+                        WHERE id = :inventory_id
                     """)
-                    connection.execute(sql_statement_ml, {'ml_used': ml_used})
-                    logger.debug(f"Updated ML: Subtracted {ml_used} ml from inventory.")
+                    connection.execute(sql_update_ml, {'ml_used': ml_used, 'inventory_id': inventory['id']})
+                    logger.debug(f"Updated ML: Subtracted {ml_used} ml from {category} inventory.")
 
             logger.debug("bottler/deliver - out")
-            logger.debug(f"Num Green Potions after delivery: {num_green_potions + num_potions}")
-            logger.debug(f"Num Green volume after delivery: {num_green_ml - ml_used}")
+            for category in POTION_TYPE_MAP.values():
+                logger.debug(f"Total {category.capitalize()} Potions Added: {total_potions_added[category]}")
+                logger.debug(f"Total {category.capitalize()} ML Used: {total_ml_used[category]}")
 
         return {"status": "OK"}
 
@@ -95,10 +133,10 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
         logger.exception("Unexpected error during bottler/deliver")
         raise HTTPException(status_code=500, detail="Internal Server Error.")
 
-@router.post("/plan", summary="Get Bottle Plan", description="Generates a bottle production plan based on global inventory.")
+@router.post("/plan", summary="Get Bottle Plan", description="Generates bottle production plan based on global inventory.")
 def get_bottle_plan():
     """
-    Generate a bottle plan based on available volume in globa_inventory.
+    Generate bottle plan based on available volume in globa_inventory.
     """
 
     # Each bottle has a quantity of what proportion of red, blue, and

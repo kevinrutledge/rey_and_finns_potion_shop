@@ -66,8 +66,8 @@ def get_inventory():
 
     try:
         with db.engine.begin() as connection:
-            sql_statement_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_statement_select))
+            sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
+            result = connection.execute(sqlalchemy.text(sql_select))
             row = result.mappings().one_or_none()
 
             if row is None:
@@ -97,7 +97,7 @@ def get_inventory():
         raise HTTPException(status_code=500, detail="Internal Server Error.")
 
 # Gets called once a day
-@router.post("/plan", summary="Get Capacity Plan", description="Generates a capacity purchase plan based on current inventory.")
+@router.post("/plan", summary="Get Capacity Plan", description="Generates capacity purchase plan based on current inventory.")
 def get_capacity_plan():
     """ 
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
@@ -108,8 +108,8 @@ def get_capacity_plan():
     try:
         with db.engine.begin() as connection:
             # Fetch current inventory
-            sql_statement_select = "SELECT num_green_potions, num_green_ml FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_statement_select))
+            sql_select = "SELECT num_green_potions, num_green_ml FROM global_inventory;"
+            result = connection.execute(sqlalchemy.text(sql_select))
             row = result.mappings().one_or_none()
 
             if row is None:
@@ -161,8 +161,8 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     try:
         with db.engine.begin() as connection:
             # Fetch current gold
-            sql_statement_select = "SELECT gold FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_statement_select))
+            sql_select = "SELECT gold FROM global_inventory;"
+            result = connection.execute(sqlalchemy.text(sql_select))
             row = result.mappings().one_or_none()
 
             if row is None:

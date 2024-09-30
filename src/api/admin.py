@@ -28,13 +28,13 @@ def reset():
 
         with db.engine.begin() as connection:
             # Reset inventory in global database
-            sql_statement_reset = sqlalchemy.text("""
+            sql_reset = sqlalchemy.text("""
                 UPDATE global_inventory
                 SET num_green_potions = :num_green_potions,
                     num_green_ml = :num_green_ml,
                     gold = :gold
             """)
-            connection.execute(sql_statement_reset, {
+            connection.execute(sql_reset, {
                 'num_green_potions': 0,
                 'num_green_ml': 0,
                 'gold': 100
@@ -42,8 +42,8 @@ def reset():
             logger.debug("Executed inventory reset SQL statement.")
 
             # Select updated inventory
-            sql_statement_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_statement_select))
+            sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
+            result = connection.execute(sqlalchemy.text(sql_select))
             row = result.mappings().one_or_none()  # Use one_or_none to handle empty results
 
             if row is None:

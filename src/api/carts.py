@@ -110,10 +110,10 @@ class Customer(BaseModel):
     level: int
 
     @validator('customer_name')
-    def validate_customer_name(cls, customer_name_value):
-        if not customer_name_value.strip():
+    def validate_customer_name(cls, name_value):
+        if not name_value.strip():
             raise ValueError('Customer name must not be empty')
-        return customer_name_value
+        return name_value
 
     @validator('level')
     def level_must_be_positive(cls, level_value):
@@ -139,7 +139,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
         logger.exception("Error during carts/visits")
         raise HTTPException(status_code=500, detail="Internal Server Error.")
 
-@router.post("/", summary="Create Cart", description="Create a new cart for a customer.")
+@router.post("/", summary="Create Cart", description="Create new cart for customer.")
 def create_cart(new_cart: Customer):
     """ """
     logger.debug("carts/ Create Cart - in")
@@ -204,7 +204,7 @@ class CartCheckout(BaseModel):
             raise ValueError('Payment method must not be empty')
         return payment_value
 
-@router.post("/{cart_id}/checkout", summary="Set Item Quantity", description="Set quantity of a specific item in cart.")
+@router.post("/{cart_id}/checkout", summary="Set Item Quantity", description="Set quantity of specific item in cart.")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """
    Checkout cart.
@@ -220,8 +220,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
             with db.engine.begin() as connection:
                 # Fetch number of green potions from global inventory
-                sql_statement_select = "SELECT num_green_potions FROM global_inventory;"
-                result = connection.execute(sqlalchemy.text(sql_statement_select))
+                sql_select = "SELECT num_green_potions FROM global_inventory;"
+                result = connection.execute(sqlalchemy.text(sql_select))
                 row = result.mappings().one_or_none()
 
                 if row is None:
