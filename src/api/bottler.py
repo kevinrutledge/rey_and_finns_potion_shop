@@ -54,7 +54,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     try:
         with db.engine.begin() as connection:
             # Fetch current inventory once
-            sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
+            sql_select = "SELECT id, num_green_potions, num_green_ml, gold FROM global_inventory;"
             result = connection.execute(sqlalchemy.text(sql_select))
             inventory = result.mappings().one_or_none()
 
@@ -146,6 +146,7 @@ def get_bottle_plan():
     # Initial logic: bottle all barrels into red potions.
 
     logger.debug("bottler/plan - in")
+    
     try:
         with db.engine.begin() as connection:
             result = connection.execute(sqlalchemy.text("SELECT num_green_ml FROM global_inventory;"))
