@@ -25,18 +25,21 @@ class CapacityManager:
         # Initialize with 1 capacity unit each
         self.potion_capacity_units = 1
         self.ml_capacity_units = 1
+        logger.debug(f"Initialized CapacityManager with potion_capacity_units={self.potion_capacity_units}, ml_capacity_units={self.ml_capacity_units}")
 
     def get_current_capacity(self):
-        return {
+        capacity = {
             "potion_capacity": self.potion_capacity_units,
             "ml_capacity": self.ml_capacity_units
         }
+        logger.debug(f"Current capacity: {capacity}")
+        return capacity
 
     def add_capacity(self, potion_units: int, ml_units: int):
         self.potion_capacity_units += potion_units
         self.ml_capacity_units += ml_units
-        logger.debug(f"Potion Units: {self.potion_capacity_units}")
-        logger.debug(f"Volume Units: {self.ml_capacity_units}")
+        logger.info(f"Added capacity - Potion Units: {potion_units}, ML Units: {ml_units}")
+        logger.debug(f"Updated capacities: potion_capacity_units={self.potion_capacity_units}, ml_capacity_units={self.ml_capacity_units}")
 
 # Initialize Capacity Manager
 capacity_manager = CapacityManager()
@@ -46,11 +49,15 @@ class CapacityPurchase(BaseModel):
     potion_capacity: int
     ml_capacity: int
 
-    @validator('potion_capacity', 'ml_capacity')
-    def capacity_must_be_non_negative(cls, capacity_value, field):
-        if capacity_value < 0:
-            raise ValueError(f"{field.name} must be non-negative")
-        return capacity_value
+    def validate_purchase(cls, values):
+        potion_capacity = values.get('potion_capacity')
+        ml_capacity = values.get('ml_capacity')
+
+        if potion_capacity < 0:
+            raise ValueError("potion_capacity must be non-negative.")
+        if ml_capacity < 0:
+            raise ValueError("ml_capacity must be non-negative.")
+        return values
 
 class CapacityPurchaseResponse(BaseModel):
     status: str
@@ -62,8 +69,6 @@ def get_inventory():
     """
     Retrieve current state of global inventory.
     """
-    logger.debug("inventory/audit - in")
-
     try:
         with db.engine.begin() as connection:
             sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
@@ -71,12 +76,13 @@ def get_inventory():
             row = result.mappings().one_or_none()
 
             if row is None:
-                logger.error("No inventory record found.")
+                logger.error("No inventory record found in global_inventory table.")
                 raise HTTPException(status_code=500, detail="Inventory record not found.")
 
             num_potions = row['num_green_potions']
             ml_in_barrels = row['num_green_ml']
             gold = row['gold']
+            logger.debug(f"Fetched inventory: num_potions={num_potions}, ml_in_barrels={ml_in_barrels}, gold={gold}")
 
         return_inventory = {
             "number_of_potions": num_potions,
@@ -84,17 +90,17 @@ def get_inventory():
             "gold": gold
         }
 
-        logger.debug("inventory/audit - out")
-        logger.debug(f"Inventory: {return_inventory}")
+        logger.info(f"Inventory audit successful: {return_inventory}")
 
         return return_inventory
 
     except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception("Database error during inventory/audit")
+        logger.exception("Database error during get_inventory")
         raise HTTPException(status_code=500, detail="Database error.")
     except Exception:
-        logger.exception("Unexpected error during inventory/audit")
+        logger.exception("Unexpected error during get_inventory")
         raise HTTPException(status_code=500, detail="Internal Server Error.")
+
 
 # Gets called once a day
 @router.post("/plan", summary="Get Capacity Plan", description="Generates capacity purchase plan based on current inventory.")
@@ -103,8 +109,6 @@ def get_capacity_plan():
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
-    logger.debug("inventory/plan - in")
-
     try:
         with db.engine.begin() as connection:
             # Fetch current inventory
@@ -113,18 +117,17 @@ def get_capacity_plan():
             row = result.mappings().one_or_none()
 
             if row is None:
-                logger.error("No inventory record found.")
+                logger.error("No inventory record found in global_inventory table.")
                 raise HTTPException(status_code=500, detail="Inventory record not found.")
 
             num_potions = row['num_green_potions']
             ml_in_barrels = row['num_green_ml']
+            logger.debug(f"Fetched inventory for plan: num_potions={num_potions}, ml_in_barrels={ml_in_barrels}")
 
         # Calculate current capacities
         current_potion_capacity = capacity_manager.potion_capacity_units * POTION_CAPACITY_PER_UNIT
         current_ml_capacity = capacity_manager.ml_capacity_units * ML_CAPACITY_PER_UNIT
-
-        logger.debug(f"Current Potion Capacity: {current_potion_capacity} (Units: {capacity_manager.potion_capacity_units})")
-        logger.debug(f"Current ML Capacity: {current_ml_capacity} (Units: {capacity_manager.ml_capacity_units})")
+        logger.debug(f"Current capacities: potion_capacity={current_potion_capacity}, ml_capacity={current_ml_capacity}")
 
         # Determine needed capacities
         needed_potion_capacity_units = math.ceil(max(0, num_potions - current_potion_capacity) / POTION_CAPACITY_PER_UNIT)
@@ -135,17 +138,17 @@ def get_capacity_plan():
             "ml_capacity": needed_ml_capacity_units
         }
 
-        logger.debug(f"Capacity Purchase Plan: {purchase_plan}")
-        logger.debug("inventory/plan - out")
+        logger.info(f"Generated capacity purchase plan: {purchase_plan}")
 
         return purchase_plan
 
     except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception("Database error during inventory/plan")
+        logger.exception("Database error during get_capacity_plan")
         raise HTTPException(status_code=500, detail="Database error.")
     except Exception:
-        logger.exception("Unexpected error during inventory/plan")
+        logger.exception("Unexpected error during get_capacity_plan")
         raise HTTPException(status_code=500, detail="Internal Server Error.")
+
 
 # Gets called once a day
 @router.post("/deliver/{order_id}", summary="Deliver Capacity Purchase", description="Process delivery of capacity purchases.")
@@ -154,11 +157,9 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
-    logger.debug("inventory/deliver/{order_id} - Deliver Capacity Plan - in")
-    logger.debug(f"Capacity Purchase: {capacity_purchase}")
-    logger.debug(f"Order Id: {order_id}")
-
     try:
+        logger.debug(f"Processing capacity delivery for order_id={order_id} with purchase details: {capacity_purchase}")
+
         with db.engine.begin() as connection:
             # Fetch current gold
             sql_select = "SELECT gold FROM global_inventory;"
@@ -166,47 +167,40 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
             row = result.mappings().one_or_none()
 
             if row is None:
-                logger.error("No inventory record found.")
+                logger.error("No inventory record found in global_inventory table.")
                 raise HTTPException(status_code=500, detail="Inventory record not found.")
 
             gold = row['gold']
+            logger.debug(f"Current gold before purchase: {gold}")
 
             # Calculate total cost
             total_capacity_units = capacity_purchase.potion_capacity + capacity_purchase.ml_capacity
             total_cost = total_capacity_units * CAPACITY_UNIT_COST
-
-            logger.debug(f"Total Capacity Units: {total_capacity_units}")
-            logger.debug(f"Total Cost: {total_cost} gold")
+            logger.debug(f"Total capacity units to purchase: {total_capacity_units}, Total cost: {total_cost} gold")
 
             if total_cost > gold:
-                logger.error("Not enough gold to purchase additional capacities.")
+                logger.error(f"Insufficient gold for capacity purchase. Required: {total_cost}, Available: {gold}")
                 raise HTTPException(status_code=400, detail="Not enough gold to purchase additional capacities.")
 
             # Deduct gold
-            sql_update_gold = sqlalchemy.text("""
+            sql_update_gold = """
                 UPDATE global_inventory
                 SET gold = gold - :total_cost
-            """)
-            connection.execute(sql_update_gold, {'total_cost': total_cost})
-            logger.debug(f"Updated Gold: Subtracted {total_cost} gold from inventory.")
+            """
+            connection.execute(sqlalchemy.text(sql_update_gold), {'total_cost': total_cost})
+            logger.debug(f"Deducted {total_cost} gold from inventory.")
 
         # Update capacities using CapacityManager
         capacity_manager.add_capacity(capacity_purchase.potion_capacity, capacity_purchase.ml_capacity)
 
-        logger.debug(f"inventory/deliver/{order_id} - Deliver Capacity Plan - out")
-        logger.debug(f"Additional Potions: {capacity_purchase.potion_capacity}")
-        logger.debug(f"Additional ML: {capacity_purchase.ml_capacity}")
-        logger.debug(f"Total Cost: {total_cost} gold")
+        logger.info(f"Capacity purchase delivered for order_id={order_id}: {capacity_purchase}, Total Cost: {total_cost} gold")
 
         return CapacityPurchaseResponse(status="OK", total_cost=total_cost)
 
     except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception(f"Database error during inventory/deliver/{order_id}")
+        logger.exception(f"Database error during deliver_capacity_plan for order_id={order_id}")
         raise HTTPException(status_code=500, detail="Database error.")
-    except HTTPException as he:
-        # Re-raise HTTPExceptions to be handled by FastAPI
-        raise he
     except Exception:
-        logger.exception(f"Unexpected error during inventory/deliver/{order_id}")
+        logger.exception(f"Unexpected error during deliver_capacity_plan for order_id={order_id}")
         raise HTTPException(status_code=500, detail="Internal Server Error.")
     

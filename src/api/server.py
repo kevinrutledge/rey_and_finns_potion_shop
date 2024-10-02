@@ -9,7 +9,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout)
     ]

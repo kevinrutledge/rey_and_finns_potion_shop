@@ -14,20 +14,23 @@ router = APIRouter(
     dependencies=[Depends(auth.get_api_key)],
 )
 
+
 @router.post("/reset", summary="Reset Game State", description="Resets game inventory and clears all carts.")
 def reset():
     """
     Reset game state. Gold goes to 100, all potions are removed from
     inventory, and all barrels are removed from inventory. Carts are all reset.
     """
+    logger.debug("Initiating game state reset.")
+
     try:
-        # clear in-memory data structures
+        # Clear in-memory data structures
         carts.clear()
         cart_items.clear()
-        logger.debug("Cleared carts and cart_items.")
+        logger.info("Cleared all in-memory carts and cart items.")
 
         with db.engine.begin() as connection:
-            # Reset inventory in global database
+            # Reset inventory in the global database
             sql_reset = sqlalchemy.text("""
                 UPDATE global_inventory
                 SET num_green_potions = :num_green_potions,
@@ -44,27 +47,23 @@ def reset():
             # Select updated inventory
             sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
             result = connection.execute(sqlalchemy.text(sql_select))
-            row = result.mappings().one_or_none()  # Use one_or_none to handle empty results
+            row = result.mappings().one_or_none()
 
             if row is None:
-                logger.error("No inventory record found.")
+                logger.error("No inventory record found after reset.")
                 raise HTTPException(status_code=500, detail="Inventory record not found.")
 
             num_green_potions = row['num_green_potions']
             num_green_ml = row['num_green_ml']
             gold = row['gold']
+            logger.debug(f"Post-reset inventory state - Green Potions: {num_green_potions}, Green ML: {num_green_ml}, Gold: {gold}")
 
-        # Log updated inventory
-        logger.debug("admin/reset - out")
-        logger.debug(f"Num Green Potions: {num_green_potions}")
-        logger.debug(f"Num Green volume: {num_green_ml}")
-        logger.debug(f"Gold: {gold}")
-
+        logger.info("Game state has been successfully reset.")
         return {"status": "OK"}
 
-    except sqlalchemy.exc.SQLAlchemyError as db_err:
-        logger.exception("Database error during admin/reset")
+    except sqlalchemy.exc.SQLAlchemyError:
+        logger.exception("Database error occurred during game state reset.")
         raise HTTPException(status_code=500, detail="Database error.")
-    except Exception as e:
-        logger.exception("Unexpected error during admin/reset")
+    except Exception:
+        logger.exception("Unexpected error occurred during game state reset.")
         raise HTTPException(status_code=500, detail="Internal Server Error.")
