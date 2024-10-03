@@ -123,7 +123,7 @@ def search_orders(
 
             # Execute query
             result = connection.execute(base_query, params)
-            items = result.fetchall()
+            items = result.mappings().fetchall()
             logger.debug(f"Query returned {len(items)} items (including one extra for pagination check)")
 
             # Determine previous and next page
@@ -355,7 +355,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 ),
                 {'cart_id': cart_id}
             )
-            cart_items = result.fetchall()
+            cart_items = result.mappings().fetchall()
             if not cart_items:
                 logger.error(f"No items in cart {cart_id} to checkout.")
                 raise HTTPException(status_code=400, detail="Cart is empty.")
