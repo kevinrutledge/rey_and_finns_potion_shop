@@ -2,7 +2,7 @@ import sqlalchemy
 import logging
 from src import database as db
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 from src.api import auth
 import math
 
@@ -19,87 +19,85 @@ POTION_CAPACITY_PER_UNIT = 50  # Each potion capacity unit allows storage of 50 
 ML_CAPACITY_PER_UNIT = 10000    # Each ML capacity unit allows storage of 10000 ml
 CAPACITY_UNIT_COST = 1000       # Cost per capacity unit in gold
 
-# Capacity Manager Class
-class CapacityManager:
-    def __init__(self):
-        # Initialize with 1 capacity unit each
-        self.potion_capacity_units = 1
-        self.ml_capacity_units = 1
-        logger.debug(f"Initialized CapacityManager with potion_capacity_units={self.potion_capacity_units}, ml_capacity_units={self.ml_capacity_units}")
-
-    def get_current_capacity(self):
-        capacity = {
-            "potion_capacity": self.potion_capacity_units,
-            "ml_capacity": self.ml_capacity_units
-        }
-        logger.debug(f"Current capacity: {capacity}")
-        return capacity
-
-    def add_capacity(self, potion_units: int, ml_units: int):
-        self.potion_capacity_units += potion_units
-        self.ml_capacity_units += ml_units
-        logger.info(f"Added capacity - Potion Units: {potion_units}, ML Units: {ml_units}")
-        logger.debug(f"Updated capacities: potion_capacity_units={self.potion_capacity_units}, ml_capacity_units={self.ml_capacity_units}")
-
-# Initialize Capacity Manager
-capacity_manager = CapacityManager()
-
-# Pydantic Models
-class CapacityPurchase(BaseModel):
-    potion_capacity: int
-    ml_capacity: int
-
-    def validate_purchase(cls, values):
-        potion_capacity = values.get('potion_capacity')
-        ml_capacity = values.get('ml_capacity')
-
-        if potion_capacity < 0:
-            raise ValueError("potion_capacity must be non-negative.")
-        if ml_capacity < 0:
-            raise ValueError("ml_capacity must be non-negative.")
-        return values
-
-class CapacityPurchaseResponse(BaseModel):
-    status: str
-    total_cost: int
-
 
 @router.get("/audit", summary="Audit Inventory", description="Retrieve current state of global inventory.")
 def get_inventory():
     """
     Retrieve current state of global inventory.
     """
+    logger.info("Starting get_inventory endpoint.")
+
+    # Local variables
+    number_of_potions = 0
+    ml_in_barrels = 0
+    gold = 0
+
     try:
         with db.engine.begin() as connection:
-            sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_select))
-            row = result.mappings().one_or_none()
+            # Get total number of potions
+            logger.debug("Fetching total number of potions from database.")
+            result = connection.execute(
+                sqlalchemy.text(
+                    "SELECT SUM(current_quantity) AS total_potions FROM potions;"
+                )
+            )
+            row = result.mappings().fetchone()
+            if row and row["total_potions"] is not None:
+                number_of_potions = row["total_potions"]
+            else:
+                number_of_potions = 0
+            logger.debug(f"Total number of potions: {number_of_potions}")
 
-            if row is None:
-                logger.error("No inventory record found in global_inventory table.")
-                raise HTTPException(status_code=500, detail="Inventory record not found.")
+            # Get total ml in barrels
+            logger.debug("Fetching total ml in barrels from global_inventory.")
+            result = connection.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT 
+                        COALESCE(red_ml, 0) + COALESCE(green_ml, 0) + 
+                        COALESCE(blue_ml, 0) + COALESCE(dark_ml, 0) AS total_ml
+                    FROM global_inventory
+                    WHERE id = 1;
+                    """
+                )
+            )
+            row = result.mappings().fetchone()
+            if row and row["total_ml"] is not None:
+                ml_in_barrels = row["total_ml"]
+            else:
+                ml_in_barrels = 0
+            logger.debug(f"Total ml in barrels: {ml_in_barrels}")
 
-            num_potions = row['num_green_potions']
-            ml_in_barrels = row['num_green_ml']
-            gold = row['gold']
-            logger.debug(f"Fetched inventory: num_potions={num_potions}, ml_in_barrels={ml_in_barrels}, gold={gold}")
+            # Get current gold amount
+            logger.debug("Fetching current gold amount from global_inventory.")
+            result = connection.execute(
+                sqlalchemy.text("SELECT gold FROM global_inventory WHERE id = 1;")
+            )
+            row = result.mappings().fetchone()
+            if row and row["gold"] is not None:
+                gold = row["gold"]
+            else:
+                gold = 0
+            logger.debug(f"Current gold amount: {gold}")
 
-        return_inventory = {
-            "number_of_potions": num_potions,
-            "ml_in_barrels": ml_in_barrels,
-            "gold": gold
-        }
+        # Log totals calculated
+        logger.info(
+            f"Inventory totals - Potions: {number_of_potions}, ML in barrels: {ml_in_barrels}, Gold: {gold}"
+        )
 
-        logger.info(f"Inventory audit successful: {return_inventory}")
+    except Exception as e:
+        logger.error(f"Error in get_inventory: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-        return return_inventory
-
-    except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception("Database error during get_inventory")
-        raise HTTPException(status_code=500, detail="Database error.")
-    except Exception:
-        logger.exception("Unexpected error during get_inventory")
-        raise HTTPException(status_code=500, detail="Internal Server Error.")
+    logger.info("Ending get_inventory endpoint.")
+    logger.debug(
+        f"Returning from get_inventory with response: {{'number_of_potions': {number_of_potions}, 'ml_in_barrels': {ml_in_barrels}, 'gold': {gold}}}"
+    )
+    return {
+        "number_of_potions": number_of_potions,
+        "ml_in_barrels": ml_in_barrels,
+        "gold": gold,
+    }
 
 
 # Gets called once a day
@@ -109,45 +107,139 @@ def get_capacity_plan():
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
+    logger.info("Starting get_capacity_plan endpoint.")
+    # No input parameters to log since this endpoint does not receive any.
+
+    # Initialize variables with default values
+    potion_capacity_units = 1
+    ml_capacity_units = 1
+    gold = 100
+    total_potions = 0
+    total_ml = 0
+
     try:
         with db.engine.begin() as connection:
-            # Fetch current inventory
-            sql_select = "SELECT num_green_potions, num_green_ml FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_select))
-            row = result.mappings().one_or_none()
+            # Get current capacity units and gold from global_inventory
+            logger.debug("Fetching current capacity units and gold from global_inventory.")
+            result = connection.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT potion_capacity_units, ml_capacity_units, gold
+                    FROM global_inventory
+                    WHERE id = 1;
+                    """
+                )
+            )
+            row = result.mappings().fetchone()
+            if row:
+                potion_capacity_units = row["potion_capacity_units"]
+                ml_capacity_units = row["ml_capacity_units"]
+                gold = row["gold"]
+            else:
+                # Initialize if no record exists
+                potion_capacity_units = 1
+                ml_capacity_units = 1
+                gold = 100
+            logger.debug(
+                f"Current capacity units - Potion: {potion_capacity_units}, ML: {ml_capacity_units}, Gold: {gold}"
+            )
 
-            if row is None:
-                logger.error("No inventory record found in global_inventory table.")
-                raise HTTPException(status_code=500, detail="Inventory record not found.")
+            # Get total number of potions in inventory
+            logger.debug("Fetching total number of potions in inventory.")
+            result = connection.execute(
+                sqlalchemy.text(
+                    "SELECT SUM(current_quantity) AS total_potions FROM potions;"
+                )
+            )
+            row = result.mappings().fetchone()
+            if row and row["total_potions"] is not None:
+                total_potions = row["total_potions"]
+            else:
+                total_potions = 0
+            logger.debug(f"Total potions in inventory: {total_potions}")
 
-            num_potions = row['num_green_potions']
-            ml_in_barrels = row['num_green_ml']
-            logger.debug(f"Fetched inventory for plan: num_potions={num_potions}, ml_in_barrels={ml_in_barrels}")
+            # Get total ml in barrels
+            logger.debug("Fetching total ml in barrels from global_inventory.")
+            result = connection.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT 
+                        COALESCE(red_ml, 0) + COALESCE(green_ml, 0) + 
+                        COALESCE(blue_ml, 0) + COALESCE(dark_ml, 0) AS total_ml
+                    FROM global_inventory
+                    WHERE id = 1;
+                    """
+                )
+            )
+            row = result.mappings().fetchone()
+            if row and row["total_ml"] is not None:
+                total_ml = row["total_ml"]
+            else:
+                total_ml = 0
+            logger.debug(f"Total ml in barrels: {total_ml}")
 
-        # Calculate current capacities
-        current_potion_capacity = capacity_manager.potion_capacity_units * POTION_CAPACITY_PER_UNIT
-        current_ml_capacity = capacity_manager.ml_capacity_units * ML_CAPACITY_PER_UNIT
-        logger.debug(f"Current capacities: potion_capacity={current_potion_capacity}, ml_capacity={current_ml_capacity}")
+            # Calculate current capacity limits
+            potion_capacity_limit = potion_capacity_units * POTION_CAPACITY_PER_UNIT
+            ml_capacity_limit = ml_capacity_units * ML_CAPACITY_PER_UNIT
+            logger.debug(
+                f"Potion capacity limit: {potion_capacity_limit}, ML capacity limit: {ml_capacity_limit}"
+            )
 
-        # Determine needed capacities
-        needed_potion_capacity_units = math.ceil(max(0, num_potions - current_potion_capacity) / POTION_CAPACITY_PER_UNIT)
-        needed_ml_capacity_units = math.ceil(max(0, ml_in_barrels - current_ml_capacity) / ML_CAPACITY_PER_UNIT)
+            # Initialize capacity units to purchase
+            potion_capacity_needed = 0
+            ml_capacity_needed = 0
 
-        purchase_plan = {
-            "potion_capacity": needed_potion_capacity_units,
-            "ml_capacity": needed_ml_capacity_units
-        }
+            # Check if potion inventory exceeds 80% of capacity
+            if total_potions >= potion_capacity_limit * 0.8:
+                logger.debug("Potion inventory exceeds 80% of capacity.")
+                units_to_buy = 1  # TODO: calculate units_to_buy
+                cost = units_to_buy * CAPACITY_UNIT_COST
+                logger.debug(f"Calculated cost for additional potion capacity units: {cost}")
+                if gold >= cost:
+                    potion_capacity_needed = units_to_buy
+                    logger.debug(f"Planning to purchase {potion_capacity_needed} potion capacity units.")
+                else:
+                    logger.info("Not enough gold to purchase additional potion capacity.")
+            else:
+                logger.debug("Potion inventory does not exceed 80% of capacity.")
 
-        logger.info(f"Generated capacity purchase plan: {purchase_plan}")
+            # Check if ml inventory exceeds 80% of capacity
+            if total_ml >= ml_capacity_limit * 0.8:
+                logger.debug("ML inventory exceeds 80% of capacity.")
+                units_to_buy = 1
+                cost = units_to_buy * CAPACITY_UNIT_COST
+                logger.debug(f"Calculated cost for additional ml capacity units: {cost}")
+                if gold >= cost:
+                    ml_capacity_needed = units_to_buy
+                    logger.debug(f"Planning to purchase {ml_capacity_needed} ml capacity units.")
+                else:
+                    logger.info("Not enough gold to purchase additional ml capacity.")
+            else:
+                logger.debug("ML inventory does not exceed 80% of capacity.")
 
-        return purchase_plan
+            # Log decisions made
+            logger.info(f"Potion capacity units: {potion_capacity_units}, Total potions: {total_potions}")
+            logger.info(f"ML capacity units: {ml_capacity_units}, Total ml: {total_ml}")
+            logger.info(f"Planning to purchase potion capacity units: {potion_capacity_needed}")
+            logger.info(f"Planning to purchase ml capacity units: {ml_capacity_needed}")
 
-    except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception("Database error during get_capacity_plan")
-        raise HTTPException(status_code=500, detail="Database error.")
-    except Exception:
-        logger.exception("Unexpected error during get_capacity_plan")
-        raise HTTPException(status_code=500, detail="Internal Server Error.")
+    except Exception as e:
+        logger.error(f"Error in get_capacity_plan: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    logger.info("Ending get_capacity_plan endpoint.")
+    logger.debug(
+        f"Returning from get_capacity_plan with response: {{'potion_capacity': {potion_capacity_needed}, 'ml_capacity': {ml_capacity_needed}}}"
+    )
+    return {
+        "potion_capacity": potion_capacity_needed,
+        "ml_capacity": ml_capacity_needed,
+    }
+
+
+class CapacityPurchase(BaseModel):
+    status: str
+    total_cost: int
 
 
 # Gets called once a day
@@ -157,50 +249,93 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
+    logger.info(f"Starting deliver_capacity_plan endpoint for order_id {order_id}.")
+    logger.debug(f"Received capacity_purchase: {capacity_purchase.dict()}")
+
+    potion_capacity_to_add = capacity_purchase.potion_capacity
+    ml_capacity_to_add = capacity_purchase.ml_capacity
+
+    total_units_to_add = potion_capacity_to_add + ml_capacity_to_add
+    total_cost = total_units_to_add * CAPACITY_UNIT_COST
+
+    logger.info(f"Capacity units to add - Potion: {potion_capacity_to_add}, ML: {ml_capacity_to_add}")
+    logger.info(f"Total cost for capacity units: {total_cost}")
+
     try:
-        logger.debug(f"Processing capacity delivery for order_id={order_id} with purchase details: {capacity_purchase}")
-
         with db.engine.begin() as connection:
-            # Fetch current gold
-            sql_select = "SELECT gold FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_select))
-            row = result.mappings().one_or_none()
+            # Get current gold and capacity units
+            logger.debug("Fetching current gold and capacity units from global_inventory.")
+            result = connection.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT gold, potion_capacity_units, ml_capacity_units
+                    FROM global_inventory
+                    WHERE id = 1;
+                    """
+                )
+            )
+            row = result.mappings().fetchone()
+            if row:
+                gold = row["gold"]
+                potion_capacity_units = row["potion_capacity_units"]
+                ml_capacity_units = row["ml_capacity_units"]
+            else:
+                # Initialize if no record exists
+                gold = 100
+                potion_capacity_units = 1
+                ml_capacity_units = 1
+            logger.debug(
+                f"Current gold: {gold}, potion_capacity_units: {potion_capacity_units}, ml_capacity_units: {ml_capacity_units}"
+            )
 
-            if row is None:
-                logger.error("No inventory record found in global_inventory table.")
-                raise HTTPException(status_code=500, detail="Inventory record not found.")
+            # Check if there is enough gold to cover total cost
+            if gold >= total_cost:
+                logger.debug("Sufficient gold to cover total cost.")
+                # Update capacity units and deduct gold
+                new_potion_capacity_units = potion_capacity_units + potion_capacity_to_add
+                new_ml_capacity_units = ml_capacity_units + ml_capacity_to_add
+                new_gold = gold - total_cost
+                logger.debug(
+                    f"New capacity units - Potion: {new_potion_capacity_units}, ML: {new_ml_capacity_units}, New gold: {new_gold}"
+                )
 
-            gold = row['gold']
-            logger.debug(f"Current gold before purchase: {gold}")
+                # Update global_inventory table
+                connection.execute(
+                    sqlalchemy.text(
+                        """
+                        UPDATE global_inventory
+                        SET potion_capacity_units = :new_potion_capacity_units,
+                            ml_capacity_units = :new_ml_capacity_units,
+                            gold = :new_gold
+                        WHERE id = 1;
+                        """
+                    ),
+                    {
+                        "new_potion_capacity_units": new_potion_capacity_units,
+                        "new_ml_capacity_units": new_ml_capacity_units,
+                        "new_gold": new_gold,
+                    },
+                )
 
-            # Calculate total cost
-            total_capacity_units = capacity_purchase.potion_capacity + capacity_purchase.ml_capacity
-            total_cost = total_capacity_units * CAPACITY_UNIT_COST
-            logger.debug(f"Total capacity units to purchase: {total_capacity_units}, Total cost: {total_cost} gold")
+                logger.info(
+                    f"Updated capacity units - Potion: {new_potion_capacity_units}, ML: {new_ml_capacity_units}"
+                )
+                logger.info(f"Gold after purchase: {new_gold}")
+            else:
+                logger.error("Not enough gold to purchase capacity units.")
+                raise HTTPException(
+                    status_code=400, detail="Not enough gold to purchase capacity units."
+                )
 
-            if total_cost > gold:
-                logger.error(f"Insufficient gold for capacity purchase. Required: {total_cost}, Available: {gold}")
-                raise HTTPException(status_code=400, detail="Not enough gold to purchase additional capacities.")
+    except HTTPException as e:
+        # Re-raise HTTPExceptions
+        logger.error(f"HTTPException in deliver_capacity_plan: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Error in deliver_capacity_plan: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-            # Deduct gold
-            sql_update_gold = """
-                UPDATE global_inventory
-                SET gold = gold - :total_cost
-            """
-            connection.execute(sqlalchemy.text(sql_update_gold), {'total_cost': total_cost})
-            logger.debug(f"Deducted {total_cost} gold from inventory.")
-
-        # Update capacities using CapacityManager
-        capacity_manager.add_capacity(capacity_purchase.potion_capacity, capacity_purchase.ml_capacity)
-
-        logger.info(f"Capacity purchase delivered for order_id={order_id}: {capacity_purchase}, Total Cost: {total_cost} gold")
-
-        return CapacityPurchaseResponse(status="OK", total_cost=total_cost)
-
-    except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception(f"Database error during deliver_capacity_plan for order_id={order_id}")
-        raise HTTPException(status_code=500, detail="Database error.")
-    except Exception:
-        logger.exception(f"Unexpected error during deliver_capacity_plan for order_id={order_id}")
-        raise HTTPException(status_code=500, detail="Internal Server Error.")
+    logger.info("Ending deliver_capacity_plan endpoint.")
+    logger.debug("Returning from deliver_capacity_plan with response: 'OK'")
+    return {"status": "OK"}
     

@@ -4,7 +4,6 @@ from src import database as db
 from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel
 from src.api import auth
-from src.api.carts import carts, cart_items
 
 logger = logging.getLogger(__name__)
 
@@ -21,49 +20,58 @@ def reset():
     Reset game state. Gold goes to 100, all potions are removed from
     inventory, and all barrels are removed from inventory. Carts are all reset.
     """
-    logger.debug("Initiating game state reset.")
-
+    logger.info("Starting reset endpoint. Resetting shop state.")
     try:
-        # Clear in-memory data structures
-        carts.clear()
-        cart_items.clear()
-        logger.info("Cleared all in-memory carts and cart items.")
-
         with db.engine.begin() as connection:
-            # Reset inventory in the global database
-            sql_reset = sqlalchemy.text("""
+            # Reset global_inventory
+            logger.debug("Resetting global_inventory table.")
+            connection.execute(sqlalchemy.text(
+                """
                 UPDATE global_inventory
-                SET num_green_potions = :num_green_potions,
-                    num_green_ml = :num_green_ml,
-                    gold = :gold
-            """)
-            connection.execute(sql_reset, {
-                'num_green_potions': 0,
-                'num_green_ml': 0,
-                'gold': 100
-            })
-            logger.debug("Executed inventory reset SQL statement.")
+                SET gold = 100,
+                    red_ml = 0,
+                    green_ml = 0,
+                    blue_ml = 0,
+                    dark_ml = 0,
+                    potion_capacity_units = 1,
+                    ml_capacity_units = 1
+                WHERE id = 1;
+                """
+            ))
 
-            # Select updated inventory
-            sql_select = "SELECT num_green_potions, num_green_ml, gold FROM global_inventory;"
-            result = connection.execute(sqlalchemy.text(sql_select))
-            row = result.mappings().one_or_none()
+            # Reset current_quantity of all potions to 0
+            logger.debug("Resetting potion quantities to 0.")
+            connection.execute(sqlalchemy.text(
+                """
+                UPDATE potions
+                SET current_quantity = 0;
+                """
+            ))
 
-            if row is None:
-                logger.error("No inventory record found after reset.")
-                raise HTTPException(status_code=500, detail="Inventory record not found.")
+            # Clear carts and cart_items tables
+            logger.debug("Deleting all records from cart_items and carts tables.")
+            connection.execute(sqlalchemy.text(
+                """
+                DELETE FROM cart_items;
+                """
+            ))
+            connection.execute(sqlalchemy.text(
+                """
+                DELETE FROM carts;
+                """
+            ))
 
-            num_green_potions = row['num_green_potions']
-            num_green_ml = row['num_green_ml']
-            gold = row['gold']
-            logger.debug(f"Post-reset inventory state - Green Potions: {num_green_potions}, Green ML: {num_green_ml}, Gold: {gold}")
+            # Clear ledger_entries table
+            logger.debug("Deleting all records from ledger_entries table.")
+            connection.execute(sqlalchemy.text(
+                """
+                DELETE FROM ledger_entries;
+                """
+            ))
 
-        logger.info("Game state has been successfully reset.")
-        return {"status": "OK"}
-
-    except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception("Database error occurred during game state reset.")
-        raise HTTPException(status_code=500, detail="Database error.")
-    except Exception:
-        logger.exception("Unexpected error occurred during game state reset.")
-        raise HTTPException(status_code=500, detail="Internal Server Error.")
+            logger.info("Shop state reset successfully.")
+        logger.debug("Returning success response: {'success': True}")
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error in reset endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
