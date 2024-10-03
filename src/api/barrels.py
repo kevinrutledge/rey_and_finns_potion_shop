@@ -213,9 +213,9 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 
                 # Get list of possible barrels for current color, sorted by size (small to large)
                 color_to_barrels = {
-                    'red': ['MINI_RED_BARREL', 'SMALL_RED_BARREL', 'MEDIUM_RED_BARREL', 'LARGE_RED_BARREL'],
-                    'green': ['MINI_GREEN_BARREL', 'SMALL_GREEN_BARREL', 'MEDIUM_GREEN_BARREL', 'LARGE_GREEN_BARREL'],
-                    'blue': ['MINI_BLUE_BARREL', 'SMALL_BLUE_BARREL', 'MEDIUM_BLUE_BARREL', 'LARGE_BLUE_BARREL'],
+                    'red': ['SMALL_RED_BARREL', 'MEDIUM_RED_BARREL', 'LARGE_RED_BARREL'],
+                    'green': ['SMALL_GREEN_BARREL', 'MEDIUM_GREEN_BARREL', 'LARGE_GREEN_BARREL'],
+                    'blue': ['SMALL_BLUE_BARREL', 'MEDIUM_BLUE_BARREL', 'LARGE_BLUE_BARREL'],
                     'dark': ['LARGE_DARK_BARREL']  # Only large dark barrels available
                 }
                 barrel_skus = color_to_barrels[color]
