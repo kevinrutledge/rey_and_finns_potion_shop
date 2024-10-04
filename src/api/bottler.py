@@ -318,7 +318,7 @@ def get_bottle_plan():
                             'green_ml': potion_type[1],
                             'blue_ml': potion_type[2],
                             'dark_ml': potion_type[3],
-                            'price': 100  # Adjust prices as needed
+                            'price': 50  # Adjust prices as needed
                         }
                     )
                     # Retrieve newly inserted potion_id
