@@ -366,7 +366,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
             # Check stock availability and compute totals
             for item in cart_items:
-                logger.debug(f"Processing cart item: {dict(item)}")
+                logger.debug(f"Processing cart item: {item}")
                 if item['quantity'] > item['potion_stock']:
                     logger.error(f"Not enough stock for potion_id {item['potion_id']}. Requested {item['quantity']}, available {item['potion_stock']}.")
                     raise HTTPException(status_code=400, detail=f"Not enough stock for item {item['potion_id']}.")
@@ -410,20 +410,22 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             )
             logger.info(f"Updated gold in global inventory to {new_gold}.")
 
-            # Mark cart as checked out and update totals
+            # Mark cart as checked out, update totals, and store payment method
             connection.execute(
                 sqlalchemy.text(
                     """
                     UPDATE carts
                     SET checked_out = TRUE,
                         total_potions_bought = :total_potions_bought,
-                        total_gold_paid = :total_gold_paid
+                        total_gold_paid = :total_gold_paid,
+                        payment = :payment
                     WHERE cart_id = :cart_id;
                     """
                 ),
                 {
                     'total_potions_bought': total_potions_bought,
                     'total_gold_paid': total_gold_paid,
+                    'payment': cart_checkout.payment,
                     'cart_id': cart_id
                 }
             )
