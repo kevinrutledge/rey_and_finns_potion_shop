@@ -150,7 +150,7 @@ def search_orders(
 
             logger.info(f"Search returned {len(results)} results.")
             logger.debug(f"Response: {response}")
-            logger.info("Ending search_orders endpoint.")
+            logger.info("Ending search_orders endpoint.") 
             return response
 
     except Exception as e:
@@ -158,16 +158,54 @@ def search_orders(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+@router.post("/visits/{visit_id}")
 def post_visits(visit_id: int, customers: list[Customer]):
     """
     Which customers visited the shop today?
     """
     logger.info(f"Starting post_visits endpoint for visit_id {visit_id}.")
     logger.debug(f"Received customers: {[customer.dict() for customer in customers]}")
-    for customer in customers:
-        logger.info(f"Customer visited: {customer.customer_name}, Class: {customer.character_class}, Level: {customer.level}")
-    logger.info("Ending post_visits endpoint.")
-    return {"success": True}
+    try:
+        with db.engine.begin() as connection:
+            # Insert visit
+            connection.execute(
+                sqlalchemy.text(
+                    """
+                    INSERT INTO visits (visit_id, visit_time)
+                    VALUES (:visit_id, NOW());
+                    """
+                ),
+                {'visit_id': visit_id}
+            )
+            logger.info(f"Inserted visit with visit_id {visit_id}.")
+
+            # Insert customers
+            for customer in customers:
+                connection.execute(
+                    sqlalchemy.text(
+                        """
+                        INSERT INTO customers (visit_id, customer_name, character_class, level)
+                        VALUES (:visit_id, :customer_name, :character_class, :level);
+                        """
+                    ),
+                    {
+                        'visit_id': visit_id,
+                        'customer_name': customer.customer_name,
+                        'character_class': customer.character_class,
+                        'level': customer.level
+                    }
+                )
+                logger.info(f"Inserted customer {customer.customer_name} for visit_id {visit_id}.")
+
+        logger.info("Ending post_visits endpoint.")
+        logger.debug("Returning success response: {'success': True}")
+        return {"success": True}
+    except sqlalchemy.exc.IntegrityError as e:
+        logger.error(f"IntegrityError in post_visits: {e}")
+        raise HTTPException(status_code=400, detail="Visit ID already exists.")
+    except Exception as e:
+        logger.error(f"Error in post_visits: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.post("/")
@@ -179,19 +217,39 @@ def create_cart(new_cart: Customer):
     logger.debug(f"Received new_cart data: {new_cart.dict()}")
     try:
         with db.engine.begin() as connection:
-            # Insert new cart into carts table
+            # Find customer_id based on customer details
             result = connection.execute(
                 sqlalchemy.text(
                     """
-                    INSERT INTO carts (customer_name, character_class, level, checked_out, created_at)
-                    VALUES (:customer_name, :character_class, :level, FALSE, :created_at)
-                    RETURNING cart_id;
+                    SELECT customer_id FROM customers
+                    WHERE customer_name = :customer_name
+                    AND character_class = :character_class
+                    AND level = :level
                     """
                 ),
                 {
                     'customer_name': new_cart.customer_name,
                     'character_class': new_cart.character_class,
-                    'level': new_cart.level,
+                    'level': new_cart.level
+                }
+            )
+            customer_row = result.mappings().fetchone()
+            if not customer_row:
+                logger.error("Customer not found in the current visit.")
+                raise HTTPException(status_code=404, detail="Customer not found in the current visit.")
+            customer_id = customer_row['customer_id']
+
+            # Insert new cart into carts table linked to customer_id
+            result = connection.execute(
+                sqlalchemy.text(
+                    """
+                    INSERT INTO carts (customer_id, checked_out, created_at)
+                    VALUES (:customer_id, FALSE, :created_at)
+                    RETURNING cart_id;
+                    """
+                ),
+                {
+                    'customer_id': customer_id,
                     'created_at': datetime.utcnow()
                 }
             )
@@ -200,7 +258,7 @@ def create_cart(new_cart: Customer):
                 logger.error("Failed to create cart.")
                 raise HTTPException(status_code=500, detail="Failed to create cart.")
             cart_id = cart_id_row['cart_id']
-            logger.info(f"Created cart with cart_id {cart_id} for customer {new_cart.customer_name}.")
+            logger.info(f"Created cart with cart_id {cart_id} for customer_id {customer_id}.")
             logger.debug(f"Returning cart_id: {cart_id}")
             logger.info("Ending create_cart endpoint.")
             return {"cart_id": cart_id}
