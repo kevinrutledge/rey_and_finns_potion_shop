@@ -24,6 +24,10 @@ class BarrelPurchase(BaseModel):
     sku: str
     quantity: int
 
+# Constants for capacity calculations
+POTION_CAPACITY_PER_UNIT = 50  # Each potion capacity unit allows storage of 50 potions
+ML_CAPACITY_PER_UNIT = 10000    # Each ML capacity unit allows storage of 10000 ml
+
 
 @router.post("/deliver/{order_id}", summary="Deliver Barrels", description="Process delivery of barrels.")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
@@ -157,15 +161,18 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 f"blue_ml={blue_ml}, dark_ml={dark_ml}, gold={gold}"
             )
 
-        logger.debug("Returning response: {'status': 'OK'}")
-        return {"status": "OK"}
-
     except HTTPException as e:
+        # Re-raise HTTPExceptions after logging
         logger.error(f"HTTPException in post_deliver_barrels: {e.detail}")
         raise e
     except Exception as e:
+        # Log exception with traceback
         logger.exception(f"Unhandled exception in post_deliver_barrels: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    logger.debug("Returning response: {'status': 'OK'}")
+    logger.info(f"Delivery for order_id {order_id} completed successfully.")
+    return {"status": "OK"}
 
 
 # Gets called once a day
@@ -175,184 +182,118 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     Generates wholesale purchase plan based on current inventory.
     """
     logger.info("Starting get_wholesale_purchase_plan endpoint.")
-    logger.debug(f"Received wholesale_catalog: {wholesale_catalog}")
+    logger.debug(f"Received wholesale_catalog: {[barrel.dict() for barrel in wholesale_catalog]}")
 
     try:
         with db.engine.begin() as connection:
-            logger.debug("Fetching current inventory from global_inventory.")
-            # Retrieve current inventory details
+            # Retrieve current inventory and gold
+            logger.debug("Fetching current inventory and gold from global_inventory.")
             result = connection.execute(
-                sqlalchemy.text(
-                    """
+                sqlalchemy.text("""
                     SELECT red_ml, green_ml, blue_ml, dark_ml, gold, ml_capacity_units
                     FROM global_inventory
                     WHERE id = 1;
-                    """
-                )
+                """)
             )
-            inventory_row = result.mappings().fetchone()
-            logger.debug(f"Current Inventory: {inventory_row}")
-
-            if not inventory_row:
+            inventory = result.mappings().fetchone()
+            if not inventory:
                 logger.error("Global inventory record not found.")
                 raise HTTPException(status_code=500, detail="Global inventory not found.")
 
-            red_ml = inventory_row['red_ml']
-            green_ml = inventory_row['green_ml']
-            blue_ml = inventory_row['blue_ml']
-            dark_ml = inventory_row['dark_ml']
-            gold = inventory_row['gold']
-            ml_capacity_units = inventory_row['ml_capacity_units']
+            red_ml = inventory['red_ml']
+            green_ml = inventory['green_ml']
+            blue_ml = inventory['blue_ml']
+            dark_ml = inventory['dark_ml']
+            gold = inventory['gold']
+            ml_capacity_units = inventory['ml_capacity_units']
 
-            logger.debug(
-                f"Inventory before planning: red_ml={red_ml}, green_ml={green_ml}, "
-                f"blue_ml={blue_ml}, dark_ml={dark_ml}, gold={gold}, ml_capacity_units={ml_capacity_units}"
-            )
+            logger.debug(f"Current Inventory: red_ml={red_ml}, green_ml={green_ml}, blue_ml={blue_ml}, dark_ml={dark_ml}")
+            logger.debug(f"Current Gold: {gold}, ML Capacity Units: {ml_capacity_units}")
 
-            # Calculate total ML and remaining capacity
-            total_ml = red_ml + green_ml + blue_ml + dark_ml
-            ml_capacity = ml_capacity_units * 10000  # Each ML capacity unit allows 10,000 ML storage
-            remaining_capacity = ml_capacity - total_ml
+            # Calculate total ML capacity and remaining capacity
+            total_ml_capacity = ml_capacity_units * ML_CAPACITY_PER_UNIT  # Each unit allows 10000 ML
+            total_ml_used = red_ml + green_ml + blue_ml + dark_ml
+            remaining_capacity = total_ml_capacity - total_ml_used
 
-            logger.debug(
-                f"Total ML: {total_ml}, ML Capacity: {ml_capacity}, Remaining Capacity: {remaining_capacity}"
-            )
+            logger.debug(f"Total ML Capacity: {total_ml_capacity}, Total ML Used: {total_ml_used}, Remaining Capacity: {remaining_capacity}")
+
+            # Define purchasing order and filter available barrels
+            purchasing_order = ['green', 'red', 'blue']
+            color_to_skus = {
+                'green': ['SMALL_GREEN_BARREL', 'MEDIUM_GREEN_BARREL', 'LARGE_GREEN_BARREL'],
+                'red': ['SMALL_RED_BARREL', 'MEDIUM_RED_BARREL', 'LARGE_RED_BARREL'],
+                'blue': ['SMALL_BLUE_BARREL', 'MEDIUM_BLUE_BARREL', 'LARGE_BLUE_BARREL']
+            }
+
+            # Create mapping from SKU to Barrel for quick access
+            sku_to_barrel = {barrel.sku: barrel for barrel in wholesale_catalog}
+
+            logger.debug(f"Purchasing Order: {purchasing_order}")
+            logger.debug(f"SKU to Barrel Mapping: {sku_to_barrel}")
 
             purchase_plan = []
 
-            # Create mapping from SKU to Barrel for easy access
-            sku_to_barrel = {barrel.sku: barrel for barrel in wholesale_catalog}
-            logger.debug(f"SKU to Barrel mapping: {sku_to_barrel}")
+            # Determine purchasing strategy based on gold
+            if gold < 200:
+                logger.info("Gold is less than 200. Purchasing Green Barrels to build capital.")
+                colors_to_purchase = ['green']
+            elif 200 <= gold < 500:
+                logger.info("Gold is between 200 and 500. Purchasing Green, Red, and Blue Barrels in order.")
+                colors_to_purchase = ['green', 'red', 'blue']
+            else:
+                logger.info("Gold is 500 or more. Purchasing Green, Red, and Blue Barrels and considering ML capacity expansion.")
+                colors_to_purchase = ['green', 'red', 'blue']
+                # TODO: Implement further logic when data is collected
 
-            # Define desired ML per color (can be adjusted as needed)
-            desired_ml_per_color = {
-                'red': 5000,
-                'green': 5000,
-                'blue': 5000,
-                'dark': 5000
-            }
+            # Iterate through purchasing order and add barrels to purchase_plan
+            for color in colors_to_purchase:
+                logger.debug(f"Processing color: {color}")
 
-            # Current ML levels by color
-            color_levels = {
-                'red': red_ml,
-                'green': green_ml,
-                'blue': blue_ml,
-                'dark': dark_ml
-            }
+                # Get available SKUs for current color
+                available_skus = color_to_skus.get(color, [])
+                logger.debug(f"Available SKUs for color '{color}': {available_skus}")
 
-            # Sort colors by how much ML is needed (ascending order)
-            colors_needed = sorted(
-                desired_ml_per_color.items(),
-                key=lambda x: x[1] - color_levels.get(x[0], 0)
-            )
-            logger.debug(f"Colors sorted by ML needed: {colors_needed}")
+                # Iterate through SKUs in ascending order of size (assuming SMALL to LARGE)
+                for sku in available_skus:
+                    barrel = sku_to_barrel.get(sku)
+                    if not barrel:
+                        logger.debug(f"Barrel SKU '{sku}' not available in wholesale catalog. Skipping.")
+                        continue  # Barrel not available for purchase
 
-            # Maximum number of barrels to plan to buy per request to avoid over-purchasing
-            max_barrels_to_buy = 2
+                    # Check if purchasing this barrel exceeds ML capacity
+                    if remaining_capacity < barrel.ml_per_barrel:
+                        logger.warning(f"Not enough ML capacity to purchase '{sku}'. Required: {barrel.ml_per_barrel}, Available: {remaining_capacity}. Skipping.")
+                        continue
 
-            # Initialize count of barrels planned to buy
-            barrels_planned = 0
+                    # Check if there's enough gold to purchase this barrel
+                    if gold < barrel.price:
+                        logger.warning(f"Not enough gold to purchase '{sku}'. Price: {barrel.price}, Available Gold: {gold}. Skipping.")
+                        continue
 
-            # Priority order for purchasing barrels when gold is low
-            priority_order = ['green', 'red', 'blue', 'dark']
+                    # Decide quantity to purchase
+                    quantity_to_purchase = 1 # TODO: Decide amount from data analytics and future algorithm
 
-            for color, desired_ml in colors_needed:
-                logger.debug(
-                    f"Planning for color: {color}, Desired ML: {desired_ml}, Current ML: {color_levels[color]}"
-                )
-                if color_levels[color] >= desired_ml:
-                    logger.debug(f"Desired ML for color '{color}' already met. Skipping.")
-                    continue  # Skip colors that have met desired ML
+                    # Add barrel to purchase plan
+                    purchase_plan.append({
+                        "sku": sku,
+                        "quantity": quantity_to_purchase
+                    })
+                    logger.info(f"Added '{sku}' x{quantity_to_purchase} to purchase plan.")
 
-                # Get list of possible barrels for current color, sorted by size (small to large)
-                color_to_barrels = {
-                    'red': ['SMALL_RED_BARREL', 'MEDIUM_RED_BARREL', 'LARGE_RED_BARREL'],
-                    'green': ['SMALL_GREEN_BARREL', 'MEDIUM_GREEN_BARREL', 'LARGE_GREEN_BARREL'],
-                    'blue': ['SMALL_BLUE_BARREL', 'MEDIUM_BLUE_BARREL', 'LARGE_BLUE_BARREL'],
-                    'dark': ['LARGE_DARK_BARREL']  # Only large dark barrels available
-                }
-                barrel_skus = color_to_barrels[color]
+                    # Update gold and remaining_capacity
+                    gold -= barrel.price * quantity_to_purchase
+                    remaining_capacity -= barrel.ml_per_barrel * quantity_to_purchase
 
-                for barrel_sku in barrel_skus:
-                    if barrels_planned >= max_barrels_to_buy:
-                        logger.debug(
-                            f"Reached maximum barrels to buy: {max_barrels_to_buy}. Stopping further purchases."
-                        )
-                        break  # Reached purchase limit
+                    logger.debug(f"Updated Gold: {gold}, Remaining Capacity: {remaining_capacity}")
 
-                    if barrel_sku in sku_to_barrel:
-                        barrel = sku_to_barrel[barrel_sku]
-                        barrel_total_ml = barrel.ml_per_barrel
-                        barrel_price = barrel.price
-                        barrel_quantity_available = barrel.quantity
+            logger.debug(f"Final Purchase Plan: {purchase_plan}")
+            logger.info("Completed generating barrel purchase plan.")
 
-                        logger.debug(
-                            f"Considering purchase of {barrel_sku}: "
-                            f"price={barrel_price}, ML per barrel={barrel_total_ml}, "
-                            f"quantity_available={barrel_quantity_available}"
-                        )
+            return purchase_plan
 
-                        # Check if there is enough ML capacity to store barrel
-                        if remaining_capacity < barrel_total_ml:
-                            logger.debug(
-                                f"Skipping {barrel_sku}: Not enough ML capacity. "
-                                f"Required: {barrel_total_ml}, Available: {remaining_capacity}"
-                            )
-                            continue  # Skip this barrel
-
-                        # Check if there is enough gold to purchase barrel
-                        if gold < barrel_price:
-                            logger.debug(
-                                f"Skipping {barrel_sku}: Not enough gold. "
-                                f"Required: {barrel_price}, Available: {gold}"
-                            )
-                            continue  # Skip this barrel
-
-                        # Decide how many barrels to buy (start with 1)
-                        quantity_to_buy = 1
-                        quantity_to_buy = min(quantity_to_buy, barrel_quantity_available)
-                        if quantity_to_buy <= 0:
-                            logger.debug(f"No available quantity to buy for {barrel_sku}. Skipping.")
-                            continue  # Skip if no quantity is available
-
-                        # Add to purchase plan
-                        purchase_plan.append(
-                            {
-                                "sku": barrel_sku,
-                                "quantity": quantity_to_buy
-                            }
-                        )
-                        logger.info(
-                            f"Planning to purchase {quantity_to_buy} of {barrel_sku}."
-                        )
-
-                        # Update gold, remaining capacity, and color ML levels
-                        gold -= barrel_price * quantity_to_buy
-                        remaining_capacity -= barrel_total_ml * quantity_to_buy
-                        color_levels[color] += barrel_total_ml * quantity_to_buy
-                        barrels_planned += 1
-
-                        logger.debug(
-                            f"After purchasing {barrel_sku}: gold={gold}, "
-                            f"remaining_capacity={remaining_capacity}, "
-                            f"{color}_ml={color_levels[color]}"
-                        )
-                    else:
-                        logger.debug(f"{barrel_sku} not available in catalog. Skipping.")
-
-                if barrels_planned >= max_barrels_to_buy:
-                    break  # Reached purchase limit
-
-            logger.info("Wholesale purchase plan generated successfully.")
-            logger.debug(f"Purchase Plan: {purchase_plan}")
-
-    except HTTPException as e:
-        logger.error(f"HTTPException in get_wholesale_purchase_plan: {e.detail}")
-        raise e
+    except HTTPException as he:
+        logger.error(f"HTTPException in get_wholesale_purchase_plan: {he.detail}")
+        raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in get_wholesale_purchase_plan: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
-    logger.debug(f"Returning purchase_plan: {purchase_plan}")
-    logger.info("Finished processing wholesale purchase plan.")
-    return purchase_plan

@@ -6,14 +6,15 @@ DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS potions CASCADE;
 DROP TABLE IF EXISTS global_inventory CASCADE;
 DROP TABLE IF EXISTS visits CASCADE;
+DROP TABLE IF EXISTS game_time CASCADE;
 
--- 1. Visits Table (Parent)
+-- Visits Table (Parent)
 CREATE TABLE visits (
     visit_id BIGSERIAL PRIMARY KEY,
     visit_time TIMESTAMPTZ NOT NULL
 );
 
--- 2. Global Inventory Table (Independent)
+-- Global Inventory Table (Independent)
 CREATE TABLE global_inventory (
     id BIGINT PRIMARY KEY,
     gold INT DEFAULT 100,
@@ -27,7 +28,7 @@ CREATE TABLE global_inventory (
     ml_capacity_units INT DEFAULT 1
 );
 
--- 3. Potions Table (Independent)
+-- Potions Table (Independent)
 CREATE TABLE potions (
     potion_id BIGSERIAL PRIMARY KEY,
     name VARCHAR NOT NULL,
@@ -42,7 +43,7 @@ CREATE TABLE potions (
     current_quantity INT NOT NULL
 );
 
--- 4. Customers Table (References Visits)
+-- Customers Table (References Visits)
 CREATE TABLE customers (
     customer_id BIGSERIAL PRIMARY KEY,
     visit_id BIGINT REFERENCES visits(visit_id),
@@ -51,7 +52,7 @@ CREATE TABLE customers (
     level INT NOT NULL
 );
 
--- 5. Carts Table (References Customers)
+-- Carts Table (References Customers)
 CREATE TABLE carts (
     cart_id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES customers(customer_id),
@@ -62,7 +63,7 @@ CREATE TABLE carts (
     payment VARCHAR
 );
 
--- 6. Cart Items Table (References Carts and Potions)
+-- Cart Items Table (References Carts and Potions)
 CREATE TABLE cart_items (
     cart_item_id BIGSERIAL PRIMARY KEY,
     cart_id BIGINT REFERENCES carts(cart_id),
@@ -72,7 +73,7 @@ CREATE TABLE cart_items (
     line_item_total INT NOT NULL
 );
 
--- 7. Ledger Entries Table (References Potions)
+-- Ledger Entries Table (References Potions)
 CREATE TABLE ledger_entries (
     ledger_entry_id BIGSERIAL PRIMARY KEY,
     change_type VARCHAR NOT NULL,
@@ -82,4 +83,12 @@ CREATE TABLE ledger_entries (
     potion_id INT REFERENCES potions(potion_id),
     description TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Game Time Table
+CREATE TABLE game_time (
+    id BIGSERIAL PRIMARY KEY,
+    current_day VARCHAR NOT NULL,
+    current_hour INT NOT NULL,
+    last_updated TIMESTAMPTZ DEFAULT NOW()
 );
