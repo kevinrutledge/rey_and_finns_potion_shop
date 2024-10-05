@@ -322,8 +322,11 @@ def get_bottle_plan():
                     continue  # No capacity to brew this potion
 
                 # Add to bottle plan
-                bottle_plan.append({potion_type, potions_to_brew})
-
+                bottle_plan.append({
+                    "potion_type": potion_type,
+                    "quantity": potions_to_brew
+                })
+                
                 logger.info(f"Planned to brew {potions_to_brew} units of {potion['name']}.")
 
                 # Update remaining capacity and ML in inventory
