@@ -6,7 +6,6 @@ DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS potions CASCADE;
 DROP TABLE IF EXISTS global_inventory CASCADE;
 DROP TABLE IF EXISTS visits CASCADE;
-DROP TABLE IF EXISTS game_time CASCADE;
 
 -- Visits Table (Parent)
 CREATE TABLE visits (
@@ -56,8 +55,11 @@ CREATE TABLE customers (
 CREATE TABLE carts (
     cart_id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES customers(customer_id),
+    in_game_day VARCHAR,
+    in_game_hour INT,
     created_at TIMESTAMPTZ NOT NULL,
     checked_out BOOLEAN DEFAULT FALSE,
+    checked_out_at TIMESTAMPTZ;
     total_potions_bought INT DEFAULT 0,
     total_gold_paid INT DEFAULT 0,
     payment VARCHAR
@@ -83,12 +85,4 @@ CREATE TABLE ledger_entries (
     potion_id INT REFERENCES potions(potion_id),
     description TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Game Time Table
-CREATE TABLE game_time (
-    id BIGSERIAL PRIMARY KEY,
-    current_day VARCHAR NOT NULL,
-    current_hour INT NOT NULL,
-    last_updated TIMESTAMPTZ DEFAULT NOW()
 );
