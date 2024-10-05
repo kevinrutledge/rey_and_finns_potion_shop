@@ -291,6 +291,7 @@ def get_bottle_plan():
                 # {'name': 'Dark Green Potion', 'potion_type': [0, 50, 0, 50]},
                 # {'name': 'Dark Blue Potion', 'potion_type': [0, 0, 50, 50]},
                 # {'name': 'Dark Red Potion', 'potion_type': [50, 0, 0, 50]},
+                # {'name': 'Dark Brown Potion', 'potion_type': [25, 25, 25, 25]},
                 # TODO: Use data analytics to see if there's more combos to be made
             ]
 

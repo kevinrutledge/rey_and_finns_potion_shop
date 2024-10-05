@@ -59,7 +59,7 @@ CREATE TABLE carts (
     in_game_hour INT,
     created_at TIMESTAMPTZ NOT NULL,
     checked_out BOOLEAN DEFAULT FALSE,
-    checked_out_at TIMESTAMPTZ;
+    checked_out_at TIMESTAMPTZ,
     total_potions_bought INT DEFAULT 0,
     total_gold_paid INT DEFAULT 0,
     payment VARCHAR
