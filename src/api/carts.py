@@ -1,11 +1,13 @@
 import sqlalchemy
 import logging
 from src import database as db
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
 from enum import Enum
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
+from typing import Tuple
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -36,25 +38,65 @@ class CartItem(BaseModel):
 class CartCheckout(BaseModel):
     payment: str
 
+# List of in-game days
+IN_GAME_DAYS = [
+    "Hearthday",
+    "Crownday",
+    "Blesseday",
+    "Soulday",
+    "Edgeday",
+    "Bloomday",
+    "Aracanaday"
+]
+DAYS_PER_WEEK = len(IN_GAME_DAYS)
+
+# Define the local timezone
+LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
+
 # Function to compute in-game time
-def compute_in_game_time(real_time):
-    EPOCH = datetime(2023, 1, 1, 0, 0, tzinfo=timezone.utc)
-    TICK_INTERVAL = timedelta(hours=2)
-    HOURS_PER_DAY = 12
-    DAYS_PER_WEEK = 7
-    IN_GAME_DAYS = [
-        "Edgeday",
-        "Soulday",
-        "Aracanaday",
-        "Hearthday",
-        "Crownday",
-        "Blesseday",
-        "Bloomday"
-    ]
-    total_ticks = int((real_time - EPOCH) / TICK_INTERVAL)
-    in_game_hour = (total_ticks % HOURS_PER_DAY) + 1
-    in_game_day_index = (total_ticks // HOURS_PER_DAY) % DAYS_PER_WEEK
+def compute_in_game_time(real_time: datetime) -> Tuple[str, int]:
+    """
+    Compute in-game day and hour based on provided local real_time.
+
+    Rounding Rules:
+    - If real_time.hour is odd:
+        - Round up to the next hour.
+    - If real_time.hour is even:
+        - Round down to the same hour.
+
+    Args:
+        real_time (datetime): Real-world local timestamp to convert.
+
+    Returns:
+        Tuple[str, int]: Tuple containing in-game day and in-game hour.
+    """
+    # Define epoch (start of game) in local time
+    EPOCH = datetime(2024, 1, 1, 0, 0, 0)
+
+    # Calculate time difference between real_time and EPOCH
+    delta = real_time - EPOCH
+    total_seconds = delta.total_seconds()
+    total_hours = int(total_seconds // 3600)
+
+    # Calculate in-game day index and name
+    in_game_day_index = (total_hours // 24) % DAYS_PER_WEEK
     in_game_day = IN_GAME_DAYS[in_game_day_index]
+
+    # Apply Even/Odd Rounding Logic
+    if real_time.hour % 2 == 1:
+        # Odd hour: round up to the next hour
+        rounded_time = (real_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        # Check if day changes
+        if rounded_time.day != real_time.day:
+            in_game_day_index = (in_game_day_index + 1) % DAYS_PER_WEEK
+            in_game_day = IN_GAME_DAYS[in_game_day_index]
+    else:
+        # Even hour: round down to the same hour
+        rounded_time = real_time.replace(minute=0, second=0, microsecond=0)
+
+    # Set in_game_hour as the rounded hour (no offset)
+    in_game_hour = rounded_time.hour
+
     return in_game_day, in_game_hour
 
 
@@ -91,11 +133,14 @@ def search_orders(
     time is 5 total line items.
     """
     logger.info("Endpoint /carts/search/ called.")
-    logger.debug(f"Parameters - customer_name: '{customer_name}', potion_sku: '{potion_sku}', search_page: {search_page}, sort_col: '{sort_col}', sort_order: '{sort_order}'")
-
+    logger.debug(
+        f"Parameters received - customer_name: '{customer_name}', "
+        f"potion_sku: '{potion_sku}', search_page: {search_page}, "
+        f"sort_col: '{sort_col}', sort_order: '{sort_order}'"
+    )
     try:
         with db.engine.begin() as connection:
-            # Build base SQL query with necessary joins
+            # Build base SQL query
             logger.debug("Building base SQL query for searching orders.")
             base_query = sqlalchemy.select(
                 [
@@ -103,9 +148,7 @@ def search_orders(
                     sqlalchemy.column('p.sku').label('item_sku'),
                     sqlalchemy.column('cust.customer_name'),
                     sqlalchemy.column('ci.line_item_total'),
-                    sqlalchemy.column('c.checked_out_at').label('timestamp'),
-                    sqlalchemy.column('c.in_game_day'),
-                    sqlalchemy.column('c.in_game_hour')
+                    sqlalchemy.column('c.checked_out_at').label('timestamp')
                 ]
             ).select_from(
                 sqlalchemy.text(
@@ -132,7 +175,6 @@ def search_orders(
                 params['potion_sku'] = f"%{potion_sku}%"
                 logger.debug(f"Filtering by potion_sku: {potion_sku}")
             if filters:
-                logger.debug(f"Applying filters: {[f.keys() for f in filters]}")
                 base_query = base_query.where(sqlalchemy.and_(*filters))
 
             # Apply sorting
@@ -143,45 +185,51 @@ def search_orders(
                 'timestamp': 'c.checked_out_at'
             }
             sort_column = sort_column_map.get(sort_col.value, 'c.checked_out_at')
-            order_direction = sqlalchemy.asc if sort_order == sqlalchemy.SearchSortOrder.asc else sqlalchemy.desc
+            order_direction = sqlalchemy.asc if sort_order == 'asc' else sqlalchemy.desc
             logger.debug(f"Applying sorting by {sort_column} in {sort_order} order.")
             base_query = base_query.order_by(order_direction(sqlalchemy.text(sort_column)))
 
             # Apply pagination
             page_size = 5
             offset = (search_page - 1) * page_size
-            logger.debug(f"Applying pagination - Page Size: {page_size}, Offset: {offset}")
+            logger.debug(f"Applying pagination - page_size: {page_size}, offset: {offset}")
             base_query = base_query.offset(offset).limit(page_size + 1)  # Fetch one extra to check for next page
 
             # Execute query
             logger.debug("Executing SQL query.")
             result = connection.execute(base_query, params)
             items = result.mappings().fetchall()
-            logger.debug(f"Query returned {len(items)} items (including one extra for pagination).")
+            logger.debug(f"Query returned {len(items)} items (including one extra for pagination check).")
 
             # Determine previous and next page
             previous_page = search_page - 1 if search_page > 1 else None
             next_page = search_page + 1 if len(items) > page_size else None
-            logger.debug(f"Pagination - Previous Page: {previous_page}, Next Page: {next_page}")
 
             # Prepare results
             results = []
             for item in items[:page_size]:
                 timestamp = item['timestamp']
                 if timestamp:
-                    in_game_day, in_game_hour = compute_in_game_time(timestamp)
-                    logger.debug(f"Line Item ID {item['line_item_id']} - In-game Day: {in_game_day}, Hour: {in_game_hour}")
+                    # Convert UTC timestamp to local timezone
+                    timestamp_local = timestamp.astimezone(LOCAL_TIMEZONE)
+                    in_game_day, in_game_hour = compute_in_game_time(timestamp_local)
+                    logger.debug(
+                        f"Line Item ID {item['line_item_id']} - In-game Day: {in_game_day}, "
+                        f"Hour: {in_game_hour}:00, Real Timestamp (Local): {timestamp_local.isoformat()}"
+                    )
                 else:
-                    in_game_day = in_game_hour = None
+                    in_game_day, in_game_hour = "Unknown", 0
                     logger.debug(f"Line Item ID {item['line_item_id']} has no timestamp.")
 
-                timestamp_iso = timestamp.isoformat() if timestamp else None
+                timestamp_iso = timestamp_local.isoformat() if timestamp else None
                 results.append({
                     'line_item_id': item['line_item_id'],
                     'item_sku': item['item_sku'],
                     'customer_name': item['customer_name'],
                     'line_item_total': item['line_item_total'],
-                    'timestamp': timestamp_iso
+                    'timestamp': timestamp_iso,
+                    'in_game_day': in_game_day,
+                    'in_game_hour': in_game_hour
                 })
 
             # Build response
@@ -190,20 +238,23 @@ def search_orders(
                 'next': str(next_page) if next_page else "",
                 'results': results
             }
+
             logger.debug(f"Prepared response: {response}")
+            logger.info(f"Search completed with {len(results)} results.")
+            return response
 
-        logger.info(f"Search completed with {len(results)} results.")
-        return response
-
+    except sqlalchemy.exc.SQLAlchemyError as e:
+        logger.exception(f"Database error in search_orders: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred.")
     except Exception as e:
-        logger.error(f"Unhandled exception in search_orders: {e}")
+        logger.exception(f"Unhandled exception in search_orders: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.post("/visits/{visit_id}")
 def post_visits(visit_id: int, customers: list[Customer]):
     """
-    Which customers visited the shop today?
+    Which customers visited shop today?
     """
     logger.info(f"Endpoint /carts/visits/{visit_id} called with {len(customers)} customers.")
     logger.debug(f"Visit ID: {visit_id}, Customers: {customers}")
@@ -242,14 +293,14 @@ def post_visits(visit_id: int, customers: list[Customer]):
                 )
                 logger.info(f"Inserted customer '{customer.customer_name}' for visit_id {visit_id}.")
 
-        logger.info("All customers for  visit have been recorded successfully.")
+        logger.info("All customers for visit have been recorded successfully.")
         return {"success": True}
 
     except sqlalchemy.exc.IntegrityError as e:
         logger.error(f"IntegrityError: {e}")
         raise HTTPException(status_code=400, detail="Visit ID already exists.")
     except Exception as e:
-        logger.error(f"Unhandled exception: {e}")
+        logger.exception(f"Unhandled exception in post_visits: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
@@ -258,12 +309,12 @@ def create_cart(new_cart: Customer):
     """
     Create new cart for customer.
     """
-    logger.info(f"Endpoint /carts/ called to create  new cart for customer '{new_cart.customer_name}'.")
+    logger.info(f"Endpoint /carts/ called to create a new cart for customer '{new_cart.customer_name}'.")
     logger.debug(f"Customer Details: {new_cart.dict()}")
 
     try:
         with db.engine.begin() as connection:
-            # Retrieve customer_id based on customer details
+            # Retrieve the latest customer_id based on customer details
             logger.debug("Retrieving customer_id from 'customers' table.")
             result = connection.execute(
                 sqlalchemy.text(
@@ -289,8 +340,9 @@ def create_cart(new_cart: Customer):
             customer_id = customer_row['customer_id']
             logger.debug(f"Retrieved customer_id: {customer_id}")
 
-            # Compute in-game day and hour
-            current_time = datetime.utcnow().replace(tzinfo=timezone.utc)
+            # Get current local time for in-game time computation
+            LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
+            current_time = datetime.now(tz=LOCAL_TIMEZONE)
             in_game_day, in_game_hour = compute_in_game_time(current_time)
             logger.debug(f"Computed in-game time for cart creation - Day: {in_game_day}, Hour: {in_game_hour}")
 
@@ -325,7 +377,7 @@ def create_cart(new_cart: Customer):
         logger.error(f"HTTPException in create_cart: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Unhandled exception in create_cart: {e}")
+        logger.exception(f"Unhandled exception in create_cart: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
@@ -447,7 +499,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
         logger.error(f"HTTPException in set_item_quantity: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Unhandled exception in set_item_quantity: {e}")
+        logger.exception(f"Unhandled exception in set_item_quantity: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
@@ -508,10 +560,16 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 potion_id = item['potion_id']
                 quantity = item['quantity']
                 potion_stock = item['potion_stock']
-                logger.debug(f"Processing cart_item_id {item['cart_item_id']}: Potion ID {potion_id}, Quantity {quantity}, Stock {potion_stock}")
+                logger.debug(
+                    f"Processing cart_item_id {item['cart_item_id']}: "
+                    f"Potion ID {potion_id}, Quantity {quantity}, Stock {potion_stock}"
+                )
 
                 if quantity > potion_stock:
-                    logger.error(f"Not enough stock for potion_id {potion_id}. Requested: {quantity}, Available: {potion_stock}.")
+                    logger.error(
+                        f"Not enough stock for potion_id {potion_id}. "
+                        f"Requested: {quantity}, Available: {potion_stock}."
+                    )
                     raise HTTPException(
                         status_code=400,
                         detail=f"Not enough stock for potion ID {potion_id}."
@@ -519,7 +577,9 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
                 total_potions_bought += quantity
                 total_gold_paid += item['line_item_total']
-                logger.debug(f"Accumulated totals - Potions: {total_potions_bought}, Gold: {total_gold_paid}")
+                logger.debug(
+                    f"Accumulated totals - Potions: {total_potions_bought}, Gold: {total_gold_paid}"
+                )
 
             # Update potions stock
             for item in cart_items:
@@ -571,9 +631,11 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             logger.info(f"Updated gold in global_inventory to {new_gold}.")
 
             # Compute in-game day and hour at checkout
-            checked_out_at = datetime.utcnow().replace(tzinfo=timezone.utc)
-            in_game_day, in_game_hour = compute_in_game_time(checked_out_at)
-            logger.debug(f"Computed in-game time for checkout - Day: {in_game_day}, Hour: {in_game_hour}")
+            checked_out_at_local = datetime.now(tz=LOCAL_TIMEZONE)
+            in_game_day, in_game_hour = compute_in_game_time(checked_out_at_local)
+            logger.debug(
+                f"Computed in-game time for checkout - Day: {in_game_day}, Hour: {in_game_hour}"
+            )
 
             # Mark cart as checked out and update totals
             logger.debug("Marking cart as checked out and updating totals.")
@@ -595,25 +657,30 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                     'total_potions_bought': total_potions_bought,
                     'total_gold_paid': total_gold_paid,
                     'payment': cart_checkout.payment,
-                    'checked_out_at': checked_out_at,
+                    'checked_out_at': checked_out_at_local,
                     'in_game_day': in_game_day,
                     'in_game_hour': in_game_hour,
                     'cart_id': cart_id
                 }
             )
-            logger.info(f"Checked out cart {cart_id}: {total_potions_bought} potions bought, {total_gold_paid} gold paid.")
+            logger.info(
+                f"Checked out cart {cart_id}: {total_potions_bought} potions bought, "
+                f"{total_gold_paid} gold paid."
+            )
 
         logger.info("Checkout process completed successfully.")
-        logger.debug(f"Returning response: {{'total_potions_bought': {total_potions_bought}, 'total_gold_paid': {total_gold_paid}}}")
+        logger.debug(
+            f"Returning response: {{'total_potions_bought': {total_potions_bought}, "
+            f"'total_gold_paid': {total_gold_paid}}}"
+        )
         return {
             "total_potions_bought": total_potions_bought,
             "total_gold_paid": total_gold_paid
         }
-    
+
     except HTTPException as e:
-        # Re-raise HTTPExceptions
         logger.error(f"HTTPException in checkout: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Error in checkout: {e}")
+        logger.exception(f"Unhandled exception in checkout: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")

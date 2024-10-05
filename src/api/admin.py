@@ -109,7 +109,7 @@ DEFAULT_POTIONS = [
         'dark_ml': 50,
         'total_ml': 100,
         'price': 50,
-        'description': 'Hypothesis: Grants both shadow and vitality',
+        'description': 'Hypothesis: Grants both shadow and vitality.',
         'current_quantity': 0
     },
     {
