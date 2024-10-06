@@ -70,8 +70,8 @@ def compute_in_game_time(real_time: datetime) -> Tuple[str, int]:
     Returns:
         Tuple[str, int]: Tuple containing in-game day and in-game hour.
     """
-    # Define epoch (start of game) in local time
-    EPOCH = datetime(2024, 1, 1, 0, 0, 0)
+    # Define epoch (start of game) with timezone
+    EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
 
     # Calculate time difference between real_time and EPOCH
     delta = real_time - EPOCH
