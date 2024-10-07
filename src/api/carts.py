@@ -1,7 +1,7 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src.utilities import TimeUtils as ti
+from src.utilities import Utils as ti
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth

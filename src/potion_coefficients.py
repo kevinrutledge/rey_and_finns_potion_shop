@@ -186,6 +186,8 @@ potion_coefficients = {
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
         ],
     },
+
+    # Crownday
     "Crownday": {
         "night": [
             # Define potions for hours 2, 4, 6
@@ -224,6 +226,8 @@ potion_coefficients = {
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
         ],
     },
+
+    # Blessday
     "Blesseday": {
         "night": [
             # Define potions for hours 2, 4, 6
@@ -262,6 +266,8 @@ potion_coefficients = {
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
         ],
     },
+
+    # Soulday
     "Soulday": {
         "night": [
             # Define potions for hours 2, 4, 6
@@ -300,6 +306,8 @@ potion_coefficients = {
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100},
         ],
     },
+
+    # Edgeday
     "Edgeday": {
         "night": [
             # Define potions for hours 2, 4, 6
@@ -337,6 +345,8 @@ potion_coefficients = {
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 3, "price": 100},
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100},
         ],
+    
+    # Bloomday
     },
     "Bloomday": {
         "night": [
@@ -376,6 +386,8 @@ potion_coefficients = {
             {"name": "Dark Blue Potion", "composition": [0, 0, 50, 50], "demand": 2, "price": 100},
         ],
     },
+
+    # Aracanday
     "Aracanaday": {
         "night": [
             # Define potions for hours 2, 4, 6

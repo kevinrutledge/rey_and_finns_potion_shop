@@ -1,7 +1,8 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src.utilities import TimeUtils as ti
+from src import potion_coefficients as po
+from src.utilities import Utils as ut
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
@@ -77,170 +78,137 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """
     Process delivery of barrels to inventory.
     """
-    logger.info(f"Starting post_deliver_barrels endpoint for order_id {order_id}.")
-    logger.debug(f"Barrels delivered: {barrels_delivered}")
-    
+    logger.info(f"Endpoint /barrels/deliver/{order_id} called with {len(barrels_delivered)} barrels.")
+    logger.debug(f"Received barrels_delivered: {barrels_delivered}")
+
     try:
         with db.engine.begin() as connection:
-            # Insert a new barrel visit
-            logger.debug("Inserting barrel visit into 'barrel_visits' table.")
-            current_time = datetime.now(tz=ti.LOCAL_TIMEZONE)
-            in_game_day, in_game_hour = ti.compute_in_game_time(current_time)
-            logger.debug(f"Computed in-game time for barrel visit - Day: {in_game_day}, Hour: {in_game_hour}")
-            
-            result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    INSERT INTO barrel_visits (visit_time, in_game_day, in_game_hour)
-                    VALUES (:visit_time, :in_game_day, :in_game_hour)
-                    RETURNING barrel_visit_id;
-                    """
-                ),
-                {
-                    'visit_time': current_time,
-                    'in_game_day': in_game_day,
-                    'in_game_hour': in_game_hour
-                }
-            )
-            barrel_visit = result.mappings().fetchone()
-            if not barrel_visit:
-                logger.error("Failed to insert barrel_visit record.")
-                raise HTTPException(status_code=500, detail="Failed to record barrel visit.")
-            barrel_visit_id = barrel_visit['barrel_visit_id']
-            logger.info(f"Inserted barrel visit with barrel_visit_id {barrel_visit_id} at {current_time.isoformat()}.")
+            for barrel in barrels_delivered:
+                sku = barrel.sku
+                quantity = barrel.quantity
+                ml_per_barrel = barrel.ml_per_barrel
+                potion_type = barrel.potion_type  # [red, green, blue, dark]
+                price = barrel.price
 
-            # Retrieve current inventory details
-            logger.debug("Fetching current inventory from 'global_inventory'.")
-            result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT red_ml, green_ml, blue_ml, dark_ml, gold, ml_capacity_units
+                logger.debug(f"Processing delivered barrel - SKU: {sku}, Quantity: {quantity}, ML per barrel: {ml_per_barrel}, Potion Type: {potion_type}, Price: {price}")
+
+                # Validate potion_type
+                if len(potion_type) != 4 or sum(potion_type) != 100:
+                    logger.error(f"Invalid potion_type for SKU {sku}: {potion_type}")
+                    raise HTTPException(status_code=400, detail=f"Invalid potion_type for SKU {sku}")
+
+                # Fetch the corresponding potion from potions table
+                logger.debug(f"Fetching potion details for SKU: {sku}")
+                query_potion = """
+                    SELECT potion_id, red_ml, green_ml, blue_ml, dark_ml, current_quantity
+                    FROM potions
+                    WHERE sku = :sku
+                    LIMIT 1;
+                """
+                result = connection.execute(
+                    sqlalchemy.text(query_potion),
+                    {'sku': sku}
+                )
+                potion = result.mappings().fetchone()
+
+                if not potion:
+                    logger.error(f"No potion found with SKU: {sku}")
+                    raise HTTPException(status_code=400, detail=f"No potion found with SKU: {sku}")
+
+                potion_id = potion['potion_id']
+                current_quantity = potion['current_quantity']
+
+                logger.debug(f"Found Potion ID: {potion_id} with Current Quantity: {current_quantity}")
+
+                # Calculate total ML to add
+                total_ml_to_add = ml_per_barrel * quantity
+                logger.debug(f"Total ML to add for SKU {sku}: {total_ml_to_add}")
+
+                # Update global_inventory ML counts
+                ml_fields = ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']
+                for idx, color_ml in enumerate(potion_type):
+                    color_field = ml_fields[idx]
+                    if color_ml > 0:
+                        update_ml_query = f"""
+                            UPDATE global_inventory
+                            SET {color_field} = {color_field} + :ml_to_add
+                            WHERE id = 1;
+                        """
+                        connection.execute(
+                            sqlalchemy.text(update_ml_query),
+                            {'ml_to_add': color_ml * quantity}
+                        )
+                        logger.debug(f"Added {color_ml * quantity} ML to {color_field} in global_inventory.")
+
+                # Update total_ml in global_inventory
+                logger.debug("Recalculating total_ml in global_inventory.")
+                query_total_ml = """
+                    SELECT red_ml, green_ml, blue_ml, dark_ml
                     FROM global_inventory
                     WHERE id = 1;
-                    """
+                """
+                result = connection.execute(sqlalchemy.text(query_total_ml))
+                updated_inventory = result.mappings().fetchone()
+                total_ml = (
+                    updated_inventory['red_ml'] +
+                    updated_inventory['green_ml'] +
+                    updated_inventory['blue_ml'] +
+                    updated_inventory['dark_ml']
                 )
-            )
-            inventory_row = result.mappings().fetchone()
-            logger.debug(f"Current Inventory: {inventory_row}")
-    
-            if not inventory_row:
-                logger.error("Global inventory record not found.")
-                raise HTTPException(status_code=500, detail="Global inventory not found.")
-    
-            red_ml = inventory_row['red_ml']
-            green_ml = inventory_row['green_ml']
-            blue_ml = inventory_row['blue_ml']
-            dark_ml = inventory_row['dark_ml']
-            gold = inventory_row['gold']
-            ml_capacity_units = inventory_row['ml_capacity_units']
-    
-            logger.debug(
-                f"Inventory before processing: red_ml={red_ml}, green_ml={green_ml}, "
-                f"blue_ml={blue_ml}, dark_ml={dark_ml}, gold={gold}, ml_capacity_units={ml_capacity_units}"
-            )
-    
-            total_gold_spent = 0
-    
-            # Mapping of color names to indices
-            color_map = {'red': 'red_ml', 'green': 'green_ml', 'blue': 'blue_ml', 'dark': 'dark_ml'}
-    
-            for barrel in barrels_delivered:
-                logger.debug(f"Processing delivered barrel: {barrel.dict()}")
-                potion_type = barrel.potion_type
-                quantity = barrel.quantity
-    
-                # Identify color based on potion_type
-                color = get_color_from_potion_type(potion_type)
-                if color == 'unknown':
-                    logger.warning(f"Invalid or mixed potion_type in delivered barrel SKU {barrel.sku}. Skipping.")
-                    continue
-                logger.debug(f"Identified color '{color}' for potion_type {potion_type}")
-    
-                ml_to_add = barrel.ml_per_barrel * quantity
-                gold_cost = barrel.price * quantity
-    
-                logger.debug(
-                    f"Barrel SKU {barrel.sku}: ml_to_add={ml_to_add}, gold_cost={gold_cost}"
-                )
-    
-                # Check if there is enough gold to purchase barrel
-                if gold < gold_cost:
-                    logger.error(
-                        f"Not enough gold to pay for delivered barrel SKU {barrel.sku}. "
-                        f"Needed: {gold_cost}, Available: {gold}."
-                    )
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Insufficient gold to pay for delivered barrels SKU {barrel.sku}.",
-                    )
-    
-                # Update ML levels and deduct gold
-                current_ml_field = color_map[color]
-                current_ml = inventory_row[current_ml_field]
-                new_ml = current_ml + ml_to_add
-    
-                logger.debug(f"Updating {current_ml_field}: {current_ml} + {ml_to_add} = {new_ml}")
-    
-                # Update inventory
-                update_inventory_query = sqlalchemy.text(
-                    f"""
+                logger.debug(f"Total ML after addition: {total_ml}")
+
+                update_total_ml_query = """
                     UPDATE global_inventory
-                    SET {current_ml_field} = :new_ml,
-                        gold = :new_gold
+                    SET total_ml = :total_ml
                     WHERE id = 1;
-                    """
-                )
+                """
                 connection.execute(
-                    update_inventory_query,
+                    sqlalchemy.text(update_total_ml_query),
+                    {'total_ml': total_ml}
+                )
+                logger.debug("Updated total_ml in global_inventory.")
+
+                # Update potion's current_quantity
+                new_quantity = current_quantity + quantity
+                logger.debug(f"Updating potion ID {potion_id} quantity from {current_quantity} to {new_quantity}.")
+                update_potion_query = """
+                    UPDATE potions
+                    SET current_quantity = :new_quantity
+                    WHERE potion_id = :potion_id;
+                """
+                connection.execute(
+                    sqlalchemy.text(update_potion_query),
                     {
-                        'new_ml': new_ml,
-                        'new_gold': gold - gold_cost
+                        'new_quantity': new_quantity,
+                        'potion_id': potion_id
                     }
                 )
-    
-                # Update local variables
-                inventory_row[current_ml_field] = new_ml
-                gold -= gold_cost
-                total_gold_spent += gold_cost
-    
-                logger.debug(
-                    f"Updated inventory: {current_ml_field}={new_ml}, gold={gold}"
-                )
-    
-                # Insert barrel record linked to barrel_visit
-                logger.debug(f"Inserting barrel SKU {barrel.sku} into 'barrels' table linked to barrel_visit_id {barrel_visit_id}.")
+                logger.info(f"Updated potion ID {potion_id} quantity to {new_quantity}.")
+
+                # Deduct gold based on purchase
+                total_cost = price * quantity
+                logger.debug(f"Total cost for SKU {sku}: {total_cost}")
+
+                update_gold_query = """
+                    UPDATE global_inventory
+                    SET gold = gold - :cost
+                    WHERE id = 1;
+                """
                 connection.execute(
-                    sqlalchemy.text(
-                        """
-                        INSERT INTO barrels (sku, ml_per_barrel, potion_type, price, quantity, barrel_visit_id)
-                        VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity, :barrel_visit_id);
-                        """
-                    ),
-                    {
-                        'sku': barrel.sku,
-                        'ml_per_barrel': barrel.ml_per_barrel,
-                        'potion_type': ','.join(map(str, potion_type)),  # Store as comma-separated string
-                        'price': barrel.price,
-                        'quantity': barrel.quantity,
-                        'barrel_visit_id': barrel_visit_id
-                    }
+                    sqlalchemy.text(update_gold_query),
+                    {'cost': total_cost}
                 )
-                logger.info(f"Inserted barrel SKU {barrel.sku} with quantity {quantity} linked to barrel_visit_id {barrel_visit_id}.")
-    
-            # Log total gold spent
-            logger.debug(f"Total gold spent on barrels: {total_gold_spent}")
-    
-    except HTTPException as e:
-        logger.error(f"HTTPException in post_deliver_barrels: {e.detail}")
-        raise e
+                logger.debug(f"Deducted {total_cost} gold from global_inventory.")
+
+        logger.info(f"Successfully processed delivery for order_id {order_id}.")
+        return {"success": True}
+
+    except HTTPException as he:
+        logger.error(f"HTTPException in post_deliver_barrels: {he.detail}")
+        raise he
     except Exception as e:
-        traceback_str = traceback.format_exc()
-        logger.error(f"Unhandled exception in post_deliver_barrels: {e}\nTraceback: {traceback_str}")
+        logger.exception(f"Unhandled exception in post_deliver_barrels: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
-    logger.debug("Returning response: {'status': 'OK'}")
-    logger.info(f"Delivery for order_id {order_id} completed successfully.")
-    return {"status": "OK"}
 
 
 # Gets called once a day
@@ -249,101 +217,50 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """
     Generates wholesale purchase plan based on current inventory.
     """
-    logger.info("Starting get_wholesale_purchase_plan endpoint.")
-    logger.debug(f"Received wholesale_catalog: {[barrel.dict() for barrel in wholesale_catalog]}")
-    
+    logger.info("Endpoint /barrels/plan called.")
+    logger.debug(f"Received wholesale_catalog: {wholesale_catalog}")
+
     try:
         with db.engine.begin() as connection:
-            # Fetch current in-game day
-            current_time = datetime.now(tz=ti.LOCAL_TIMEZONE)
-            in_game_day, _ = ti.compute_in_game_time(current_time)
-            logger.debug(f"Current in-game day: {in_game_day}")
-            
-            # Get preferred potion colors for the day
-            preferred_colors = DAY_POTION_PREFERENCES.get(in_game_day, ["green", "blue", "red"])
-            logger.info(f"Preferred potion colors for {in_game_day}: {preferred_colors}")
-            
-            # Fetch current inventory details
-            logger.debug("Fetching current inventory from 'global_inventory'.")
-            result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT red_ml, green_ml, blue_ml, dark_ml, gold, ml_capacity_units
-                    FROM global_inventory
-                    WHERE id = 1;
-                    """
-                )
-            )
-            inventory_row = result.mappings().fetchone()
-            logger.debug(f"Current Inventory: {inventory_row}")
-    
-            if not inventory_row:
+            # Fetch current inventory and gold from global_inventory
+            logger.debug("Fetching current inventory and gold from global_inventory.")
+            query_inventory = """
+                SELECT gold, total_potions, total_ml, red_ml, green_ml, blue_ml, dark_ml, potion_capacity_units, ml_capacity_units
+                FROM global_inventory
+                WHERE id = 1;
+            """
+            result = connection.execute(sqlalchemy.text(query_inventory))
+            row = result.mappings().fetchone()
+
+            if not row:
                 logger.error("Global inventory record not found.")
-                raise HTTPException(status_code=500, detail="Global inventory not found.")
-    
-            red_ml = inventory_row['red_ml']
-            green_ml = inventory_row['green_ml']
-            blue_ml = inventory_row['blue_ml']
-            dark_ml = inventory_row['dark_ml']
-            gold = inventory_row['gold']
-            ml_capacity_units = inventory_row['ml_capacity_units']
-    
-            logger.debug(
-                f"Inventory before processing: red_ml={red_ml}, green_ml={green_ml}, "
-                f"blue_ml={blue_ml}, dark_ml={dark_ml}, gold={gold}, ml_capacity_units={ml_capacity_units}"
-            )
-    
-            total_gold_spent = 0
-            purchase_plan = []
-    
-            # Define purchasing order based on preferred colors
-            for color in preferred_colors:
-                logger.debug(f"Processing purchases for color: {color}")
-                
-                # Filter available barrels matching the preferred color
-                available_barrels = [
-                    barrel for barrel in wholesale_catalog 
-                    if get_color_from_potion_type(barrel.potion_type) == color
-                ]
-                logger.debug(f"Available barrels for color '{color}': {[barrel.sku for barrel in available_barrels]}")
-    
-                # Sort barrels by price ascending to buy cheaper first
-                available_barrels.sort(key=lambda x: x.price)
-    
-                for barrel in available_barrels:
-                    logger.debug(f"Evaluating barrel SKU: {barrel.sku}, Quantity Available: {barrel.quantity}, Price: {barrel.price}")
-    
-                    # Check if gold is sufficient
-                    if gold < barrel.price:
-                        logger.warning(f"Insufficient gold to purchase barrel SKU {barrel.sku}. Needed: {barrel.price}, Available: {gold}.")
-                        continue
-    
-                    # Decide how many barrels to purchase (e.g., purchase as many as possible)
-                    max_affordable = gold // barrel.price
-                    purchase_quantity = min(barrel.quantity, max_affordable)
-    
-                    if purchase_quantity <= 0:
-                        logger.warning(f"No affordable quantity available for barrel SKU {barrel.sku}.")
-                        continue
-    
-                    # Add to purchase plan
-                    purchase_plan.append({
-                        "sku": barrel.sku,
-                        "quantity": purchase_quantity
-                    })
-                    logger.info(f"Planned to purchase {purchase_quantity} of barrel SKU {barrel.sku}.")
-    
-                    # Update gold and total_gold_spent
-                    gold -= barrel.price * purchase_quantity
-                    total_gold_spent += barrel.price * purchase_quantity
-    
-                    logger.debug(f"Updated gold: {gold}, Total gold spent: {total_gold_spent}")
-    
-            # Log final purchase plan
-            logger.debug(f"Final Purchase Plan: {purchase_plan}")
-            logger.info("Completed generating barrel purchase plan.")
-    
-            return purchase_plan
+                raise HTTPException(status_code=500, detail="Global inventory record not found.")
+
+            # Prepare current inventory dictionary
+            current_inventory = {
+                'gold': row['gold'],
+                'total_potions': row['total_potions'],
+                'total_ml': row['total_ml'],
+                'red_ml': row['red_ml'],
+                'green_ml': row['green_ml'],
+                'blue_ml': row['blue_ml'],
+                'dark_ml': row['dark_ml'],
+                'potion_capacity_units': row['potion_capacity_units'],
+                'ml_capacity_units': row['ml_capacity_units'],
+            }
+
+            logger.debug(f"Current Inventory: {current_inventory}")
+
+        # Calculate purchase plan
+        purchase_plan = ut.calculate_purchase_plan(
+            wholesale_catalog=wholesale_catalog,
+            current_inventory=current_inventory,
+            gold=current_inventory['gold'],
+            potion_capacity_units=current_inventory['potion_capacity_units'],
+            ml_capacity_units=current_inventory['ml_capacity_units']
+        )
+
+        logger.info(f"Generated purchase plan: {purchase_plan}")
 
     except HTTPException as he:
         logger.error(f"HTTPException in get_wholesale_purchase_plan: {he.detail}")
@@ -351,3 +268,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     except Exception as e:
         logger.exception(f"Unhandled exception in get_wholesale_purchase_plan: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    logger.info("Ending get_wholesale_purchase_plan endpoint.")
+    logger.debug(f"Returning purchase_plan: {purchase_plan}")
+    return purchase_plan
