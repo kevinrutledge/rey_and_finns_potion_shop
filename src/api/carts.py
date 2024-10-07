@@ -371,7 +371,7 @@ def create_cart(new_cart: Customer):
             logger.info(f"Created cart with cart_id {cart_id} for customer_id {customer_id}.")
 
             logger.debug(f"Returning cart_id: {cart_id}")
-            return {"cart_id": str(cart_id)}
+            return {"cart_id": cart_id}
 
     except HTTPException as e:
         logger.error(f"HTTPException in create_cart: {e.detail}")
