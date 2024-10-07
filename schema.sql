@@ -3,14 +3,28 @@ DROP TABLE IF EXISTS ledger_entries CASCADE;
 DROP TABLE IF EXISTS cart_items CASCADE;
 DROP TABLE IF EXISTS carts CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
+DROP TABLE IF EXISTS customer_visits CASCADE;
 DROP TABLE IF EXISTS potions CASCADE;
 DROP TABLE IF EXISTS global_inventory CASCADE;
-DROP TABLE IF EXISTS visits CASCADE;
+DROP TABLE IF EXISTS barrels CASCADE;
+DROP TABLE IF EXISTS barrel_visits CASCADE;
 
--- Visits Table (Parent)
-CREATE TABLE visits (
-    visit_id BIGSERIAL PRIMARY KEY,
-    visit_time TIMESTAMPTZ NOT NULL
+-- Barrel Visits Table (Parent)
+CREATE TABLE barrel_visits (
+    barrel_visit_id BIGSERIAL PRIMARY KEY,
+    visit_time TIMESTAMPTZ NOT NULL,
+    in_game_day VARCHAR,
+    in_game_hour INT
+);
+
+-- Barrels Table (Reference Barrel Visits)
+CREATE TABLE barrels (
+    barrel_id BIGSERIAL PRIMARY KEY,
+    sku VARCHAR NOT NULL,
+    ml_per_barrel INT NOT NULL,
+    potion_type VARCHAR(10) NOT NULL,
+    price INT NOT NULL,
+    quantity INT NOT NULL
 );
 
 -- Global Inventory Table (Independent)
@@ -49,6 +63,14 @@ CREATE TABLE customers (
     customer_name VARCHAR NOT NULL,
     character_class VARCHAR NOT NULL,
     level INT NOT NULL
+);
+
+-- Customer Visits Table (Parent)
+CREATE TABLE customer_visits (
+    visit_id BIGSERIAL PRIMARY KEY,
+    visit_time TIMESTAMPTZ NOT NULL,
+    in_game_day VARCHAR,
+    in_game_hour INT,
 );
 
 -- Carts Table (References Customers)

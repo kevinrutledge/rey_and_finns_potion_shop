@@ -1,13 +1,12 @@
 import sqlalchemy
 import logging
 from src import database as db
+from src.utilities import TimeUtils as ti
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
 from enum import Enum
-from datetime import datetime, timedelta
-from typing import Tuple
-from zoneinfo import ZoneInfo
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -37,67 +36,6 @@ class CartItem(BaseModel):
 
 class CartCheckout(BaseModel):
     payment: str
-
-# List of in-game days
-IN_GAME_DAYS = [
-    "Hearthday",
-    "Crownday",
-    "Blesseday",
-    "Soulday",
-    "Edgeday",
-    "Bloomday",
-    "Aracanaday"
-]
-DAYS_PER_WEEK = len(IN_GAME_DAYS)
-
-# Define the local timezone
-LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
-
-# Function to compute in-game time
-def compute_in_game_time(real_time: datetime) -> Tuple[str, int]:
-    """
-    Compute in-game day and hour based on provided local real_time.
-
-    Rounding Rules:
-    - If real_time.hour is odd:
-        - Round up to the next hour.
-    - If real_time.hour is even:
-        - Round down to the same hour.
-
-    Args:
-        real_time (datetime): Real-world local timestamp to convert.
-
-    Returns:
-        Tuple[str, int]: Tuple containing in-game day and in-game hour.
-    """
-    # Define epoch (start of game) with timezone
-    EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
-
-    # Calculate time difference between real_time and EPOCH
-    delta = real_time - EPOCH
-    total_seconds = delta.total_seconds()
-    total_hours = int(total_seconds // 3600)
-
-    # Calculate in-game day index and name
-    in_game_day_index = (total_hours // 24) % DAYS_PER_WEEK
-    in_game_day = IN_GAME_DAYS[in_game_day_index]
-
-    # Apply Even/Odd Rounding Logic
-    if real_time.hour % 2 == 1:
-        # Odd hour: round up to the next hour
-        rounded_time = (real_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-        # Check if day changes
-        if rounded_time.day != real_time.day:
-            in_game_day_index = (in_game_day_index + 1) % DAYS_PER_WEEK
-            in_game_day = IN_GAME_DAYS[in_game_day_index]
-    else:
-        # Even hour: round down to the same hour
-        rounded_time = real_time.replace(minute=0, second=0, microsecond=0)
-
-    # Set in_game_hour as the rounded hour (no offset)
-    in_game_hour = rounded_time.hour
-
-    return in_game_day, in_game_hour
 
 
 @router.get("/search/", tags=["search"])
@@ -211,8 +149,8 @@ def search_orders(
                 timestamp = item['timestamp']
                 if timestamp:
                     # Convert UTC timestamp to local timezone
-                    timestamp_local = timestamp.astimezone(LOCAL_TIMEZONE)
-                    in_game_day, in_game_hour = compute_in_game_time(timestamp_local)
+                    timestamp_local = timestamp.astimezone(tz=ti.LOCAL_TIMEZONE)
+                    in_game_day, in_game_hour = ti.compute_in_game_time(timestamp_local)
                     logger.debug(
                         f"Line Item ID {item['line_item_id']} - In-game Day: {in_game_day}, "
                         f"Hour: {in_game_hour}:00, Real Timestamp (Local): {timestamp_local.isoformat()}"
@@ -339,11 +277,8 @@ def create_cart(new_cart: Customer):
                 raise HTTPException(status_code=404, detail="Customer not found in any visit.")
             customer_id = customer_row['customer_id']
             logger.debug(f"Retrieved customer_id: {customer_id}")
-
-            # Get current local time for in-game time computation
-            LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
-            current_time = datetime.now(tz=LOCAL_TIMEZONE)
-            in_game_day, in_game_hour = compute_in_game_time(current_time)
+            current_time = datetime.now(tz=ti.LOCAL_TIMEZONE)
+            in_game_day, in_game_hour = ti.compute_in_game_time(current_time)
             logger.debug(f"Computed in-game time for cart creation - Day: {in_game_day}, Hour: {in_game_hour}")
 
             # Insert new cart into 'carts' table with in-game time
@@ -631,8 +566,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             logger.info(f"Updated gold in global_inventory to {new_gold}.")
 
             # Compute in-game day and hour at checkout
-            checked_out_at_local = datetime.now(tz=LOCAL_TIMEZONE)
-            in_game_day, in_game_hour = compute_in_game_time(checked_out_at_local)
+            checked_out_at_local = datetime.now(tz=ti.LOCAL_TIMEZONE)
+            in_game_day, in_game_hour = ti.compute_in_game_time(checked_out_at_local)
             logger.debug(
                 f"Computed in-game time for checkout - Day: {in_game_day}, Hour: {in_game_hour}"
             )

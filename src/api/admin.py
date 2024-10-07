@@ -14,142 +14,6 @@ router = APIRouter(
     dependencies=[Depends(auth.get_api_key)],
 )
 
-# Defined default potions
-DEFAULT_POTIONS = [
-    {
-        'sku': 'GREEN_POTION',
-        'name': 'Elixir of Vitality',
-        'red_ml': 0,
-        'green_ml': 100,
-        'blue_ml': 0,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Restores vitality.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'BLUE_POTION',
-        'name': 'Elixir of Wisdom',
-        'red_ml': 0,
-        'green_ml': 0,
-        'blue_ml': 100,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants wisdom.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'RED_POTION',
-        'name': 'Elixir of Strength',
-        'red_ml': 100,
-        'green_ml': 0,
-        'blue_ml': 0,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Enhances strength.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'SHADOW_ELIXIR',
-        'name': 'Shadow Elixir',
-        'red_ml': 0,
-        'green_ml': 0,
-        'blue_ml': 0,
-        'dark_ml': 100,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis Shadow magic.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'CYAN_POTION',
-        'name': 'Cyan Elixir',
-        'red_ml': 0,
-        'green_ml': 50,
-        'blue_ml': 50,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants both vitality and wisdom.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'YELLOW_POTION',
-        'name': 'Sunburst Elixir',
-        'red_ml': 50,
-        'green_ml': 50,
-        'blue_ml': 0,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants both strength and vitality.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'MAGENTA_POTION',
-        'name': 'Magenta Elixir',
-        'red_ml': 50,
-        'green_ml': 0,
-        'blue_ml': 50,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants both strength and wisdom.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'VERDANT_SHADOW_ELIXIR',
-        'name': 'Verdant Shadow Elixir',
-        'red_ml': 0,
-        'green_ml': 50,
-        'blue_ml': 0,
-        'dark_ml': 50,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants both shadow and vitality.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'AZURE_SHADOW_ELIXIR',
-        'name': 'Azure Shadow Elixir',
-        'red_ml': 0,
-        'green_ml': 0,
-        'blue_ml': 50,
-        'dark_ml': 50,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants both shadow and wisdom.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'CRIMSON_SHADOW_ELIXIR',
-        'name': 'Crimson Shadow Elixir',
-        'red_ml': 50,
-        'green_ml': 0,
-        'blue_ml': 0,
-        'dark_ml': 50,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants both shadow and strength.',
-        'current_quantity': 0
-    },
-    {
-        'sku': 'OBSIDIAN_ELIXIR',
-        'name': 'Obsidian Elixir',
-        'red_ml': 25,
-        'green_ml': 25,
-        'blue_ml': 25,
-        'dark_ml': 25,
-        'total_ml': 100,
-        'price': 50,
-        'description': 'Hypothesis: Grants every property.',
-        'current_quantity': 0
-    },
-]
-
 @router.post("/reset", summary="Reset Game State", description="Resets game inventory and clears all carts.")
 def reset():
     """
@@ -181,7 +45,7 @@ def reset():
             logger.info("global_inventory table has been reset.")
 
             # Reset current_quantity of all potions to 0
-            logger.debug("Executing SQL query to reset current_quantity of all potions.")
+            logger.debug("Resetting potions table to default quantities.")
             reset_potions_query = """
                 UPDATE potions
                 SET current_quantity = 0;
@@ -248,19 +112,18 @@ def reset():
                     logger.info(f"Inserted new potion SKU {potion['sku']} with quantity {potion['current_quantity']}.")
 
             # Clear cart_items and carts tables
-            logger.debug("Executing SQL queries to delete all records from cart_items and carts tables.")
+            logger.debug("Deleting all records from cart_items and carts tables.")
             delete_cart_items_query = "DELETE FROM cart_items;"
             logger.debug(f"SQL Query: {delete_cart_items_query.strip()}")
             connection.execute(sqlalchemy.text(delete_cart_items_query))
             logger.info("All records from cart_items table have been deleted.")
-
             delete_carts_query = "DELETE FROM carts;"
             logger.debug(f"SQL Query: {delete_carts_query.strip()}")
             connection.execute(sqlalchemy.text(delete_carts_query))
             logger.info("All records from carts table have been deleted.")
 
             # Clear ledger_entries table
-            logger.debug("Executing SQL query to delete all records from ledger_entries table.")
+            logger.debug("Deleting all records from ledger_entries table.")
             delete_ledger_entries_query = "DELETE FROM ledger_entries;"
             logger.debug(f"SQL Query: {delete_ledger_entries_query.strip()}")
             connection.execute(sqlalchemy.text(delete_ledger_entries_query))
@@ -273,12 +136,17 @@ def reset():
             connection.execute(sqlalchemy.text(delete_customers_query))
             logger.info("All records from customers table have been deleted.")
 
-            # Clear visits table
-            logger.debug("Executing SQL query to delete all records from visits table.")
-            delete_visits_query = "DELETE FROM visits;"
-            logger.debug(f"SQL Query: {delete_visits_query.strip()}")
-            connection.execute(sqlalchemy.text(delete_visits_query))
-            logger.info("All records from visits table have been deleted.")
+            # Reset customer_visits and customers tables
+            logger.debug("Deleting all records from customer_visits and customers tables.")
+            connection.execute(sqlalchemy.text("DELETE FROM customers;"))
+            connection.execute(sqlalchemy.text("DELETE FROM customer_visits;"))
+            logger.info("All records from customer_visits and customers tables have been deleted.")
+
+            # Reset barrel_visits and barrels tables
+            logger.debug("Deleting all records from barrel_visits and barrels tables.")
+            connection.execute(sqlalchemy.text("DELETE FROM barrels;"))
+            connection.execute(sqlalchemy.text("DELETE FROM barrel_visits;"))
+            logger.info("All records from barrel_visits and barrels tables have been deleted.")
 
         # After successful operations
         logger.info("Shop state has been reset successfully.")

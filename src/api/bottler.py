@@ -1,10 +1,12 @@
 import sqlalchemy
 import logging
 from src import database as db
+from src.utilities import TimeUtils as ti
 from fastapi import APIRouter, Depends, HTTPException
 from enum import Enum
 from pydantic import BaseModel, validator
 from src.api import auth
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,44 @@ class PotionInventory(BaseModel):
 # Constants for capacity calculations
 POTION_CAPACITY_PER_UNIT = 50  # Each potion capacity unit allows storage of 50 potions
 ML_CAPACITY_PER_UNIT = 10000    # Each ML capacity unit allows storage of 10000 ml
+
+# Mapping of in-game days to preferred potion colors
+DAY_POTION_PREFERENCES = {
+    "Hearthday": ["green", "yellow"],
+    "Crownday": ["red", "yellow"],
+    "Blesseday": ["green", "blue"],
+    "Soulday": ["dark", "blue"],
+    "Edgeday": ["red", "yellow"],
+    "Bloomday": ["green", "blue"],
+    "Aracanaday": ["blue", "dark"]
+}
+
+def get_color_from_potion_type(potion_type: list[int]) -> str:
+    """
+    Determines the color based on potion_type list.
+    Assumes only one color is dominant or returns 'mixed' if multiple.
+    """
+    color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
+    if sum(potion_type) != 100:
+        logger.warning(f"Invalid potion_type {potion_type}. Sum must be 100.")
+        # Normalize potion_type to sum to 100
+        if sum(potion_type) > 0:
+            factor = 100 / sum(potion_type)
+            potion_type = [int(x * factor) for x in potion_type]
+            logger.debug(f"Normalized potion_type to {potion_type}.")
+        else:
+            # All zeros; return 'unknown'
+            logger.debug("All potion_type values are zero. Returning 'unknown'.")
+            return 'unknown'
+
+    # Check for single color dominance
+    dominant_colors = [color_map[i] for i, x in enumerate(potion_type) if x > 0]
+    if len(dominant_colors) == 1:
+        return dominant_colors[0]
+    elif len(dominant_colors) > 1:
+        return 'mixed'
+    else:
+        return 'unknown'
 
 
 @router.post("/deliver/{order_id}", summary="Deliver Bottles", description="Process delivery of bottles.")
@@ -232,12 +272,21 @@ def get_bottle_plan():
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
     # Initial logic: bottle all barrels into red potions.
-    logger.info("Received request to generate bottle plan.")
-
+    logger.info("Starting get_bottle_plan endpoint.")
+    
     try:
         with db.engine.begin() as connection:
-            logger.debug("Fetching current inventory and capacities from global_inventory.")
-            # Retrieve current inventory details
+            # Fetch current in-game day
+            current_time = datetime.now(tz=ti.LOCAL_TIMEZONE)
+            in_game_day, _ = ti.compute_in_game_time(current_time)
+            logger.debug(f"Current in-game day: {in_game_day}")
+            
+            # Get preferred potion colors for the day
+            preferred_colors = DAY_POTION_PREFERENCES.get(in_game_day, ["green", "blue", "red"])
+            logger.info(f"Preferred potion colors for {in_game_day}: {preferred_colors}")
+            
+            # Fetch current inventory and capacities
+            logger.debug("Fetching current inventory and capacities from 'global_inventory'.")
             result = connection.execute(
                 sqlalchemy.text(
                     """
@@ -249,11 +298,11 @@ def get_bottle_plan():
             )
             inventory_row = result.mappings().fetchone()
             logger.debug(f"Current Inventory: {inventory_row}")
-
+    
             if not inventory_row:
                 logger.error("Global inventory record not found.")
                 raise HTTPException(status_code=500, detail="Global inventory not found.")
-
+    
             red_ml = inventory_row['red_ml']
             green_ml = inventory_row['green_ml']
             blue_ml = inventory_row['blue_ml']
@@ -261,25 +310,21 @@ def get_bottle_plan():
             potion_capacity_units = inventory_row['potion_capacity_units']
             ml_capacity_units = inventory_row['ml_capacity_units']
             gold = inventory_row['gold']
-
+    
             logger.debug(
                 f"Inventory before planning: red_ml={red_ml}, green_ml={green_ml}, "
-                f"blue_ml={blue_ml}, dark_ml={dark_ml}"
+                f"blue_ml={blue_ml}, dark_ml={dark_ml}, potion_capacity_units={potion_capacity_units}, "
+                f"ml_capacity_units={ml_capacity_units}, gold={gold}"
             )
-            logger.debug(
-                f"Current Capacities - potion_capacity_units: {potion_capacity_units}, "
-                f"ml_capacity_units: {ml_capacity_units}"
-            )
-            logger.debug(f"Current Gold: {gold}")
-
+    
             # Calculate total ML capacity and remaining capacity
-            total_ml_capacity = ml_capacity_units * ML_CAPACITY_PER_UNIT  # Each unit allows 10000 ML
+            total_ml_capacity = ml_capacity_units * 10000  # Each unit allows 10,000 ML
             total_ml_used = red_ml + green_ml + blue_ml + dark_ml
             remaining_capacity = total_ml_capacity - total_ml_used
-
+    
             logger.debug(f"Total ML Capacity: {total_ml_capacity}, Total ML Used: {total_ml_used}, Remaining Capacity: {remaining_capacity}")
-
-            # Define potion priorities
+    
+            # Define potion priorities based on preferred colors
             potion_priorities = [
                 {'name': 'Green Potion', 'potion_type': [0, 100, 0, 0]},
                 {'name': 'Blue Potion', 'potion_type': [0, 0, 100, 0]},
@@ -295,61 +340,81 @@ def get_bottle_plan():
                 # TODO: Use data analytics to see if there's more combos to be made
             ]
 
+            # Reorder potion_priorities based on preferred_colors
+            def potion_priority(potion):
+                color = get_color_from_potion_type(potion['potion_type'])
+                if color in preferred_colors:
+                    return preferred_colors.index(color)
+                elif color == 'mixed':
+                    return len(preferred_colors)  # Less priority
+                else:
+                    return len(preferred_colors) + 1  # Lowest priority
+            
+            ordered_potions = sorted(
+                potion_priorities,
+                key=lambda x: potion_priority(x)
+            )
+            logger.debug(f"Ordered potion priorities: {[p['name'] for p in ordered_potions]}")
+    
             bottle_plan = []
-
-            for potion in potion_priorities:
+    
+            for potion in ordered_potions:
                 potion_type = potion['potion_type']
                 total_ml_required = sum(potion_type)
                 logger.debug(f"Evaluating potion: {potion['name']} with potion_type: {potion_type}")
-
-                # Determine available ML for each color
+    
+                # Determine how many potions can be brewed based on available ML
                 available_ml = min(
                     (red_ml // potion_type[0] if potion_type[0] > 0 else float('inf')),
                     (green_ml // potion_type[1] if potion_type[1] > 0 else float('inf')),
                     (blue_ml // potion_type[2] if potion_type[2] > 0 else float('inf')),
                     (dark_ml // potion_type[3] if potion_type[3] > 0 else float('inf'))
                 )
-
+    
                 if available_ml <= 0:
                     logger.debug(f"Insufficient ML to brew {potion['name']}. Skipping.")
                     continue  # Cannot brew this potion
-
+    
                 # Determine how many potions can be brewed without exceeding capacity
                 max_potions_capacity = remaining_capacity // total_ml_required
-                potions_to_brew = min(available_ml, max_potions_capacity, 10000)  # Limit to 10000
-
+                potions_to_brew = min(int(available_ml), int(max_potions_capacity), 10000)  # Limit to 10,000
+        
                 if potions_to_brew <= 0:
                     logger.debug(f"No capacity to brew {potion['name']}. Skipping.")
                     continue  # No capacity to brew this potion
-
+    
                 # Add to bottle plan
                 bottle_plan.append({
                     "potion_type": potion_type,
                     "quantity": potions_to_brew
                 })
-                
                 logger.info(f"Planned to brew {potions_to_brew} units of {potion['name']}.")
-
+    
                 # Update remaining capacity and ML in inventory
                 remaining_capacity -= potions_to_brew * total_ml_required
                 red_ml -= potions_to_brew * potion_type[0]
                 green_ml -= potions_to_brew * potion_type[1]
                 blue_ml -= potions_to_brew * potion_type[2]
                 dark_ml -= potions_to_brew * potion_type[3]
-
-                logger.debug(f"Updated Remaining Capacity: {remaining_capacity}")
-                logger.debug(f"Updated ML Levels - red_ml: {red_ml}, green_ml: {green_ml}, blue_ml: {blue_ml}, dark_ml: {dark_ml}")
-
+    
+                logger.debug(
+                    f"Updated Remaining Capacity: {remaining_capacity}"
+                )
+                logger.debug(
+                    f"Updated ML Levels - red_ml: {red_ml}, green_ml: {green_ml}, "
+                    f"blue_ml: {blue_ml}, dark_ml: {dark_ml}"
+                )
+    
                 # Check if capacity threshold is reached
                 if remaining_capacity / total_ml_capacity < 0.8:
                     logger.info("Inventory nearing capacity. Halting further bottling to consider capacity expansion.")
                     break  # Exit loop to consider capacity expansion
-
+    
             # Limit bottle plan to 6 potions as per API specification
             bottle_plan = bottle_plan[:6]
             logger.debug(f"Bottle plan after limiting to 6 potions: {bottle_plan}")
             logger.info("Bottle plan generated successfully.")
-
+    
             return bottle_plan
 
     except HTTPException as e:
