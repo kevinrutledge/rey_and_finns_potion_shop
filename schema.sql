@@ -95,6 +95,7 @@ CREATE TABLE cart_items (
     quantity INT NOT NULL,
     price INT NOT NULL,
     line_item_total INT NOT NULL
+    timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Ledger Entries Table (References Potions)

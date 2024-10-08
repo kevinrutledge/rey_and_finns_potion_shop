@@ -40,7 +40,7 @@ def get_catalog():
 
             result = connection.execute(sqlalchemy.text(query))
             potions = result.mappings().fetchall()
-            logger.debug(f"Fetched {len(potions)} potions from the database.")
+            logger.debug(f"Fetched {len(potions)} potions from database.")
 
             catalog_items = []
 
@@ -61,7 +61,7 @@ def get_catalog():
                         f"Potion {potion['sku']} has total_ml {total_ml}, expected 100."
                     )
                     if total_ml > 0:
-                        # Normalize the ML values to sum to 100
+                        # Normalize ML values to sum to 100
                         factor = 100 / total_ml
                         red_ml = int(potion["red_ml"] * factor)
                         green_ml = int(potion["green_ml"] * factor)

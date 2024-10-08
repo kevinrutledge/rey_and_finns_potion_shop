@@ -72,42 +72,12 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 logger.error(f"Insufficient gold. Available: {current_gold}, Required: {total_gold_cost}")
                 raise HTTPException(status_code=400, detail="Insufficient gold to complete purchase.")
 
-            # Insert delivered barrels into barrels table
-            for barrel in barrels_delivered:
-                logger.debug(f"Processing delivered barrel - SKU: {barrel.sku}, Quantity: {barrel.quantity}, "
-                             f"ML per Barrel: {barrel.ml_per_barrel}, Potion Type: {barrel.potion_type}, Price: {barrel.price}")
-
-                # Validate that potion_type is binary and sums to 1
-                if sum(barrel.potion_type) != 1:
-                    logger.error(f"Potion type ML flags do not sum to 1 for SKU {barrel.sku}.")
-                    raise HTTPException(status_code=400, detail=f"Potion type ML flags do not sum to 1 for SKU {barrel.sku}.")
-
-                # Convert potion_type list to string for database storage
-                potion_type_str = ','.join(map(str, barrel.potion_type))
-
-                # Use ON CONFLICT to handle existing SKUs by updating quantities
-                insert_barrel_query = """
-                    INSERT INTO barrels (sku, ml_per_barrel, potion_type, price, quantity)
-                    VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)
-                """
-                connection.execute(
-                    sqlalchemy.text(insert_barrel_query),
-                    {
-                        "sku": barrel.sku,
-                        "ml_per_barrel": barrel.ml_per_barrel,
-                        "potion_type": potion_type_str,
-                        "price": barrel.price,
-                        "quantity": barrel.quantity
-                    }
-                )
-                logger.info(f"Inserted/Updated {barrel.quantity} barrels of SKU {barrel.sku}.")
-
             # Add ML of each color to global_inventory
             logger.debug("Adding ML from delivered barrels to global_inventory.")
             for barrel in barrels_delivered:
                 red_flag, green_flag, blue_flag, dark_flag = barrel.potion_type
 
-                # Calculate ML to add per color
+                # Calculate ML to add per colors
                 red_ml_to_add = red_flag * barrel.ml_per_barrel * barrel.quantity
                 green_ml_to_add = green_flag * barrel.ml_per_barrel * barrel.quantity
                 blue_ml_to_add = blue_flag * barrel.ml_per_barrel * barrel.quantity

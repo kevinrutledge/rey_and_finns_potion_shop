@@ -44,7 +44,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 quantity = potion.quantity
                 logger.debug(f"Processing delivery - Composition: {composition}, Quantity: {quantity}")
 
-                # Fetch potion details from the potions table
+                # Fetch potion details from potions table
                 logger.debug("Fetching potion details from potions table.")
                 query_potion = """
                     SELECT potion_id, current_quantity
@@ -177,7 +177,7 @@ def get_bottle_plan():
     Generate bottle plan based on available ml in global_inventory.
     """
 
-    # Each bottle has a quantity of what proportion of red, blue, and
+    # Each bottle has quantity of what proportion of red, blue, and
     # green potion to add.
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
@@ -190,7 +190,7 @@ def get_bottle_plan():
         hour_block = ut.get_hour_block(in_game_hour)
         logger.debug(f"Computed in-game time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
 
-        # Step 2: Fetch potion demands for the current day and hour block
+        # Step 2: Fetch potion demands for current day and hour block
         day_potions = potion_coefficients.get(in_game_day, {}).get(hour_block, [])
         if not day_potions:
             logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Returning empty plan.")

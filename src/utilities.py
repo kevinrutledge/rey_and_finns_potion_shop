@@ -110,7 +110,7 @@ class Utils:
     @staticmethod
     def get_current_real_time() -> datetime:
         """
-        Get the current real-world local time.
+        Get current real-world local time.
 
         Returns:
             datetime: Current real-world local time with timezone.
@@ -121,7 +121,7 @@ class Utils:
     @staticmethod
     def normalize_potion_type(potion_type: List[int]) -> List[int]:
         """
-        Normalizes the potion_type to sum to 100.
+        Normalizes potion_type to sum to 100.
         """
         total = sum(potion_type)
         if total == 0:
@@ -195,13 +195,13 @@ class Utils:
             logger.debug(f"Evaluating potion: {potion_name} with demand {demand}, price {price}")
 
             # Determine which barrels contribute to this potion's potion_type
-            # For simplicity, prioritize buying barrels that match the dominant color in the potion_type
+            # For simplicity, prioritize buying barrels that match dominant color in potion_type
             dominant_color_index = composition.index(max(composition))
             color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
             dominant_color = color_map.get(dominant_color_index, 'unknown')
             logger.debug(f"Dominant color for potion {potion_name}: {dominant_color}")
 
-            # Filter barrels matching the dominant color
+            # Filter barrels matching dominant color
             matching_barrels = [b for b in wholesale_catalog if b.potion_type[dominant_color_index] == 1]
 
             if not matching_barrels:

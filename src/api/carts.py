@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from src.api import auth
 from datetime import datetime
 from enum import Enum
+import traceback
 
 
 logger = logging.getLogger(__name__)
@@ -90,26 +91,25 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
     try:
         with db.engine.begin() as connection:
-            # Insert into customer_visits table
+            # Insert into visits table
             visit_time = ut.get_current_real_time()
             in_game_day, in_game_hour = ut.compute_in_game_time(visit_time)
             logger.debug(f"In-game time for visit: Day={in_game_day}, Hour={in_game_hour}")
 
             insert_visit_query = """
-                INSERT INTO customer_visits (visit_time, in_game_day, in_game_hour)
-                VALUES (:visit_time, :in_game_day, :in_game_hour)
-                RETURNING visit_id;
+                INSERT INTO customer_visits (visit_id, visit_time, in_game_day, in_game_hour)
+                VALUES (:visit_id, :visit_time, :in_game_day, :in_game_hour)
             """
-            result = connection.execute(
+            connection.execute(
                 sqlalchemy.text(insert_visit_query),
                 {
+                    "visit_id": visit_id,
                     "visit_time": visit_time,
                     "in_game_day": in_game_day,
                     "in_game_hour": in_game_hour,
                 },
             )
-            new_visit_id = result.scalar()
-            logger.debug(f"Inserted new visit with visit_id={new_visit_id}")
+            logger.debug(f"Inserted visit with visit_id={visit_id}")
 
             # Insert each customer into customers table
             for customer in customers:
@@ -120,7 +120,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
                 connection.execute(
                     sqlalchemy.text(insert_customer_query),
                     {
-                        "visit_id": new_visit_id,
+                        "visit_id": visit_id,
                         "customer_name": customer.customer_name,
                         "character_class": customer.character_class,
                         "level": customer.level,
@@ -130,6 +130,10 @@ def post_visits(visit_id: int, customers: list[Customer]):
                     f"Inserted customer '{customer.customer_name}' of class '{customer.character_class}' with level {customer.level}."
                 )
 
+    except HTTPException as he:
+        logger.error(f"HTTPException in post_visits: {he.detail}")
+        logger.debug(traceback.format_exc())
+        raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in post_visits: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
@@ -218,8 +222,8 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                 logger.error(f"Cart with cart_id={cart_id} does not exist.")
                 raise HTTPException(status_code=404, detail="Cart not found.")
             if cart["checked_out"]:
-                logger.error(f"Cannot modify a checked-out cart with cart_id={cart_id}.")
-                raise HTTPException(status_code=400, detail="Cannot modify a checked-out cart.")
+                logger.error(f"Cannot modify checked-out cart with cart_id={cart_id}.")
+                raise HTTPException(status_code=400, detail="Cannot modify checked-out cart.")
 
             # Fetch potion_id from potions table using SKU
             fetch_potion_query = """
@@ -243,7 +247,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
 
             logger.debug(f"Fetched potion_id={potion_id}, price={price}, current_quantity={current_quantity}.")
 
-            # Check if the potion is already in the cart
+            # Check if potion is already in cart
             check_cart_item_query = """
                 SELECT cart_item_id, quantity FROM cart_items
                 WHERE cart_id = :cart_id AND potion_id = :potion_id;

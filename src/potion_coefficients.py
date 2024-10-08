@@ -144,7 +144,7 @@ Each day is divided into four hour blocks:
 3. Hours 14, 16, 18
 4. Hours 20, 22, 24
 
-Each hour block contains a list of potions with their composition,
+Each hour block contains list of potions with their composition,
 demand coefficients, and prices.
 """
 potion_coefficients = {
