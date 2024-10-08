@@ -61,7 +61,7 @@ CREATE TABLE potions (
 -- Customers Table (References Visits)
 CREATE TABLE customers (
     customer_id BIGSERIAL PRIMARY KEY,
-    visit_id BIGINT REFERENCES visits(visit_id),
+    visit_id BIGINT REFERENCES customer_visits(visit_id),
     customer_name VARCHAR NOT NULL,
     character_class VARCHAR NOT NULL,
     level INT NOT NULL

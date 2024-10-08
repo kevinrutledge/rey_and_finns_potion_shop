@@ -177,20 +177,19 @@ def get_bottle_plan():
     Generate bottle plan based on available ml in global_inventory.
     """
 
-    # Each bottle has quantity of what proportion of red, blue, and
-    # green potion to add.
+    # Each bottle has quantity of what proportion of red, blue, and green potion to add.
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
     # Initial logic: bottle all barrels into red potions.
     logger.info("Endpoint /bottler/plan called.")
     try:
-        # Step 1: Determine current in-game day and hour
+        # Determine current in-game day and hour
         real_time = ut.get_current_real_time()
         in_game_day, in_game_hour = ut.compute_in_game_time(real_time)
         hour_block = ut.get_hour_block(in_game_hour)
         logger.debug(f"Computed in-game time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
 
-        # Step 2: Fetch potion demands for current day and hour block
+        # Fetch potion demands for current day and hour block
         day_potions = potion_coefficients.get(in_game_day, {}).get(hour_block, [])
         if not day_potions:
             logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Returning empty plan.")
@@ -198,7 +197,7 @@ def get_bottle_plan():
 
         logger.debug(f"Potion demands for Day: {in_game_day}, Block: {hour_block}: {day_potions}")
 
-        # Step 3: Calculate available ml from global_inventory
+        # Calculate available ml from global_inventory
         with db.engine.begin() as connection:
             logger.debug("Fetching available ml from global_inventory.")
             query_ml = """
@@ -238,7 +237,7 @@ def get_bottle_plan():
             logger.debug(f"Potion Capacity - Units: {potion_capacity_units}, Limit: {potion_capacity_limit}")
             logger.debug(f"ML Capacity - Units: {ml_capacity_units}, Limit: {ml_capacity_limit}")
 
-        # Step 4: Fetch current number of potions
+        # Fetch current number of potions
         with db.engine.begin() as connection:
             logger.debug("Fetching total number of potions from potions table.")
             query_total_potions = """
@@ -250,7 +249,7 @@ def get_bottle_plan():
             total_potions = total_potions_row['total_potions'] if total_potions_row['total_potions'] else 0
             logger.debug(f"Total potions currently in inventory: {total_potions}")
 
-        # Step 5: Calculate ROI and sort potions
+        # Calculate ROI and sort potions
         for potion in day_potions:
             composition = potion['composition']
             demand = potion['demand']
@@ -266,7 +265,7 @@ def get_bottle_plan():
         day_potions_sorted = sorted(day_potions, key=lambda x: x['roi'], reverse=True)
         logger.debug(f"Potions sorted by ROI: {day_potions_sorted}")
 
-        # Step 6: Allocate brew quantities
+        # Allocate brew quantities
         potion_plan = []
         for potion in day_potions_sorted:
             composition = potion['composition']  # [r, g, b, d]
