@@ -2,11 +2,13 @@ import sqlalchemy
 import logging
 from src import database as db
 from src import potion_coefficients as po
+from src.api import auth
 from src.utilities import Utils as ut
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
 from datetime import datetime
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ router = APIRouter(
 class Barrel(BaseModel):
     sku: str
     ml_per_barrel: int
-    potion_type: list[int]  # [red, green, blue, dark]
+    potion_type: List[int]  # [red, green, blue, dark]
     price: int
     quantity: int  # Quantity available for sale in catalog
 
@@ -27,50 +29,12 @@ class BarrelPurchase(BaseModel):
     sku: str
     quantity: int
 
-# Constants for capacity calculations
-POTION_CAPACITY_PER_UNIT = 50  # Each potion capacity unit allows storage of 50 potions
-ML_CAPACITY_PER_UNIT = 10000    # Each ML capacity unit allows storage of 10000 ml
-
-# Mapping of in-game days to preferred potion colors
-DAY_POTION_PREFERENCES = {
-    "Hearthday": ["green", "yellow"],
-    "Crownday": ["red", "yellow"],
-    "Blesseday": ["green", "blue"],
-    "Soulday": ["dark", "blue"],
-    "Edgeday": ["red", "yellow"],
-    "Bloomday": ["green", "blue"],
-    "Aracanaday": ["blue", "dark"]
-}
-
-def get_color_from_potion_type(potion_type: list[int]) -> str:
-    """
-    Determines the color based on potion_type list.
-    Assumes only one color is set to 100 or a combination exists.
-    """
-    color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
-    if sum(potion_type) != 100:
-        logger.warning(f"Invalid potion_type {potion_type}. Sum must be 100.")
-        # Normalize potion_type to sum to 100
-        if sum(potion_type) > 0:
-            factor = 100 / sum(potion_type)
-            potion_type = [int(x * factor) for x in potion_type]
-            logger.debug(f"Normalized potion_type to {potion_type}.")
-        else:
-            # All zeros; return 'unknown'
-            logger.debug("All potion_type values are zero. Returning 'unknown'.")
-            return 'unknown'
-
-    # Check for single color dominance
-    try:
-        index = potion_type.index(100)
-        return color_map.get(index, 'unknown')
-    except ValueError:
-        # Multiple colors; prioritize based on highest value
-        max_ml = max(potion_type)
-        indices = [i for i, x in enumerate(potion_type) if x == max_ml]
-        if indices:
-            return color_map.get(indices[0], 'unknown')
-        return 'unknown'
+class BarrelDelivery(BaseModel):
+    sku: str
+    ml_per_barrel: int
+    potion_type: List[int]  # [red, green, blue, dark]
+    price: int
+    quantity: int
 
 
 @router.post("/deliver/{order_id}", summary="Deliver Barrels", description="Process delivery of barrels.")
@@ -78,137 +42,139 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """
     Process delivery of barrels to inventory.
     """
-    logger.info(f"Endpoint /barrels/deliver/{order_id} called with {len(barrels_delivered)} barrels.")
-    logger.debug(f"Received barrels_delivered: {barrels_delivered}")
+    logger.info(f"Processing delivery for order_id={order_id}. Number of barrels delivered: {len(barrels_delivered)}.")
+    logger.debug(f"Barrels Delivered: {barrels_delivered}")
 
     try:
         with db.engine.begin() as connection:
+            # Fetch current gold from global_inventory
+            logger.debug("Fetching current gold from global_inventory.")
+            query_gold = """
+                SELECT gold
+                FROM global_inventory
+                WHERE id = 1;
+            """
+            result = connection.execute(sqlalchemy.text(query_gold))
+            current_gold_row = result.mappings().fetchone()
+            if not current_gold_row:
+                logger.error("Global inventory record not found.")
+                raise HTTPException(status_code=500, detail="Global inventory record not found.")
+
+            current_gold = current_gold_row['gold']
+            logger.debug(f"Current Gold: {current_gold}")
+
+            # Calculate total gold cost
+            total_gold_cost = sum(barrel.price * barrel.quantity for barrel in barrels_delivered)
+            logger.debug(f"Total Gold Cost for Delivery: {total_gold_cost}")
+
+            # Check if sufficient gold is available
+            if current_gold < total_gold_cost:
+                logger.error(f"Insufficient gold. Available: {current_gold}, Required: {total_gold_cost}")
+                raise HTTPException(status_code=400, detail="Insufficient gold to complete purchase.")
+
+            # Insert delivered barrels into barrels table
             for barrel in barrels_delivered:
-                sku = barrel.sku
-                quantity = barrel.quantity
-                ml_per_barrel = barrel.ml_per_barrel
-                potion_type = barrel.potion_type  # [red, green, blue, dark]
-                price = barrel.price
+                logger.debug(f"Processing delivered barrel - SKU: {barrel.sku}, Quantity: {barrel.quantity}, "
+                             f"ML per Barrel: {barrel.ml_per_barrel}, Potion Type: {barrel.potion_type}, Price: {barrel.price}")
 
-                logger.debug(f"Processing delivered barrel - SKU: {sku}, Quantity: {quantity}, ML per barrel: {ml_per_barrel}, Potion Type: {potion_type}, Price: {price}")
+                # Validate that potion_type is binary and sums to 1
+                if sum(barrel.potion_type) != 1:
+                    logger.error(f"Potion type ML flags do not sum to 1 for SKU {barrel.sku}.")
+                    raise HTTPException(status_code=400, detail=f"Potion type ML flags do not sum to 1 for SKU {barrel.sku}.")
 
-                # Validate potion_type
-                if len(potion_type) != 4 or sum(potion_type) != 100:
-                    logger.error(f"Invalid potion_type for SKU {sku}: {potion_type}")
-                    raise HTTPException(status_code=400, detail=f"Invalid potion_type for SKU {sku}")
+                # Convert potion_type list to string for database storage
+                potion_type_str = ','.join(map(str, barrel.potion_type))
 
-                # Fetch the corresponding potion from potions table
-                logger.debug(f"Fetching potion details for SKU: {sku}")
-                query_potion = """
-                    SELECT potion_id, red_ml, green_ml, blue_ml, dark_ml, current_quantity
-                    FROM potions
-                    WHERE sku = :sku
-                    LIMIT 1;
-                """
-                result = connection.execute(
-                    sqlalchemy.text(query_potion),
-                    {'sku': sku}
-                )
-                potion = result.mappings().fetchone()
-
-                if not potion:
-                    logger.error(f"No potion found with SKU: {sku}")
-                    raise HTTPException(status_code=400, detail=f"No potion found with SKU: {sku}")
-
-                potion_id = potion['potion_id']
-                current_quantity = potion['current_quantity']
-
-                logger.debug(f"Found Potion ID: {potion_id} with Current Quantity: {current_quantity}")
-
-                # Calculate total ML to add
-                total_ml_to_add = ml_per_barrel * quantity
-                logger.debug(f"Total ML to add for SKU {sku}: {total_ml_to_add}")
-
-                # Update global_inventory ML counts
-                ml_fields = ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']
-                for idx, color_ml in enumerate(potion_type):
-                    color_field = ml_fields[idx]
-                    if color_ml > 0:
-                        update_ml_query = f"""
-                            UPDATE global_inventory
-                            SET {color_field} = {color_field} + :ml_to_add
-                            WHERE id = 1;
-                        """
-                        connection.execute(
-                            sqlalchemy.text(update_ml_query),
-                            {'ml_to_add': color_ml * quantity}
-                        )
-                        logger.debug(f"Added {color_ml * quantity} ML to {color_field} in global_inventory.")
-
-                # Update total_ml in global_inventory
-                logger.debug("Recalculating total_ml in global_inventory.")
-                query_total_ml = """
-                    SELECT red_ml, green_ml, blue_ml, dark_ml
-                    FROM global_inventory
-                    WHERE id = 1;
-                """
-                result = connection.execute(sqlalchemy.text(query_total_ml))
-                updated_inventory = result.mappings().fetchone()
-                total_ml = (
-                    updated_inventory['red_ml'] +
-                    updated_inventory['green_ml'] +
-                    updated_inventory['blue_ml'] +
-                    updated_inventory['dark_ml']
-                )
-                logger.debug(f"Total ML after addition: {total_ml}")
-
-                update_total_ml_query = """
-                    UPDATE global_inventory
-                    SET total_ml = :total_ml
-                    WHERE id = 1;
+                # Use ON CONFLICT to handle existing SKUs by updating quantities
+                insert_barrel_query = """
+                    INSERT INTO barrels (sku, ml_per_barrel, potion_type, price, quantity)
+                    VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)
                 """
                 connection.execute(
-                    sqlalchemy.text(update_total_ml_query),
-                    {'total_ml': total_ml}
-                )
-                logger.debug("Updated total_ml in global_inventory.")
-
-                # Update potion's current_quantity
-                new_quantity = current_quantity + quantity
-                logger.debug(f"Updating potion ID {potion_id} quantity from {current_quantity} to {new_quantity}.")
-                update_potion_query = """
-                    UPDATE potions
-                    SET current_quantity = :new_quantity
-                    WHERE potion_id = :potion_id;
-                """
-                connection.execute(
-                    sqlalchemy.text(update_potion_query),
+                    sqlalchemy.text(insert_barrel_query),
                     {
-                        'new_quantity': new_quantity,
-                        'potion_id': potion_id
+                        "sku": barrel.sku,
+                        "ml_per_barrel": barrel.ml_per_barrel,
+                        "potion_type": potion_type_str,
+                        "price": barrel.price,
+                        "quantity": barrel.quantity
                     }
                 )
-                logger.info(f"Updated potion ID {potion_id} quantity to {new_quantity}.")
+                logger.info(f"Inserted/Updated {barrel.quantity} barrels of SKU {barrel.sku}.")
 
-                # Deduct gold based on purchase
-                total_cost = price * quantity
-                logger.debug(f"Total cost for SKU {sku}: {total_cost}")
+            # Add ML of each color to global_inventory
+            logger.debug("Adding ML from delivered barrels to global_inventory.")
+            for barrel in barrels_delivered:
+                red_flag, green_flag, blue_flag, dark_flag = barrel.potion_type
 
-                update_gold_query = """
+                # Calculate ML to add per color
+                red_ml_to_add = red_flag * barrel.ml_per_barrel * barrel.quantity
+                green_ml_to_add = green_flag * barrel.ml_per_barrel * barrel.quantity
+                blue_ml_to_add = blue_flag * barrel.ml_per_barrel * barrel.quantity
+                dark_ml_to_add = dark_flag * barrel.ml_per_barrel * barrel.quantity
+                total_ml_to_add = barrel.ml_per_barrel * barrel.quantity
+
+                logger.debug(f"Adding ML for SKU {barrel.sku}: Red={red_ml_to_add}, Green={green_ml_to_add}, "
+                             f"Blue={blue_ml_to_add}, Dark={dark_ml_to_add}")
+
+                update_ml_query = """
                     UPDATE global_inventory
-                    SET gold = gold - :cost
+                    SET red_ml = red_ml + :red_ml,
+                        green_ml = green_ml + :green_ml,
+                        blue_ml = blue_ml + :blue_ml,
+                        dark_ml = dark_ml + :dark_ml,
+                        total_ml = total_ml + :total_ml
                     WHERE id = 1;
                 """
                 connection.execute(
-                    sqlalchemy.text(update_gold_query),
-                    {'cost': total_cost}
+                    sqlalchemy.text(update_ml_query),
+                    {
+                        "red_ml": red_ml_to_add,
+                        "green_ml": green_ml_to_add,
+                        "blue_ml": blue_ml_to_add,
+                        "dark_ml": dark_ml_to_add,
+                        "total_ml": total_ml_to_add
+                    }
                 )
-                logger.debug(f"Deducted {total_cost} gold from global_inventory.")
+                logger.info(f"Updated ML in global_inventory for SKU {barrel.sku}.")
 
-        logger.info(f"Successfully processed delivery for order_id {order_id}.")
-        return {"success": True}
+            # Subtract total gold cost from global_inventory
+            logger.debug("Subtracting total gold cost from global_inventory.")
+            update_gold_query = """
+                UPDATE global_inventory
+                SET gold = gold - :total_gold_cost
+                WHERE id = 1;
+            """
+            connection.execute(
+                sqlalchemy.text(update_gold_query),
+                {"total_gold_cost": total_gold_cost}
+            )
+            logger.info(f"Subtracted {total_gold_cost} gold from global_inventory.")
+
+            # Log updated gold and ML
+            logger.debug("Fetching updated gold and ML from global_inventory.")
+            query_updated_inventory = """
+                SELECT gold, red_ml, green_ml, blue_ml, dark_ml, total_ml
+                FROM global_inventory
+                WHERE id = 1;
+            """
+            updated_inventory = connection.execute(sqlalchemy.text(query_updated_inventory)).mappings().fetchone()
+            logger.debug(f"Updated Inventory - Gold: {updated_inventory['gold']}, "
+                         f"Red ML: {updated_inventory['red_ml']}, Green ML: {updated_inventory['green_ml']}, "
+                         f"Blue ML: {updated_inventory['blue_ml']}, Dark ML: {updated_inventory['dark_ml']}, "
+                         f"Total ML: {updated_inventory['total_ml']}")
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_deliver_barrels: {he.detail}")
+        logger.debug(traceback.format_exc())
         raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in post_deliver_barrels: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    logger.info(f"Successfully processed delivery for order_id {order_id}.")
+    logger.debug(f"Delivery processed: {len(barrels_delivered)} barrels delivered, {total_gold_cost} gold deducted.")
+    return {"success": True}
 
 
 # Gets called once a day

@@ -148,6 +148,7 @@ Each hour block contains a list of potions with their composition,
 demand coefficients, and prices.
 """
 potion_coefficients = {
+    # Hearthday
     "Hearthday": {
         "night": [
             # Define potions for hours 2, 4, 6
@@ -156,7 +157,7 @@ potion_coefficients = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "demand": 15, "price": 50},
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
+            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100}
         ],
         "morning": [
             # Define potions for hours 8, 10, 12
@@ -165,7 +166,7 @@ potion_coefficients = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "demand": 15, "price": 50},
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
+            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100}
         ],
         "afternoon": [
             # Define potions for hours 14, 16, 18
@@ -174,7 +175,7 @@ potion_coefficients = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "demand": 15, "price": 50},
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
+            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100}
         ],
         "evening": [
             # Define potions for hours 20, 22, 24
@@ -183,7 +184,7 @@ potion_coefficients = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "demand": 15, "price": 50},
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
+            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100}
         ],
     },
 
@@ -223,7 +224,7 @@ potion_coefficients = {
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "demand": 15, "price": 75},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 5, "price": 100},
             {"name": "Dark Blue Potion", "composition": [0, 0, 50, 50], "demand": 3, "price": 100},
-            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
+            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100}
         ],
     },
 
@@ -263,7 +264,7 @@ potion_coefficients = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "demand": 15, "price": 50},
             {"name": "Dark Blue Potion", "composition": [0, 0, 50, 50], "demand": 10, "price": 100},
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
+            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100}
         ],
     },
 
@@ -285,7 +286,7 @@ potion_coefficients = {
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "demand": 15, "price": 75},
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100},
+            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100}
         ],
         "afternoon": [
             # Define potions for hours 14, 16, 18
@@ -294,7 +295,7 @@ potion_coefficients = {
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "demand": 15, "price": 75},
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100},
+            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100}
         ],
         "evening": [
             # Define potions for hours 20, 22, 24
@@ -303,7 +304,7 @@ potion_coefficients = {
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "demand": 15, "price": 75},
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100},
+            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100}
         ],
     },
 
@@ -343,7 +344,7 @@ potion_coefficients = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "demand": 15, "price": 50},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 10, "price": 100},
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 3, "price": 100},
-            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100},
+            {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 2, "price": 100}
         ],
     
     # Bloomday
@@ -383,7 +384,7 @@ potion_coefficients = {
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "demand": 15, "price": 75},
             {"name": "Dark Green Potion", "composition": [0, 50, 0, 50], "demand": 10, "price": 100},
             {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 3, "price": 100},
-            {"name": "Dark Blue Potion", "composition": [0, 0, 50, 50], "demand": 2, "price": 100},
+            {"name": "Dark Blue Potion", "composition": [0, 0, 50, 50], "demand": 2, "price": 100}
         ],
     },
 
@@ -423,7 +424,7 @@ potion_coefficients = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "demand": 15, "price": 50},
             {"name": "Dark Blue Potion", "composition": [0, 0, 50, 50], "demand": 10, "price": 100},
             {"name": "Dark Red Potion", "composition": [50, 0, 0, 50], "demand": 3, "price": 100},
-            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100},
+            {"name": "Dark Brown Potion", "composition": [25, 25, 25, 25], "demand": 2, "price": 100}
         ],
     },
 }

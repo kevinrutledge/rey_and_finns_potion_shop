@@ -1,28 +1,42 @@
 import math
+import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Tuple
 from typing import List, Dict
-from src.models import Barrel, BarrelPurchase, BarrelDelivery
+from pydantic import BaseModel
+from src.potion_coefficients import potion_coefficients
+
+logger = logging.getLogger(__name__)
+
+# Constants for capacity calculations
+POTION_CAPACITY_PER_UNIT = 50       # Each potion capacity unit allows storage of 50 potions
+ML_CAPACITY_PER_UNIT = 10000        # Each ML capacity unit allows storage of 10000 ml
+CAPACITY_UNIT_COST = 1000           # Cost per capacity unit in gold
+DAYS_PER_WEEK = 7                   # Days of week constant
+LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
+IN_GAME_DAYS = [
+    "Hearthday",
+    "Crownday",
+    "Blesseday",
+    "Soulday",
+    "Edgeday",
+    "Bloomday",
+    "Aracanaday"
+]
+
+class Barrel(BaseModel):
+    sku: str
+    ml_per_barrel: int
+    potion_type: List[int]  # [red, green, blue, dark]
+    price: int
+    quantity: int  # Quantity available for sale in catalog
+
+class BarrelPurchase(BaseModel):
+    sku: str
+    quantity: int
 
 class Utils:
-    IN_GAME_DAYS = [
-        "Hearthday",
-        "Crownday",
-        "Blesseday",
-        "Soulday",
-        "Edgeday",
-        "Bloomday",
-        "Aracanaday"
-    ]
-    DAYS_PER_WEEK = len(IN_GAME_DAYS)
-    LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
-
-    # Constants for capacity calculations
-    POTION_CAPACITY_PER_UNIT = 50      # Each potion capacity unit allows storage of 50 potions
-    ML_CAPACITY_PER_UNIT = 10000        # Each ML capacity unit allows storage of 10,000 ml
-    CAPACITY_UNIT_COST = 1000           # Cost per capacity unit in gold
-
     @staticmethod
     def compute_in_game_time(real_time: datetime) -> Tuple[str, int]:
         """
@@ -41,12 +55,12 @@ class Utils:
             Tuple[str, int]: Tuple containing in-game day and in-game hour.
         """
 
-        EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=Utils.LOCAL_TIMEZONE)
+        EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
         delta = real_time - EPOCH
         total_hours = int(delta.total_seconds() // 3600)
 
-        in_game_day_index = (total_hours // 24) % Utils.DAYS_PER_WEEK
-        in_game_day = Utils.IN_GAME_DAYS[in_game_day_index]
+        in_game_day_index = (total_hours // 24) % DAYS_PER_WEEK
+        in_game_day = IN_GAME_DAYS[in_game_day_index]
         in_game_hour = real_time.hour
 
         # Apply Even/Odd Rounding Logic
@@ -55,8 +69,8 @@ class Utils:
             rounded_time = (real_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
             # Check if day changes
             if rounded_time.day != real_time.day:
-                in_game_day_index = (in_game_day_index + 1) % Utils.DAYS_PER_WEEK
-                in_game_day = Utils.IN_GAME_DAYS[in_game_day_index]
+                in_game_day_index = (in_game_day_index + 1) % DAYS_PER_WEEK
+                in_game_day = IN_GAME_DAYS[in_game_day_index]
         else:
             # Even hour: round down to same hour
             rounded_time = real_time.replace(minute=0, second=0, microsecond=0)
@@ -65,6 +79,7 @@ class Utils:
         in_game_hour = rounded_time.hour
 
         return in_game_day, in_game_hour
+
 
     @staticmethod
     def get_hour_block(current_hour: int) -> str:
@@ -91,6 +106,7 @@ class Utils:
         except Exception as e:
             raise e
 
+
     @staticmethod
     def get_current_real_time() -> datetime:
         """
@@ -99,23 +115,30 @@ class Utils:
         Returns:
             datetime: Current real-world local time with timezone.
         """
-        return datetime.now(tz=Utils.LOCAL_TIMEZONE)
-    
+        return datetime.now(tz=LOCAL_TIMEZONE)
+
+
     @staticmethod
-    def get_dominant_color(potion_type: List[int]) -> str:
+    def normalize_potion_type(potion_type: List[int]) -> List[int]:
         """
-        Determines the dominant color based on potion_type list.
-        Returns 'mixed' if multiple colors are present.
+        Normalizes the potion_type to sum to 100.
         """
-        color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
-        dominant_colors = [color_map[i] for i, amount in enumerate(potion_type) if amount > 0]
-        if len(dominant_colors) == 1:
-            return dominant_colors[0]
-        elif len(dominant_colors) > 1:
-            return 'mixed'
-        else:
-            return 'unknown'
+        total = sum(potion_type)
+        if total == 0:
+            raise ValueError("Total of potion_type cannot be zero.")
+        factor = 100 / total
+        normalized = [int(x * factor) for x in potion_type]
+        # Adjust for rounding errors
+        difference = 100 - sum(normalized)
+        if difference != 0:
+            for i in range(len(normalized)):
+                if normalized[i] + difference >= 0:
+                    normalized[i] += difference
+                    break
+        logger.debug(f"Normalized potion_type from {potion_type} to {normalized}")
+        return normalized
     
+
     @staticmethod
     def calculate_purchase_plan(wholesale_catalog: List[Barrel], current_inventory: Dict[str, int], gold: int, potion_capacity_units: int, ml_capacity_units: int) -> List[BarrelPurchase]:
         """
@@ -133,28 +156,21 @@ class Utils:
         """
         logger.debug("Calculating purchase plan based on current inventory and potion demands.")
 
-        # Determine current capacity limits
-        potion_capacity_limit = potion_capacity_units * POTION_CAPACITY_PER_UNIT
-        ml_capacity_limit = ml_capacity_units * ML_CAPACITY_PER_UNIT
-        logger.debug(f"Current Potion Capacity Limit: {potion_capacity_limit}, ML Capacity Limit: {ml_capacity_limit}")
-
-        # Determine current total potions and ML
+        potion_capacity_limit = potion_capacity_units * POTION_CAPACITY_PER_UNIT  # Each unit allows 50 potions
+        ml_capacity_limit = ml_capacity_units * ML_CAPACITY_PER_UNIT          # Each unit allows 10,000 ml
         total_potions = current_inventory.get('total_potions', 0)
         total_ml = current_inventory.get('total_ml', 0)
-        logger.debug(f"Current Total Potions: {total_potions}, Current Total ML: {total_ml}")
 
-        # Determine available capacities
         available_potion_capacity = potion_capacity_limit - total_potions
         available_ml_capacity = ml_capacity_limit - total_ml
-        logger.debug(f"Available Potion Capacity: {available_potion_capacity}, Available ML Capacity: {available_ml_capacity}")
 
-        # Get current in-game time
+        # Compute in-game time
         real_time = Utils.get_current_real_time()
         in_game_day, in_game_hour = Utils.compute_in_game_time(real_time)
         hour_block = Utils.get_hour_block(in_game_hour)
         logger.debug(f"Computed In-Game Time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
 
-        # Fetch potion demands for the current day and hour block
+        # Fetch potion demands
         day_potions = potion_coefficients.get(in_game_day, {}).get(hour_block, [])
         if not day_potions:
             logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Returning empty purchase plan.")
@@ -178,61 +194,61 @@ class Utils:
 
             logger.debug(f"Evaluating potion: {potion_name} with demand {demand}, price {price}")
 
-            # Find corresponding barrel in wholesale_catalog
-            matching_barrels = [barrel for barrel in wholesale_catalog if barrel.potion_type == composition]
+            # Determine which barrels contribute to this potion's potion_type
+            # For simplicity, prioritize buying barrels that match the dominant color in the potion_type
+            dominant_color_index = composition.index(max(composition))
+            color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
+            dominant_color = color_map.get(dominant_color_index, 'unknown')
+            logger.debug(f"Dominant color for potion {potion_name}: {dominant_color}")
+
+            # Filter barrels matching the dominant color
+            matching_barrels = [b for b in wholesale_catalog if b.potion_type[dominant_color_index] == 1]
+
             if not matching_barrels:
-                logger.debug(f"No matching barrels found for potion: {potion_name}. Skipping.")
-                continue  # No available barrels for this potion
+                logger.warning(f"No matching barrels found for dominant color {dominant_color} of potion {potion_name}. Skipping.")
+                continue  # No available barrels for this potion's dominant color
 
-            barrel = matching_barrels[0]  # Assuming one barrel per potion type
-            logger.debug(f"Found matching barrel: SKU {barrel.sku} for potion {potion_name}")
+            # Sort matching barrels by size ascending (Mini to Large) for flexibility
+            size_order = ['MINI', 'SMALL', 'MEDIUM', 'LARGE']
+            matching_barrels.sort(key=lambda b: size_order.index(b.sku.split('_')[0]) if b.sku.split('_')[0] in size_order else 4)
 
-            # Determine how many barrels to buy based on demand and available capacity
-            max_potions_based = math.floor((demand / 100) * potion_capacity_limit)
-            max_potions_based = min(max_potions_based, remaining_potion_capacity)
-            logger.debug(f"Max potions based on demand: {max_potions_based}")
+            for barrel in matching_barrels:
+                barrel_sku = barrel.sku
+                barrel_ml = barrel.ml_per_barrel
+                barrel_price = barrel.price
+                barrel_quantity_available = barrel.quantity
 
-            # Determine how many barrels based on ML availability
-            ml_required_per_barrel = barrel.ml_per_barrel
-            if ml_required_per_barrel == 0:
-                logger.debug(f"Barrel SKU {barrel.sku} has 0 ML per barrel. Skipping.")
-                continue  # Avoid division by zero
+                logger.debug(f"Considering barrel SKU {barrel_sku} with {barrel_ml} ml and price {barrel_price}.")
 
-            max_barrels_ml = math.floor(remaining_ml_capacity / ml_required_per_barrel)
-            logger.debug(f"Max barrels based on ML availability: {max_barrels_ml}")
+                # Determine max barrels based on available gold and inventory capacity
+                max_affordable = remaining_gold // barrel_price if barrel_price > 0 else 0
+                max_by_gold = min(max_affordable, barrel_quantity_available)
 
-            # Determine the feasible number of barrels to purchase
-            feasible_barrels = min(max_potions_based, max_barrels_ml)
-            if feasible_barrels <= 0:
-                logger.debug(f"No feasible barrels to purchase for potion: {potion_name}. Skipping.")
-                continue
+                max_by_capacity_ml = remaining_ml_capacity // (barrel_ml)
+                max_by_capacity_potions = remaining_potion_capacity  # Assuming each ml contributes to one potion
 
-            # Determine cost
-            total_cost = feasible_barrels * barrel.price
-            if total_cost > remaining_gold:
-                feasible_barrels = math.floor(remaining_gold / barrel.price)
-                total_cost = feasible_barrels * barrel.price
-                logger.debug(f"Adjusted feasible barrels based on gold availability: {feasible_barrels}, Total Cost: {total_cost}")
+                feasible_barrels = min(max_by_gold, max_by_capacity_ml, max_by_capacity_potions)
 
-            if feasible_barrels <= 0:
-                logger.debug(f"Insufficient gold to purchase any barrels for potion: {potion_name}. Skipping.")
-                continue
+                if feasible_barrels <= 0:
+                    logger.debug(f"No feasible barrels to purchase for SKU {barrel_sku}.")
+                    continue
 
-            # Add to purchase plan
-            purchase_plan.append(BarrelPurchase(sku=barrel.sku, quantity=feasible_barrels))
-            logger.info(f"Planned to purchase {feasible_barrels} barrels of SKU {barrel.sku} for potion {potion_name}")
+                # Add to purchase plan
+                purchase_plan.append(BarrelPurchase(sku=barrel_sku, quantity=feasible_barrels))
+                logger.info(f"Planned to purchase {feasible_barrels} barrels of SKU {barrel_sku}.")
 
-            # Update remaining capacities and gold
-            remaining_potion_capacity -= feasible_barrels
-            remaining_ml_capacity -= feasible_barrels * ml_required_per_barrel
-            remaining_gold -= feasible_barrels * barrel.price
+                # Update remaining capacities and gold
+                total_cost = feasible_barrels * barrel_price
+                remaining_gold -= total_cost
+                remaining_ml_capacity -= feasible_barrels * barrel_ml
+                remaining_potion_capacity -= feasible_barrels  # Assuming each barrel adds ml equivalent to one potion
 
-            logger.debug(f"Updated Remaining Capacities - Potion: {remaining_potion_capacity}, ML: {remaining_ml_capacity}, Gold: {remaining_gold}")
+                logger.debug(f"Updated Remaining Capacities - Potion: {remaining_potion_capacity}, ML: {remaining_ml_capacity}, Gold: {remaining_gold}")
 
-            # Break if no more capacity or gold
-            if remaining_potion_capacity <= 0 or remaining_gold < min([b.price for b in wholesale_catalog]):
-                logger.debug("No more capacity or insufficient gold to purchase additional barrels. Stopping purchase plan calculation.")
-                break
+                # Break if no more capacity or gold
+                if remaining_potion_capacity <= 0 or remaining_gold < min([b.price for b in matching_barrels if b.price > 0], default=0):
+                    logger.debug("No more capacity or insufficient gold to purchase additional barrels. Stopping purchase plan calculation.")
+                    break
 
         logger.info(f"Generated purchase plan: {purchase_plan}")
         return purchase_plan

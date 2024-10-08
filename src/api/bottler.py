@@ -3,7 +3,7 @@ import logging
 import math
 from src.api import auth
 from src import database as db
-from src import potion_coefficients as po
+from src.potion_coefficients import potion_coefficients
 from src.utilities import Utils as ut
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, validator
@@ -21,44 +21,12 @@ class PotionInventory(BaseModel):
     potion_type: list[int]
     quantity: int
 
-# Constants for capacity calculations
-POTION_CAPACITY_PER_UNIT = 50  # Each potion capacity unit allows storage of 50 potions
-ML_CAPACITY_PER_UNIT = 10000    # Each ML capacity unit allows storage of 10000 ml
-
 class BottlePlanItem(BaseModel):
     potion_type: List[int]  # [red_ml, green_ml, blue_ml, dark_ml]
     quantity: int
 
 class BottlePlanResponse(BaseModel):
     plan: List[BottlePlanItem]
-
-
-def get_color_from_potion_type(potion_type: list[int]) -> str:
-    """
-    Determines the color based on potion_type list.
-    Assumes only one color is dominant or returns 'mixed' if multiple.
-    """
-    color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
-    if sum(potion_type) != 100:
-        logger.warning(f"Invalid potion_type {potion_type}. Sum must be 100.")
-        # Normalize potion_type to sum to 100
-        if sum(potion_type) > 0:
-            factor = 100 / sum(potion_type)
-            potion_type = [int(x * factor) for x in potion_type]
-            logger.debug(f"Normalized potion_type to {potion_type}.")
-        else:
-            # All zeros; return 'unknown'
-            logger.debug("All potion_type values are zero. Returning 'unknown'.")
-            return 'unknown'
-
-    # Check for single color dominance
-    dominant_colors = [color_map[i] for i, x in enumerate(potion_type) if x > 0]
-    if len(dominant_colors) == 1:
-        return dominant_colors[0]
-    elif len(dominant_colors) > 1:
-        return 'mixed'
-    else:
-        return 'unknown'
 
 
 @router.post("/deliver/{order_id}", summary="Deliver Bottles", description="Process delivery of bottles.")
@@ -223,7 +191,7 @@ def get_bottle_plan():
         logger.debug(f"Computed in-game time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
 
         # Step 2: Fetch potion demands for the current day and hour block
-        day_potions = po.get(in_game_day, {}).get(hour_block, [])
+        day_potions = potion_coefficients.get(in_game_day, {}).get(hour_block, [])
         if not day_potions:
             logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Returning empty plan.")
             return BottlePlanResponse(plan=[])
@@ -282,39 +250,51 @@ def get_bottle_plan():
             total_potions = total_potions_row['total_potions'] if total_potions_row['total_potions'] else 0
             logger.debug(f"Total potions currently in inventory: {total_potions}")
 
-        # Step 5: Determine how many potions can be brewed without exceeding capacity
-        potion_plan = []
+        # Step 5: Calculate ROI and sort potions
         for potion in day_potions:
+            composition = potion['composition']
+            demand = potion['demand']
+            price = potion['price']
+            total_ml = sum(composition)
+            if total_ml == 0:
+                potion['roi'] = 0
+            else:
+                # Define ROI as (demand * price) / total_ml_required
+                potion['roi'] = (demand * price) / total_ml
+
+        # Sort potions by ROI in descending order
+        day_potions_sorted = sorted(day_potions, key=lambda x: x['roi'], reverse=True)
+        logger.debug(f"Potions sorted by ROI: {day_potions_sorted}")
+
+        # Step 6: Allocate brew quantities
+        potion_plan = []
+        for potion in day_potions_sorted:
             composition = potion['composition']  # [r, g, b, d]
             demand = potion['demand']          # Integer representing demand
-            max_possible = potion_capacity_limit - total_potions
+            price = potion['price']
+            roi = potion['roi']
 
-            # Determine max quantity based on demand and available potion capacity
-            desired_quantity = math.floor((demand / 100) * (potion_capacity_limit))
-            desired_quantity = min(desired_quantity, max_possible)
+            # Calculate desired_quantity based on demand
+            desired_quantity = math.floor((demand / 100) * potion_capacity_limit)
+            desired_quantity = min(desired_quantity, potion_capacity_limit - total_potions)
 
             if desired_quantity <= 0:
                 logger.debug(f"No capacity left to brew potion: {potion['name']}. Skipping.")
-                continue
+                continue  # Skip if no capacity left
 
             # Determine max quantity based on available ml
             max_quantity_ml = float('inf')
-            potion_ml = {
-                'red_ml': composition[0],
-                'green_ml': composition[1],
-                'blue_ml': composition[2],
-                'dark_ml': composition[3]
-            }
-            for color, ml_required in potion_ml.items():
+            for idx, color in enumerate(['red_ml', 'green_ml', 'blue_ml', 'dark_ml']):
+                ml_required = composition[idx]
                 if ml_required > 0:
-                    available = available_ml[f"{color}_ml"]
-                    possible = available // ml_required
+                    possible = available_ml[color] // ml_required
                     max_quantity_ml = min(max_quantity_ml, possible)
+
             brew_quantity = min(desired_quantity, max_quantity_ml)
 
             if brew_quantity <= 0:
                 logger.debug(f"Insufficient ML to brew potion: {potion['name']}. Skipping.")
-                continue
+                continue  # Skip if insufficient ML
 
             # Add to potion plan
             potion_plan.append({
@@ -322,9 +302,15 @@ def get_bottle_plan():
                 "quantity": brew_quantity
             })
 
-            # Update total_potions for capacity calculation
+            # Update totals
             total_potions += brew_quantity
-            logger.debug(f"Planned to brew {brew_quantity} of {potion['name']}.")
+            for idx, color in enumerate(['red_ml', 'green_ml', 'blue_ml', 'dark_ml']):
+                available_ml[color] -= composition[idx] * brew_quantity
+
+            logger.debug(f"Planned to brew {brew_quantity} of {potion['name']} with ROI {roi}.")
+
+        logger.info(f"Brew plan generated: {potion_plan}")
+        return BottlePlanResponse(plan=potion_plan)
 
     except HTTPException as e:
         logger.error(f"HTTPException in get_bottle_plan: {e.detail}")

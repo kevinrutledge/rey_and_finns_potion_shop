@@ -1,12 +1,13 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src.utilities import Utils as ti
-from fastapi import APIRouter, Depends, HTTPException
+from src.utilities import Utils as ut
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from src.api import auth
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class CartCheckout(BaseModel):
 
 @router.get("/search/", tags=["search"])
 def search_orders(
+
     customer_name: str = "",
     potion_sku: str = "",
     search_page: int = 1,
@@ -76,117 +78,6 @@ def search_orders(
         f"potion_sku: '{potion_sku}', search_page: {search_page}, "
         f"sort_col: '{sort_col}', sort_order: '{sort_order}'"
     )
-    try:
-        with db.engine.begin() as connection:
-            # Build base SQL query
-            logger.debug("Building base SQL query for searching orders.")
-            base_query = sqlalchemy.select(
-                [
-                    sqlalchemy.column('ci.cart_item_id').label('line_item_id'),
-                    sqlalchemy.column('p.sku').label('item_sku'),
-                    sqlalchemy.column('cust.customer_name'),
-                    sqlalchemy.column('ci.line_item_total'),
-                    sqlalchemy.column('c.checked_out_at').label('timestamp')
-                ]
-            ).select_from(
-                sqlalchemy.text(
-                    """
-                    cart_items ci
-                    JOIN carts c ON ci.cart_id = c.cart_id
-                    JOIN potions p ON ci.potion_id = p.potion_id
-                    JOIN customers cust ON c.customer_id = cust.customer_id
-                    """
-                )
-            ).where(
-                sqlalchemy.text('c.checked_out = TRUE')
-            )
-
-            # Apply filters
-            filters = []
-            params = {}
-            if customer_name:
-                filters.append(sqlalchemy.text("cust.customer_name ILIKE :customer_name"))
-                params['customer_name'] = f"%{customer_name}%"
-                logger.debug(f"Filtering by customer_name: {customer_name}")
-            if potion_sku:
-                filters.append(sqlalchemy.text("p.sku ILIKE :potion_sku"))
-                params['potion_sku'] = f"%{potion_sku}%"
-                logger.debug(f"Filtering by potion_sku: {potion_sku}")
-            if filters:
-                base_query = base_query.where(sqlalchemy.and_(*filters))
-
-            # Apply sorting
-            sort_column_map = {
-                'customer_name': 'cust.customer_name',
-                'item_sku': 'p.sku',
-                'line_item_total': 'ci.line_item_total',
-                'timestamp': 'c.checked_out_at'
-            }
-            sort_column = sort_column_map.get(sort_col.value, 'c.checked_out_at')
-            order_direction = sqlalchemy.asc if sort_order == 'asc' else sqlalchemy.desc
-            logger.debug(f"Applying sorting by {sort_column} in {sort_order} order.")
-            base_query = base_query.order_by(order_direction(sqlalchemy.text(sort_column)))
-
-            # Apply pagination
-            page_size = 5
-            offset = (search_page - 1) * page_size
-            logger.debug(f"Applying pagination - page_size: {page_size}, offset: {offset}")
-            base_query = base_query.offset(offset).limit(page_size + 1)  # Fetch one extra to check for next page
-
-            # Execute query
-            logger.debug("Executing SQL query.")
-            result = connection.execute(base_query, params)
-            items = result.mappings().fetchall()
-            logger.debug(f"Query returned {len(items)} items (including one extra for pagination check).")
-
-            # Determine previous and next page
-            previous_page = search_page - 1 if search_page > 1 else None
-            next_page = search_page + 1 if len(items) > page_size else None
-
-            # Prepare results
-            results = []
-            for item in items[:page_size]:
-                timestamp = item['timestamp']
-                if timestamp:
-                    # Convert UTC timestamp to local timezone
-                    timestamp_local = timestamp.astimezone(tz=ti.LOCAL_TIMEZONE)
-                    in_game_day, in_game_hour = ti.compute_in_game_time(timestamp_local)
-                    logger.debug(
-                        f"Line Item ID {item['line_item_id']} - In-game Day: {in_game_day}, "
-                        f"Hour: {in_game_hour}:00, Real Timestamp (Local): {timestamp_local.isoformat()}"
-                    )
-                else:
-                    in_game_day, in_game_hour = "Unknown", 0
-                    logger.debug(f"Line Item ID {item['line_item_id']} has no timestamp.")
-
-                timestamp_iso = timestamp_local.isoformat() if timestamp else None
-                results.append({
-                    'line_item_id': item['line_item_id'],
-                    'item_sku': item['item_sku'],
-                    'customer_name': item['customer_name'],
-                    'line_item_total': item['line_item_total'],
-                    'timestamp': timestamp_iso,
-                    'in_game_day': in_game_day,
-                    'in_game_hour': in_game_hour
-                })
-
-            # Build response
-            response = {
-                'previous': str(previous_page) if previous_page else "",
-                'next': str(next_page) if next_page else "",
-                'results': results
-            }
-
-            logger.debug(f"Prepared response: {response}")
-            logger.info(f"Search completed with {len(results)} results.")
-            return response
-
-    except sqlalchemy.exc.SQLAlchemyError as e:
-        logger.exception(f"Database error in search_orders: {e}")
-        raise HTTPException(status_code=500, detail="Database error occurred.")
-    except Exception as e:
-        logger.exception(f"Unhandled exception in search_orders: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.post("/visits/{visit_id}")
@@ -194,52 +85,57 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     Which customers visited shop today?
     """
-    logger.info(f"Endpoint /carts/visits/{visit_id} called with {len(customers)} customers.")
-    logger.debug(f"Visit ID: {visit_id}, Customers: {customers}")
+    logger.info(f"Post Visits called with visit_id={visit_id} and {len(customers)} customers.")
+    logger.debug(f"Customers data: {customers}")
 
     try:
         with db.engine.begin() as connection:
-            # Insert visit record
-            logger.debug("Inserting visit record into 'visits' table.")
-            connection.execute(
-                sqlalchemy.text(
-                    """
-                    INSERT INTO visits (visit_id, visit_time)
-                    VALUES (:visit_id, NOW());
-                    """
-                ),
-                {'visit_id': visit_id}
+            # Insert into customer_visits table
+            visit_time = ut.get_current_real_time()
+            in_game_day, in_game_hour = ut.compute_in_game_time(visit_time)
+            logger.debug(f"In-game time for visit: Day={in_game_day}, Hour={in_game_hour}")
+
+            insert_visit_query = """
+                INSERT INTO customer_visits (visit_time, in_game_day, in_game_hour)
+                VALUES (:visit_time, :in_game_day, :in_game_hour)
+                RETURNING visit_id;
+            """
+            result = connection.execute(
+                sqlalchemy.text(insert_visit_query),
+                {
+                    "visit_time": visit_time,
+                    "in_game_day": in_game_day,
+                    "in_game_hour": in_game_hour,
+                },
             )
-            logger.info(f"Inserted visit with visit_id {visit_id}.")
+            new_visit_id = result.scalar()
+            logger.debug(f"Inserted new visit with visit_id={new_visit_id}")
 
-            # Insert customer records
+            # Insert each customer into customers table
             for customer in customers:
-                logger.debug(f"Inserting customer: {customer.customer_name}")
+                insert_customer_query = """
+                    INSERT INTO customers (visit_id, customer_name, character_class, level)
+                    VALUES (:visit_id, :customer_name, :character_class, :level);
+                """
                 connection.execute(
-                    sqlalchemy.text(
-                        """
-                        INSERT INTO customers (visit_id, customer_name, character_class, level)
-                        VALUES (:visit_id, :customer_name, :character_class, :level);
-                        """
-                    ),
+                    sqlalchemy.text(insert_customer_query),
                     {
-                        'visit_id': visit_id,
-                        'customer_name': customer.customer_name,
-                        'character_class': customer.character_class,
-                        'level': customer.level
-                    }
+                        "visit_id": new_visit_id,
+                        "customer_name": customer.customer_name,
+                        "character_class": customer.character_class,
+                        "level": customer.level,
+                    },
                 )
-                logger.info(f"Inserted customer '{customer.customer_name}' for visit_id {visit_id}.")
+                logger.info(
+                    f"Inserted customer '{customer.customer_name}' of class '{customer.character_class}' with level {customer.level}."
+                )
 
-        logger.info("All customers for visit have been recorded successfully.")
-        return {"success": True}
-
-    except sqlalchemy.exc.IntegrityError as e:
-        logger.error(f"IntegrityError: {e}")
-        raise HTTPException(status_code=400, detail="Visit ID already exists.")
     except Exception as e:
         logger.exception(f"Unhandled exception in post_visits: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    logger.info(f"Successfully recorded visit_id={visit_id} with {len(customers)} customers.")
+    return {"success": True}
 
 
 @router.post("/")
@@ -247,70 +143,49 @@ def create_cart(new_cart: Customer):
     """
     Create new cart for customer.
     """
-    logger.info(f"Endpoint /carts/ called to create a new cart for customer '{new_cart.customer_name}'.")
-    logger.debug(f"Customer Details: {new_cart.dict()}")
+    logger.info(f"Create Cart called for customer '{new_cart.customer_name}'.")
+    logger.debug(f"Customer data: {new_cart}")
 
     try:
         with db.engine.begin() as connection:
-            # Retrieve the latest customer_id based on customer details
-            logger.debug("Retrieving customer_id from 'customers' table.")
+            # Insert customer into customers table
+            insert_customer_query = """
+                INSERT INTO customers (customer_name, character_class, level)
+                VALUES (:customer_name, :character_class, :level)
+                RETURNING customer_id;
+            """
             result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT customer_id FROM customers
-                    WHERE customer_name = :customer_name
-                    AND character_class = :character_class
-                    AND level = :level
-                    ORDER BY customer_id DESC
-                    LIMIT 1;
-                    """
-                ),
+                sqlalchemy.text(insert_customer_query),
                 {
-                    'customer_name': new_cart.customer_name,
-                    'character_class': new_cart.character_class,
-                    'level': new_cart.level
-                }
+                    "customer_name": new_cart.customer_name,
+                    "character_class": new_cart.character_class,
+                    "level": new_cart.level,
+                },
             )
-            customer_row = result.mappings().fetchone()
-            if not customer_row:
-                logger.error("Customer not found in any visit.")
-                raise HTTPException(status_code=404, detail="Customer not found in any visit.")
-            customer_id = customer_row['customer_id']
-            logger.debug(f"Retrieved customer_id: {customer_id}")
-            current_time = datetime.now(tz=ti.LOCAL_TIMEZONE)
-            in_game_day, in_game_hour = ti.compute_in_game_time(current_time)
-            logger.debug(f"Computed in-game time for cart creation - Day: {in_game_day}, Hour: {in_game_hour}")
+            customer_id = result.scalar()
+            logger.debug(f"Inserted customer with customer_id={customer_id}")
 
-            # Insert new cart into 'carts' table with in-game time
-            logger.debug("Inserting new cart into 'carts' table.")
-            result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    INSERT INTO carts (customer_id, checked_out, created_at, in_game_day, in_game_hour)
-                    VALUES (:customer_id, FALSE, :created_at, :in_game_day, :in_game_hour)
-                    RETURNING cart_id;
-                    """
-                ),
+            # Insert new cart into carts table
+            in_game_day, in_game_hour = ut.compute_in_game_time(ut.get_current_real_time())
+            insert_cart_query = """
+                INSERT INTO carts (customer_id, in_game_day, in_game_hour, created_at)
+                VALUES (:customer_id, :in_game_day, :in_game_hour, :created_at)
+                RETURNING cart_id;
+            """
+            cart_id = connection.execute(
+                sqlalchemy.text(insert_cart_query),
                 {
-                    'customer_id': customer_id,
-                    'created_at': current_time,
-                    'in_game_day': in_game_day,
-                    'in_game_hour': in_game_hour
-                }
-            )
-            cart_id_row = result.mappings().fetchone()
-            if not cart_id_row:
-                logger.error("Failed to create cart.")
-                raise HTTPException(status_code=500, detail="Failed to create cart.")
-            cart_id = cart_id_row['cart_id']
-            logger.info(f"Created cart with cart_id {cart_id} for customer_id {customer_id}.")
+                    "customer_id": customer_id,
+                    "in_game_day": in_game_day,
+                    "in_game_hour": in_game_hour,
+                    "created_at": ut.get_current_real_time(),
+                },
+            ).scalar()
+            logger.debug(f"Inserted cart with cart_id={cart_id}")
 
-            logger.debug(f"Returning cart_id: {cart_id}")
-            return {"cart_id": cart_id}
+        logger.info(f"Successfully created cart_id={cart_id} for customer_id={customer_id}.")
+        return {"cart_id": str(cart_id)}
 
-    except HTTPException as e:
-        logger.error(f"HTTPException in create_cart: {e.detail}")
-        raise e
     except Exception as e:
         logger.exception(f"Unhandled exception in create_cart: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
@@ -321,121 +196,116 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """
     Add or update item quantity in cart.
     """
-    logger.info(f"Endpoint /carts/{cart_id}/items/{item_sku} called to set item quantity.")
-    logger.debug(f"Cart ID: {cart_id}, Item SKU: {item_sku}, Quantity: {cart_item.quantity}")
+    logger.info(f"Set Item Quantity called for cart_id={cart_id}, item_sku='{item_sku}', quantity={cart_item.quantity}.")
+    logger.debug(f"CartItem data: {cart_item}")
+
+    if cart_item.quantity < 1 or cart_item.quantity > 10000:
+        logger.error("Quantity must be between 1 and 10,000.")
+        raise HTTPException(status_code=400, detail="Quantity must be between 1 and 10,000.")
 
     try:
         with db.engine.begin() as connection:
             # Check if cart exists and is not checked out
-            logger.debug("Verifying cart existence and checkout status.")
+            check_cart_query = """
+                SELECT checked_out FROM carts WHERE cart_id = :cart_id;
+            """
             result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT checked_out FROM carts WHERE cart_id = :cart_id;
-                    """
-                ),
-                {'cart_id': cart_id}
+                sqlalchemy.text(check_cart_query),
+                {"cart_id": cart_id},
             )
-            cart_row = result.mappings().fetchone()
-            if not cart_row:
-                logger.error(f"Cart {cart_id} does not exist.")
+            cart = result.mappings().fetchone()
+            if not cart:
+                logger.error(f"Cart with cart_id={cart_id} does not exist.")
                 raise HTTPException(status_code=404, detail="Cart not found.")
-            if cart_row['checked_out']:
-                logger.error(f"Cart {cart_id} is already checked out.")
-                raise HTTPException(status_code=400, detail="Cart is already checked out.")
+            if cart["checked_out"]:
+                logger.error(f"Cannot modify a checked-out cart with cart_id={cart_id}.")
+                raise HTTPException(status_code=400, detail="Cannot modify a checked-out cart.")
 
-            # Get potion_id and price from 'potions' table
-            logger.debug("Retrieving potion_id and price from 'potions' table.")
+            # Fetch potion_id from potions table using SKU
+            fetch_potion_query = """
+                SELECT potion_id, price, current_quantity
+                FROM potions
+                WHERE sku = :sku
+                LIMIT 1;
+            """
             result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT potion_id, price FROM potions WHERE sku = :sku;
-                    """
-                ),
-                {'sku': item_sku}
+                sqlalchemy.text(fetch_potion_query),
+                {"sku": item_sku},
             )
-            potion_row = result.mappings().fetchone()
-            if not potion_row:
-                logger.error(f"Potion with SKU {item_sku} does not exist.")
-                raise HTTPException(status_code=404, detail="Item SKU not found.")
-            potion_id = potion_row['potion_id']
-            price = potion_row['price']
-            logger.debug(f"Retrieved potion_id: {potion_id}, price: {price}")
+            potion = result.mappings().fetchone()
+            if not potion:
+                logger.error(f"Potion with SKU '{item_sku}' does not exist.")
+                raise HTTPException(status_code=404, detail="Potion not found.")
 
-            # Validate quantity
-            quantity = cart_item.quantity
-            if quantity < 0:
-                logger.error("Quantity cannot be negative.")
-                raise HTTPException(status_code=400, detail="Quantity cannot be negative.")
-            logger.debug(f"Validated quantity: {quantity}")
+            potion_id = potion["potion_id"]
+            price = potion["price"]
+            current_quantity = potion["current_quantity"]
 
-            # Calculate line_item_total
-            line_item_total = price * quantity
-            logger.debug(f"Calculated line_item_total: {line_item_total}")
+            logger.debug(f"Fetched potion_id={potion_id}, price={price}, current_quantity={current_quantity}.")
 
-            # Check if item already exists in 'cart_items'
-            logger.debug("Checking if item already exists in 'cart_items'.")
+            # Check if the potion is already in the cart
+            check_cart_item_query = """
+                SELECT cart_item_id, quantity FROM cart_items
+                WHERE cart_id = :cart_id AND potion_id = :potion_id;
+            """
             result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT cart_item_id FROM cart_items
-                    WHERE cart_id = :cart_id AND potion_id = :potion_id;
-                    """
-                ),
-                {'cart_id': cart_id, 'potion_id': potion_id}
+                sqlalchemy.text(check_cart_item_query),
+                {"cart_id": cart_id, "potion_id": potion_id},
             )
-            cart_item_row = result.mappings().fetchone()
+            existing_item = result.mappings().fetchone()
 
-            if cart_item_row:
+            # Calculate total cost and validate inventory
+            total_cost = price * cart_item.quantity
+            if cart_item.quantity > current_quantity:
+                logger.error("Requested quantity exceeds available inventory.")
+                raise HTTPException(status_code=400, detail="Requested quantity exceeds available inventory.")
+
+            if existing_item:
                 # Update existing cart item
-                cart_item_id = cart_item_row['cart_item_id']
-                logger.debug(f"Cart item exists with cart_item_id: {cart_item_id}. Updating quantity.")
+                update_cart_item_query = """
+                    UPDATE cart_items
+                    SET quantity = :quantity, line_item_total = :line_item_total, timestamp = :timestamp
+                    WHERE cart_item_id = :cart_item_id;
+                """
                 connection.execute(
-                    sqlalchemy.text(
-                        """
-                        UPDATE cart_items
-                        SET quantity = :quantity, price = :price, line_item_total = :line_item_total
-                        WHERE cart_item_id = :cart_item_id;
-                        """
-                    ),
+                    sqlalchemy.text(update_cart_item_query),
                     {
-                        'quantity': quantity,
-                        'price': price,
-                        'line_item_total': line_item_total,
-                        'cart_item_id': cart_item_id
-                    }
+                        "quantity": cart_item.quantity,
+                        "line_item_total": total_cost,
+                        "timestamp": ut.get_current_real_time(),
+                        "cart_item_id": existing_item["cart_item_id"],
+                    },
                 )
-                logger.info(f"Updated cart item {cart_item_id} in cart {cart_id} with quantity {quantity}.")
+                logger.info(f"Updated cart_item_id={existing_item['cart_item_id']} with quantity={cart_item.quantity}.")
             else:
                 # Insert new cart item
-                logger.debug("Cart item does not exist. Inserting new cart item.")
-                connection.execute(
-                    sqlalchemy.text(
-                        """
-                        INSERT INTO cart_items (cart_id, potion_id, quantity, price, line_item_total)
-                        VALUES (:cart_id, :potion_id, :quantity, :price, :line_item_total);
-                        """
-                    ),
+                insert_cart_item_query = """
+                    INSERT INTO cart_items (cart_id, potion_id, quantity, price, line_item_total, timestamp)
+                    VALUES (:cart_id, :potion_id, :quantity, :price, :line_item_total, :timestamp)
+                    RETURNING cart_item_id;
+                """
+                cart_item_id = connection.execute(
+                    sqlalchemy.text(insert_cart_item_query),
                     {
-                        'cart_id': cart_id,
-                        'potion_id': potion_id,
-                        'quantity': quantity,
-                        'price': price,
-                        'line_item_total': line_item_total
-                    }
-                )
-                logger.info(f"Added new cart item for potion {item_sku} with quantity {quantity} to cart {cart_id}.")
+                        "cart_id": cart_id,
+                        "potion_id": potion_id,
+                        "quantity": cart_item.quantity,
+                        "price": price,
+                        "line_item_total": total_cost,
+                        "timestamp": ut.get_current_real_time(),
+                    },
+                ).scalar()
+                logger.info(f"Inserted new cart_item_id={cart_item_id} with quantity={cart_item.quantity}.")
 
-        logger.info("Item quantity set successfully.")
-        logger.debug("Returning response: {'success': True}")
-        return {"success": True}
-
-    except HTTPException as e:
-        logger.error(f"HTTPException in set_item_quantity: {e.detail}")
-        raise e
+    except HTTPException as he:
+        logger.error(f"HTTPException in set_item_quantity: {he.detail}")
+        raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in set_item_quantity: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    logger.info(f"Successfully set quantity for item_sku='{item_sku}' in cart_id={cart_id}.")
+    return {"success": True}
 
 
 @router.post("/{cart_id}/checkout")
@@ -443,179 +313,154 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     """
     Checkout cart.
     """
-    logger.info(f"Endpoint /carts/{cart_id}/checkout called with payment method '{cart_checkout.payment}'.")
-    logger.debug(f"Checkout Details: {cart_checkout.dict()}")
+    logger.info(f"Checkout called for cart_id={cart_id} with payment method='{cart_checkout.payment}'.")
+    logger.debug(f"CartCheckout data: {cart_checkout}")
 
     try:
         with db.engine.begin() as connection:
-            # Verify cart existence and checkout status
-            logger.debug("Verifying cart existence and checkout status.")
+            # Fetch cart details
+            fetch_cart_query = """
+                SELECT 
+                    ca.checked_out, 
+                    ca.total_potions_bought, 
+                    ca.total_gold_paid 
+                FROM carts ca
+                WHERE ca.cart_id = :cart_id
+                LIMIT 1;
+            """
             result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT checked_out FROM carts WHERE cart_id = :cart_id;
-                    """
-                ),
-                {'cart_id': cart_id}
+                sqlalchemy.text(fetch_cart_query),
+                {"cart_id": cart_id},
             )
-            cart_row = result.mappings().fetchone()
-            if not cart_row:
-                logger.error(f"Cart {cart_id} does not exist.")
+            cart = result.mappings().fetchone()
+            if not cart:
+                logger.error(f"Cart with cart_id={cart_id} does not exist.")
                 raise HTTPException(status_code=404, detail="Cart not found.")
-            if cart_row['checked_out']:
-                logger.error(f"Cart {cart_id} is already checked out.")
-                raise HTTPException(status_code=400, detail="Cart is already checked out.")
+            if cart["checked_out"]:
+                logger.error(f"Cart with cart_id={cart_id} has already been checked out.")
+                raise HTTPException(status_code=400, detail="Cart has already been checked out.")
 
-            # Retrieve cart items
-            logger.debug("Retrieving cart items from 'cart_items' table.")
+            # Fetch cart items
+            fetch_cart_items_query = """
+                SELECT 
+                    ci.potion_id, 
+                    ci.quantity, 
+                    ci.line_item_total, 
+                    p.price 
+                FROM cart_items ci
+                JOIN potions p ON ci.potion_id = p.potion_id
+                WHERE ci.cart_id = :cart_id;
+            """
             result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT ci.cart_item_id, ci.quantity, ci.price, ci.line_item_total,
-                           p.potion_id, p.current_quantity AS potion_stock
-                    FROM cart_items ci
-                    JOIN potions p ON ci.potion_id = p.potion_id
-                    WHERE ci.cart_id = :cart_id;
-                    """
-                ),
-                {'cart_id': cart_id}
+                sqlalchemy.text(fetch_cart_items_query),
+                {"cart_id": cart_id},
             )
             cart_items = result.mappings().fetchall()
-            logger.debug(f"Retrieved {len(cart_items)} items from cart {cart_id}.")
 
             if not cart_items:
-                logger.error(f"No items in cart {cart_id} to checkout.")
+                logger.error(f"No items found in cart_id={cart_id}.")
                 raise HTTPException(status_code=400, detail="Cart is empty.")
 
             total_potions_bought = 0
             total_gold_paid = 0
 
-            # Check stock availability and compute totals
+            # Verify inventory and calculate totals
             for item in cart_items:
-                potion_id = item['potion_id']
-                quantity = item['quantity']
-                potion_stock = item['potion_stock']
-                logger.debug(
-                    f"Processing cart_item_id {item['cart_item_id']}: "
-                    f"Potion ID {potion_id}, Quantity {quantity}, Stock {potion_stock}"
-                )
+                potion_id = item["potion_id"]
+                quantity = item["quantity"]
+                line_item_total = item["line_item_total"]
+                price = item["price"]
 
-                if quantity > potion_stock:
-                    logger.error(
-                        f"Not enough stock for potion_id {potion_id}. "
-                        f"Requested: {quantity}, Available: {potion_stock}."
-                    )
+                # Fetch potion inventory
+                fetch_potion_query = """
+                    SELECT current_quantity 
+                    FROM potions 
+                    WHERE potion_id = :potion_id
+                    LIMIT 1;
+                """
+                result = connection.execute(
+                    sqlalchemy.text(fetch_potion_query),
+                    {"potion_id": potion_id},
+                )
+                potion = result.mappings().fetchone()
+                if not potion:
+                    logger.error(f"Potion with potion_id={potion_id} not found.")
+                    raise HTTPException(status_code=404, detail="Potion not found.")
+
+                current_quantity = potion["current_quantity"]
+                if quantity > current_quantity:
+                    logger.error(f"Insufficient inventory for potion_id={potion_id}. Requested: {quantity}, Available: {current_quantity}.")
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Not enough stock for potion ID {potion_id}."
+                        detail=f"Insufficient inventory for potion_id={potion_id}.",
                     )
 
                 total_potions_bought += quantity
-                total_gold_paid += item['line_item_total']
-                logger.debug(
-                    f"Accumulated totals - Potions: {total_potions_bought}, Gold: {total_gold_paid}"
-                )
+                total_gold_paid += line_item_total
 
-            # Update potions stock
+            # Update inventory and gold
             for item in cart_items:
-                potion_id = item['potion_id']
-                quantity = item['quantity']
-                new_quantity = item['potion_stock'] - quantity
-                logger.debug(f"Updating stock for potion_id {potion_id}: New Quantity {new_quantity}")
+                potion_id = item["potion_id"]
+                quantity = item["quantity"]
+
+                # Deduct potion quantity
+                update_potion_query = """
+                    UPDATE potions
+                    SET current_quantity = current_quantity - :quantity
+                    WHERE potion_id = :potion_id;
+                """
                 connection.execute(
-                    sqlalchemy.text(
-                        """
-                        UPDATE potions
-                        SET current_quantity = :new_quantity
-                        WHERE potion_id = :potion_id;
-                        """
-                    ),
-                    {
-                        'new_quantity': new_quantity,
-                        'potion_id': potion_id
-                    }
+                    sqlalchemy.text(update_potion_query),
+                    {"quantity": quantity, "potion_id": potion_id},
                 )
-                logger.info(f"Updated potion_id {potion_id} stock to {new_quantity}.")
+                logger.debug(f"Deducted {quantity} from potion_id={potion_id}.")
 
-            # Update gold in global_inventory
-            logger.debug("Retrieving current gold from 'global_inventory' table.")
-            result = connection.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT gold FROM global_inventory WHERE id = 1;
-                    """
-                )
-            )
-            global_row = result.mappings().fetchone()
-            if not global_row:
-                logger.error("Global inventory record not found.")
-                raise HTTPException(status_code=500, detail="Global inventory record not found.")
-            gold = global_row['gold']
-            new_gold = gold + total_gold_paid
-            logger.debug(f"Updating gold from {gold} to {new_gold}.")
+            # Update global_inventory gold
+            update_gold_query = """
+                UPDATE global_inventory
+                SET gold = gold + :total_gold_paid
+                WHERE id = 1;
+            """
             connection.execute(
-                sqlalchemy.text(
-                    """
-                    UPDATE global_inventory
-                    SET gold = :new_gold
-                    WHERE id = 1;
-                    """
-                ),
-                {'new_gold': new_gold}
+                sqlalchemy.text(update_gold_query),
+                {"total_gold_paid": total_gold_paid},
             )
-            logger.info(f"Updated gold in global_inventory to {new_gold}.")
+            logger.debug(f"Added {total_gold_paid} gold to global_inventory.")
 
-            # Compute in-game day and hour at checkout
-            checked_out_at_local = datetime.now(tz=ti.LOCAL_TIMEZONE)
-            in_game_day, in_game_hour = ti.compute_in_game_time(checked_out_at_local)
-            logger.debug(
-                f"Computed in-game time for checkout - Day: {in_game_day}, Hour: {in_game_hour}"
-            )
-
-            # Mark cart as checked out and update totals
-            logger.debug("Marking cart as checked out and updating totals.")
+            # Mark cart as checked out
+            mark_cart_checked_out_query = """
+                UPDATE carts
+                SET 
+                    checked_out = TRUE,
+                    checked_out_at = :checked_out_at,
+                    total_potions_bought = :total_potions_bought,
+                    total_gold_paid = :total_gold_paid,
+                    payment = :payment
+                WHERE cart_id = :cart_id;
+            """
             connection.execute(
-                sqlalchemy.text(
-                    """
-                    UPDATE carts
-                    SET checked_out = TRUE,
-                        total_potions_bought = :total_potions_bought,
-                        total_gold_paid = :total_gold_paid,
-                        payment = :payment,
-                        checked_out_at = :checked_out_at,
-                        in_game_day = :in_game_day,
-                        in_game_hour = :in_game_hour
-                    WHERE cart_id = :cart_id;
-                    """
-                ),
+                sqlalchemy.text(mark_cart_checked_out_query),
                 {
-                    'total_potions_bought': total_potions_bought,
-                    'total_gold_paid': total_gold_paid,
-                    'payment': cart_checkout.payment,
-                    'checked_out_at': checked_out_at_local,
-                    'in_game_day': in_game_day,
-                    'in_game_hour': in_game_hour,
-                    'cart_id': cart_id
-                }
+                    "checked_out_at": ut.get_current_real_time(),
+                    "total_potions_bought": total_potions_bought,
+                    "total_gold_paid": total_gold_paid,
+                    "payment": cart_checkout.payment,
+                    "cart_id": cart_id,
+                },
             )
-            logger.info(
-                f"Checked out cart {cart_id}: {total_potions_bought} potions bought, "
-                f"{total_gold_paid} gold paid."
-            )
+            logger.info(f"Marked cart_id={cart_id} as checked out.")
 
-        logger.info("Checkout process completed successfully.")
-        logger.debug(
-            f"Returning response: {{'total_potions_bought': {total_potions_bought}, "
-            f"'total_gold_paid': {total_gold_paid}}}"
-        )
-        return {
+        response = {
             "total_potions_bought": total_potions_bought,
-            "total_gold_paid": total_gold_paid
+            "total_gold_paid": total_gold_paid,
         }
 
-    except HTTPException as e:
-        logger.error(f"HTTPException in checkout: {e.detail}")
-        raise e
+    except HTTPException as he:
+        logger.error(f"HTTPException in checkout: {he.detail}")
+        raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in checkout: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    logger.info(f"Checkout response: {response}")
+    return response
