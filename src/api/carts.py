@@ -136,10 +136,29 @@ def create_cart(new_cart: Customer):
 
     try:
         with db.engine.begin() as connection:
-            # Insert customer into customers table
+            # Insert a new visit into customer_visits
+            visit_time = ut.get_current_real_time()
+            in_game_day, in_game_hour = ut.compute_in_game_time(visit_time)
+            insert_visit_query = """
+                INSERT INTO customer_visits (visit_time, customers, in_game_day, in_game_hour)
+                VALUES (:visit_time, :customers, :in_game_day, :in_game_hour)
+                RETURNING visit_id;
+            """
+            visit_id = connection.execute(
+                sqlalchemy.text(insert_visit_query),
+                {
+                    "visit_time": visit_time,
+                    "customers": json.dumps([]),  # Initialize with empty customers list
+                    "in_game_day": in_game_day,
+                    "in_game_hour": in_game_hour,
+                },
+            ).scalar()
+            logger.debug(f"Inserted visit with visit_id={visit_id}")
+
+            # Insert customer with visit_id
             insert_customer_query = """
-                INSERT INTO customers (customer_name, character_class, level)
-                VALUES (:customer_name, :character_class, :level)
+                INSERT INTO customers (customer_name, character_class, level, visit_id)
+                VALUES (:customer_name, :character_class, :level, :visit_id)
                 RETURNING customer_id;
             """
             result = connection.execute(
@@ -148,13 +167,13 @@ def create_cart(new_cart: Customer):
                     "customer_name": new_cart.customer_name,
                     "character_class": new_cart.character_class,
                     "level": new_cart.level,
+                    "visit_id": visit_id,
                 },
             )
             customer_id = result.scalar()
             logger.debug(f"Inserted customer with customer_id={customer_id}")
 
             # Insert new cart into carts table
-            in_game_day, in_game_hour = ut.compute_in_game_time(ut.get_current_real_time())
             insert_cart_query = """
                 INSERT INTO carts (customer_id, in_game_day, in_game_hour, created_at)
                 VALUES (:customer_id, :in_game_day, :in_game_hour, :created_at)
@@ -166,7 +185,7 @@ def create_cart(new_cart: Customer):
                     "customer_id": customer_id,
                     "in_game_day": in_game_day,
                     "in_game_hour": in_game_hour,
-                    "created_at": ut.get_current_real_time(),
+                    "created_at": visit_time,
                 },
             ).scalar()
             logger.debug(f"Inserted cart with cart_id={cart_id}")
