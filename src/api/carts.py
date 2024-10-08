@@ -8,6 +8,7 @@ from src.api import auth
 from datetime import datetime
 from enum import Enum
 import traceback
+import json
 
 
 logger = logging.getLogger(__name__)
@@ -91,44 +92,27 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
     try:
         with db.engine.begin() as connection:
-            # Insert into visits table
+            # Insert into customer_visits table with customers JSON
             visit_time = ut.get_current_real_time()
             in_game_day, in_game_hour = ut.compute_in_game_time(visit_time)
-            logger.debug(f"In-game time for visit: Day={in_game_day}, Hour={in_game_hour}")
+            customers_json = json.dumps([customer.dict() for customer in customers])
+            logger.debug(f"Storing customers in customer_visits.")
 
             insert_visit_query = """
-                INSERT INTO customer_visits (visit_id, visit_time, in_game_day, in_game_hour)
-                VALUES (:visit_id, :visit_time, :in_game_day, :in_game_hour)
+                INSERT INTO customer_visits (visit_id, visit_time, customers, in_game_day, in_game_hour)
+                VALUES (:visit_id, :visit_time, :customers, :in_game_day, :in_game_hour)
             """
             connection.execute(
                 sqlalchemy.text(insert_visit_query),
                 {
                     "visit_id": visit_id,
                     "visit_time": visit_time,
+                    "customers": customers_json,
                     "in_game_day": in_game_day,
                     "in_game_hour": in_game_hour,
                 },
             )
             logger.debug(f"Inserted visit with visit_id={visit_id}")
-
-            # Insert each customer into customers table
-            for customer in customers:
-                insert_customer_query = """
-                    INSERT INTO customers (visit_id, customer_name, character_class, level)
-                    VALUES (:visit_id, :customer_name, :character_class, :level);
-                """
-                connection.execute(
-                    sqlalchemy.text(insert_customer_query),
-                    {
-                        "visit_id": visit_id,
-                        "customer_name": customer.customer_name,
-                        "character_class": customer.character_class,
-                        "level": customer.level,
-                    },
-                )
-                logger.info(
-                    f"Inserted customer '{customer.customer_name}' of class '{customer.character_class}' with level {customer.level}."
-                )
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_visits: {he.detail}")

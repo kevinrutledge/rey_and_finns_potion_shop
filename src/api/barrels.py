@@ -3,11 +3,11 @@ import logging
 from src import database as db
 from src.api import auth
 from src import utilities as ut
-from src.utilities import Utils as utl
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
 from typing import List
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +163,48 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     try:
         with db.engine.begin() as connection:
+            # Store wholesale_catalog JSON in barrel_visits
+            visit_time = ut.Utils.get_current_real_time()
+            in_game_day, in_game_hour = ut.Utils.compute_in_game_time(visit_time)
+            wholesale_catalog_json = json.dumps([barrel.dict() for barrel in wholesale_catalog])
+            logger.debug(f"Storing wholesale_catalog in barrel_visits.")
+
+            insert_visit_query = """
+                INSERT INTO barrel_visits (visit_time, wholesale_catalog, in_game_day, in_game_hour)
+                VALUES (:visit_time, :wholesale_catalog, :in_game_day, :in_game_hour)
+                RETURNING barrel_visit_id;
+            """
+            result = connection.execute(
+                sqlalchemy.text(insert_visit_query),
+                {
+                    "visit_time": visit_time,
+                    "wholesale_catalog": wholesale_catalog_json,
+                    "in_game_day": in_game_day,
+                    "in_game_hour": in_game_hour,
+                },
+            )
+            barrel_visit_id = result.scalar()
+            logger.debug(f"Inserted barrel_visit_id={barrel_visit_id} into barrel_visits.")
+
+            # Record all barrels in barrels table during planning stage
+            for barrel in wholesale_catalog:
+                insert_barrel_query = """
+                    INSERT INTO barrels (barrel_visit_id, sku, ml_per_barrel, potion_type, price, quantity)
+                    VALUES (:barrel_visit_id, :sku, :ml_per_barrel, :potion_type, :price, :quantity);
+                """
+                connection.execute(
+                    sqlalchemy.text(insert_barrel_query),
+                    {
+                        "barrel_visit_id": barrel_visit_id,
+                        "sku": barrel.sku,
+                        "ml_per_barrel": barrel.ml_per_barrel,
+                        "potion_type": json.dumps(barrel.potion_type),
+                        "price": barrel.price,
+                        "quantity": barrel.quantity,
+                    },
+                )
+                logger.debug(f"Recorded barrel SKU {barrel.sku} in barrels table.")
+
             # Fetch current inventory and gold from global_inventory
             logger.debug("Fetching current inventory and gold from global_inventory.")
             query_inventory = """
@@ -192,8 +234,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
             logger.debug(f"Current Inventory: {current_inventory}")
 
-        # Calculate purchase plan
-        purchase_plan = utl.calculate_purchase_plan(
+        purchase_plan = ut.Utils.calculate_purchase_plan(
             wholesale_catalog=wholesale_catalog,
             current_inventory=current_inventory,
             gold=current_inventory['gold'],

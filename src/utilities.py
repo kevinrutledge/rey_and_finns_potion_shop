@@ -156,6 +156,7 @@ class Utils:
         """
         logger.debug("Calculating purchase plan based on current inventory and potion demands.")
 
+        # Initialize capacities
         potion_capacity_limit = potion_capacity_units * POTION_CAPACITY_PER_UNIT
         ml_capacity_limit = ml_capacity_units * ML_CAPACITY_PER_UNIT
         total_potions = current_inventory.get('total_potions', 0)
@@ -178,76 +179,107 @@ class Utils:
 
         logger.debug(f"Potion demands for Day: {in_game_day}, Block: {hour_block}: {day_potions}")
 
-        # Sort potions by demand descending
-        sorted_potions = sorted(day_potions, key=lambda x: x['demand'], reverse=True)
+        # Calculate ROI for each potion and sort potions by ROI descending
+        for potion in day_potions:
+            composition = potion['composition']
+            price = potion['price']
+            demand = potion['demand']
+            # Estimate ROI as (price * demand) / total_ml_needed
+            total_ml_needed = sum(composition)
+            potion['roi'] = (price * demand) / total_ml_needed if total_ml_needed > 0 else 0
 
+        sorted_potions = sorted(day_potions, key=lambda x: x['roi'], reverse=True)
+        logger.debug(f"Potions sorted by ROI: {sorted_potions}")
+
+        # Initialize purchase plan and tracking variables
         purchase_plan = []
         remaining_gold = gold
-        remaining_potion_capacity = available_potion_capacity
         remaining_ml_capacity = available_ml_capacity
 
+        # Dictionary to keep track of ml required per color
+        total_ml_required = {'red': 0, 'green': 0, 'blue': 0, 'dark': 0}
+
+        # Loop through potions and calculate required ml
         for potion in sorted_potions:
+            if remaining_ml_capacity <= 0 or remaining_gold <= 0:
+                logger.debug("No remaining ML capacity or gold. Breaking out of potion loop.")
+                break
+
+            composition = potion['composition']
             potion_name = potion['name']
-            composition = potion['composition']  # [r, g, b, d]
-            demand = potion['demand']
             price = potion['price']
+            demand = potion['demand']
 
-            logger.debug(f"Evaluating potion: {potion_name} with demand {demand}, price {price}")
+            # Determine how many potions we can make
+            max_potions_by_capacity = available_potion_capacity
+            ml_needed_per_potion = sum(composition)
+            max_potions_by_ml = remaining_ml_capacity // ml_needed_per_potion
+            potions_to_make = min(demand, max_potions_by_capacity, max_potions_by_ml)
 
-            # Determine which barrels contribute to this potion's potion_type
-            dominant_color_index = composition.index(max(composition))
-            color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
-            dominant_color = color_map.get(dominant_color_index, 'unknown')
-            logger.debug(f"Dominant color for potion {potion_name}: {dominant_color}")
+            if potions_to_make <= 0:
+                logger.debug(f"Cannot make any more of potion {potion_name}. Skipping.")
+                continue
 
-            # Filter barrels matching dominant color
-            matching_barrels = [b for b in wholesale_catalog if b.potion_type[dominant_color_index] == 1]
+            logger.debug(f"Planning to make {potions_to_make} of {potion_name}.")
 
-            if not matching_barrels:
-                logger.warning(f"No matching barrels found for dominant color {dominant_color} of potion {potion_name}. Skipping.")
-                continue  # No available barrels for this potion's dominant color
+            # Update total_ml_required
+            for idx, color in enumerate(['red', 'green', 'blue', 'dark']):
+                ml_needed = composition[idx] * potions_to_make
+                total_ml_required[color] += ml_needed
 
-            # Sort matching barrels by size ascending (Mini to Large) for flexibility
-            size_order = ['MINI', 'SMALL', 'MEDIUM', 'LARGE']
-            matching_barrels.sort(key=lambda b: size_order.index(b.sku.split('_')[0]) if b.sku.split('_')[0] in size_order else 4)
+            # Update capacities
+            remaining_ml_capacity -= ml_needed_per_potion * potions_to_make
+            available_potion_capacity -= potions_to_make
 
-            for barrel in matching_barrels:
-                barrel_sku = barrel.sku
-                barrel_ml = barrel.ml_per_barrel
-                barrel_price = barrel.price
-                barrel_quantity_available = barrel.quantity
+        logger.debug(f"Total ML required per color: {total_ml_required}")
 
-                logger.debug(f"Considering barrel SKU {barrel_sku} with {barrel_ml} ml and price {barrel_price}.")
+        # Now, determine which barrels to buy to fulfill total_ml_required
+        # Create a list of barrel options per color
+        barrels_by_color = {'red': [], 'green': [], 'blue': [], 'dark': []}
+        for barrel in wholesale_catalog:
+            color_idx = barrel.potion_type.index(1)
+            color = ['red', 'green', 'blue', 'dark'][color_idx]
+            barrels_by_color[color].append(barrel)
 
-                # Determine max barrels based on available gold and inventory capacity
-                max_affordable = remaining_gold // barrel_price if barrel_price > 0 else 0
-                max_by_gold = min(max_affordable, barrel_quantity_available)
+        # For each color, decide which barrels to buy
+        for color, ml_needed in total_ml_required.items():
+            if ml_needed <= 0:
+                logger.debug(f"No ml needed for color {color}. Skipping.")
+                continue
 
-                max_by_capacity_ml = remaining_ml_capacity // (barrel_ml)
-                max_by_capacity_potions = remaining_potion_capacity  # Assuming each ml contributes to one potion
+            barrels = sorted(barrels_by_color[color], key=lambda b: b.price / b.ml_per_barrel)
+            ml_remaining = ml_needed
 
-                feasible_barrels = min(max_by_gold, max_by_capacity_ml, max_by_capacity_potions)
-
-                if feasible_barrels <= 0:
-                    logger.debug(f"No feasible barrels to purchase for SKU {barrel_sku}.")
-                    continue
-
-                # Add to purchase plan
-                purchase_plan.append(BarrelPurchase(sku=barrel_sku, quantity=feasible_barrels))
-                logger.info(f"Planned to purchase {feasible_barrels} barrels of SKU {barrel_sku}.")
-
-                # Update remaining capacities and gold
-                total_cost = feasible_barrels * barrel_price
-                remaining_gold -= total_cost
-                remaining_ml_capacity -= feasible_barrels * barrel_ml
-                remaining_potion_capacity -= feasible_barrels  # Assuming each barrel adds ml equivalent to one potion
-
-                logger.debug(f"Updated Remaining Capacities - Potion: {remaining_potion_capacity}, ML: {remaining_ml_capacity}, Gold: {remaining_gold}")
-
-                # Break if no more capacity or gold
-                if remaining_potion_capacity <= 0 or remaining_gold < min([b.price for b in matching_barrels if b.price > 0], default=0):
-                    logger.debug("No more capacity or insufficient gold to purchase additional barrels. Stopping purchase plan calculation.")
+            for barrel in barrels:
+                if ml_remaining <= 0 or remaining_gold <= 0:
+                    logger.debug(f"No ml remaining needed for color {color} or no gold left. Breaking out of barrel loop.")
                     break
 
-        logger.info(f"Generated purchase plan: {purchase_plan}")
+                max_barrels_affordable = remaining_gold // barrel.price
+                max_barrels_available = barrel.quantity
+                ml_per_barrel = barrel.ml_per_barrel
+
+                barrels_needed = math.ceil(ml_remaining / ml_per_barrel)
+                barrels_to_buy = min(barrels_needed, max_barrels_affordable, max_barrels_available)
+
+                if barrels_to_buy <= 0:
+                    logger.debug(f"Cannot buy any more barrels of SKU {barrel.sku}. Skipping.")
+                    continue
+
+                # Update ml_remaining and remaining_gold
+                ml_provided = barrels_to_buy * ml_per_barrel
+                ml_remaining -= ml_provided
+                remaining_gold -= barrels_to_buy * barrel.price
+
+                # Update purchase plan
+                existing_purchase = next((p for p in purchase_plan if p.sku == barrel.sku), None)
+                if existing_purchase:
+                    existing_purchase.quantity += barrels_to_buy
+                else:
+                    purchase_plan.append(BarrelPurchase(sku=barrel.sku, quantity=barrels_to_buy))
+
+                logger.info(f"Decided to buy {barrels_to_buy} of barrel SKU {barrel.sku} for color {color}.")
+                logger.debug(f"Remaining ml needed for color {color}: {ml_remaining}. Remaining gold: {remaining_gold}.")
+
+        logger.info(f"Final Purchase Plan: {purchase_plan}")
         return purchase_plan

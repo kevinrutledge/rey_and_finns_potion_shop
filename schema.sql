@@ -21,10 +21,10 @@ CREATE TABLE barrel_visits (
 -- Barrels Table (Reference Barrel Visits)
 CREATE TABLE barrels (
     barrel_id BIGSERIAL PRIMARY KEY,
-    barrel_visit_id BIGSERIAL NOT NULL,
+    barrel_visit_id BIGINT REFERENCES barrel_visits(barrel_visit_id),
     sku VARCHAR NOT NULL,
     ml_per_barrel INT NOT NULL,
-    potion_type VARCHAR(10) NOT NULL,
+    potion_type JSON NOT NULL,
     price INT NOT NULL,
     quantity INT NOT NULL
 );
