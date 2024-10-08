@@ -308,9 +308,6 @@ def get_bottle_plan():
 
             logger.debug(f"Planned to brew {brew_quantity} of {potion['name']} with ROI {roi}.")
 
-        logger.info(f"Brew plan generated: {potion_plan}")
-        return BottlePlanResponse(plan=potion_plan)
-
     except HTTPException as e:
         logger.error(f"HTTPException in get_bottle_plan: {e.detail}")
         raise e
@@ -319,4 +316,4 @@ def get_bottle_plan():
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
     logger.info(f"Brew plan generated: {potion_plan}")
-    return BottlePlanResponse(plan=potion_plan)
+    return potion_plan
