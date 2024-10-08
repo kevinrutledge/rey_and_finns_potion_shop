@@ -1,13 +1,11 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src import potion_coefficients as po
 from src.api import auth
 from src.utilities import Utils as ut
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
-from datetime import datetime
 from typing import List
 
 logger = logging.getLogger(__name__)
@@ -134,10 +132,6 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                          f"Blue ML: {updated_inventory['blue_ml']}, Dark ML: {updated_inventory['dark_ml']}, "
                          f"Total ML: {updated_inventory['total_ml']}")
 
-    except HTTPException as he:
-        logger.error(f"HTTPException in post_deliver_barrels: {he.detail}")
-        logger.debug(traceback.format_exc())
-        raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in post_deliver_barrels: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
