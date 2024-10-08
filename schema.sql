@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS barrel_visits CASCADE;
 CREATE TABLE barrel_visits (
     barrel_visit_id BIGSERIAL PRIMARY KEY,
     visit_time TIMESTAMPTZ NOT NULL,
+    wholesale_catalog JSON,
     in_game_day VARCHAR,
     in_game_hour INT
 );
@@ -20,6 +21,7 @@ CREATE TABLE barrel_visits (
 -- Barrels Table (Reference Barrel Visits)
 CREATE TABLE barrels (
     barrel_id BIGSERIAL PRIMARY KEY,
+    barrel_visit_id BIGSERIAL NOT NULL,
     sku VARCHAR NOT NULL,
     ml_per_barrel INT NOT NULL,
     potion_type VARCHAR(10) NOT NULL,
@@ -69,8 +71,9 @@ CREATE TABLE customers (
 CREATE TABLE customer_visits (
     visit_id BIGSERIAL PRIMARY KEY,
     visit_time TIMESTAMPTZ NOT NULL,
+    customers JSON,
     in_game_day VARCHAR,
-    in_game_hour INT,
+    in_game_hour INT
 );
 
 -- Carts Table (References Customers)
@@ -94,7 +97,7 @@ CREATE TABLE cart_items (
     potion_id INT REFERENCES potions(potion_id),
     quantity INT NOT NULL,
     price INT NOT NULL,
-    line_item_total INT NOT NULL
+    line_item_total INT NOT NULL,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 

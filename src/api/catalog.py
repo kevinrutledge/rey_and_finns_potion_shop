@@ -1,6 +1,8 @@
 import sqlalchemy
 import logging
 from src import database as db
+from src.utilities import Utils as ut
+from src.potion_coefficients import potion_coefficients
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -23,89 +25,117 @@ def get_catalog():
     Retrieve current catalog of available items.
     Each unique item combination must have only single price.
     """
-    logger.info("Starting get_catalog endpoint.")
-    logger.debug("No input parameters for get_catalog.")
-
+    logger.info("GET /catalog/ endpoint called.")
     try:
+        # Determine current in game time
+        real_time = ut.get_current_real_time()
+        in_game_day, in_game_hour = ut.compute_in_game_time(real_time)
+        hour_block = ut.get_hour_block(in_game_hour)
+        logger.debug(f"Current Real Time: {real_time}")
+        logger.debug(f"In-Game Time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
+
+        # Fetch potion demands for current time
+        day_potions = potion_coefficients.get(in_game_day, {}).get(hour_block, [])
+        if not day_potions:
+            logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Using default potions.")
+        
+        logger.debug(f"Potion Demands for Current Time: {day_potions}")
+
+        # Fetch all potions with current_quantity > 0
         with db.engine.begin() as connection:
-            # SQL query to fetch potions with current_quantity > 0, limited to 6
             query = """
                 SELECT potion_id, sku, name, price, current_quantity,
                        red_ml, green_ml, blue_ml, dark_ml
                 FROM potions
-                WHERE current_quantity > 0
-                LIMIT 6;
+                WHERE current_quantity > 0;
             """
             logger.debug(f"Executing SQL Query: {query.strip()}")
-
             result = connection.execute(sqlalchemy.text(query))
-            potions = result.mappings().fetchall()
-            logger.debug(f"Fetched {len(potions)} potions from database.")
+            all_available_potions = result.mappings().fetchall()
+            logger.debug(f"Total Available Potions: {len(all_available_potions)}")
 
-            catalog_items = []
+            # Convert list of dicts for easier processing
+            available_potions = [
+                {
+                    "potion_id": potion["potion_id"],
+                    "sku": potion["sku"],
+                    "name": potion["name"],
+                    "price": potion["price"],
+                    "current_quantity": potion["current_quantity"],
+                    "potion_type": [
+                        potion["red_ml"],
+                        potion["green_ml"],
+                        potion["blue_ml"],
+                        potion["dark_ml"]
+                    ]
+                }
+                for potion in all_available_potions
+            ]
 
-            for potion in potions:
-                logger.debug(f"Processing potion: {dict(potion)}")
-                
-                # Calculate total_ml to ensure it sums to 100
-                total_ml = (
-                    potion["red_ml"] +
-                    potion["green_ml"] +
-                    potion["blue_ml"] +
-                    potion["dark_ml"]
-                )
-                logger.debug(f"Total ML for potion {potion['sku']}: {total_ml}")
+        logger.debug(f"Processed Available Potions: {available_potions}")
 
-                if total_ml != 100:
-                    logger.warning(
-                        f"Potion {potion['sku']} has total_ml {total_ml}, expected 100."
-                    )
-                    if total_ml > 0:
-                        # Normalize ML values to sum to 100
-                        factor = 100 / total_ml
-                        red_ml = int(potion["red_ml"] * factor)
-                        green_ml = int(potion["green_ml"] * factor)
-                        blue_ml = int(potion["blue_ml"] * factor)
-                        dark_ml = int(potion["dark_ml"] * factor)
-                        logger.debug(
-                            f"Adjusted ML values for potion {potion['sku']}: "
-                            f"red_ml={red_ml}, green_ml={green_ml}, "
-                            f"blue_ml={blue_ml}, dark_ml={dark_ml}"
-                        )
-                    else:
-                        # If total_ml is 0, set all to 0 to avoid division by zero
-                        red_ml = green_ml = blue_ml = dark_ml = 0
-                        logger.debug(
-                            f"Set ML values to 0 for potion {potion['sku']} due to total_ml being 0."
-                        )
-                else:
-                    red_ml = potion["red_ml"]
-                    green_ml = potion["green_ml"]
-                    blue_ml = potion["blue_ml"]
-                    dark_ml = potion["dark_ml"]
+        # Prioritize potions based on demand
+        prioritized_potions = []
+        catalog_limit = 6
 
-                # Create potion_type list
-                potion_type = [red_ml, green_ml, blue_ml, dark_ml]
-                logger.debug(f"Potion type for {potion['sku']}: {potion_type}")
+        for demand_potion in day_potions:
+            # Match potions based on name and composition
+            matching_potions = [
+                potion for potion in available_potions
+                if potion["name"] == demand_potion["name"] and
+                   potion["potion_type"] == demand_potion["composition"]
+            ]
 
-                # Assemble catalog item dictionary
+            if matching_potions:
+                potion = matching_potions[0]
                 catalog_item = CatalogItem(
                     sku=potion["sku"],
                     name=potion["name"],
                     quantity=potion["current_quantity"],
                     price=potion["price"],
-                    potion_type=potion_type,
+                    potion_type=potion["potion_type"]
                 )
+                prioritized_potions.append(catalog_item)
+                logger.debug(f"Added to Catalog based on demand: {catalog_item}")
+                if len(prioritized_potions) >= catalog_limit:
+                    break
 
-                logger.debug(f"Adding catalog item: {catalog_item}")
-                catalog_items.append(catalog_item)
+        # Fill remaining catalog slots with other available potions
+        if len(prioritized_potions) < catalog_limit:
+            remaining_slots = catalog_limit - len(prioritized_potions)
+            logger.debug(f"Filling remaining {remaining_slots} catalog slots with other available potions.")
 
-            logger.info(f"Successfully fetched {len(catalog_items)} catalog items.")
+            # Exclude already added potions
+            additional_potions = [
+                potion for potion in available_potions
+                if not any(p.sku == potion["sku"] for p in prioritized_potions)
+            ]
 
+            # Sort additional potions by overall demand (descending) or any other priority
+            additional_potions_sorted = sorted(
+                additional_potions,
+                key=lambda x: x["current_quantity"],
+                reverse=True
+            )
+
+            for potion in additional_potions_sorted[:remaining_slots]:
+                catalog_item = CatalogItem(
+                    sku=potion["sku"],
+                    name=potion["name"],
+                    quantity=potion["current_quantity"],
+                    price=potion["price"],
+                    potion_type=potion["potion_type"]
+                )
+                prioritized_potions.append(catalog_item)
+                logger.debug(f"Added to Catalog as additional: {catalog_item}")
+
+        logger.info(f"Final Catalog Items (Total: {len(prioritized_potions)}): {prioritized_potions}")
+
+    except HTTPException as he:
+        logger.error(f"HTTPException in checkout: {he.detail}")
+        raise he
     except Exception as e:
-        logger.exception(f"Error in get_catalog endpoint: {e}")
+        logger.exception(f"Unhandled exception in checkout: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
-    logger.info("Ending get_catalog endpoint.")
-    logger.debug(f"Returning catalog_items: {catalog_items}")
-    return catalog_items
+    
+    return prioritized_potions

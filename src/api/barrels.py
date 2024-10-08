@@ -2,7 +2,8 @@ import sqlalchemy
 import logging
 from src import database as db
 from src.api import auth
-from src.utilities import Utils as ut
+from src import utilities as ut
+from src.utilities import Utils as utl
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
@@ -45,21 +46,26 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
     try:
         with db.engine.begin() as connection:
-            # Fetch current gold from global_inventory
-            logger.debug("Fetching current gold from global_inventory.")
-            query_gold = """
-                SELECT gold
+            # Fetch current gold and ML capacity from global_inventory
+            logger.debug("Fetching current gold and ML capacity from global_inventory.")
+            query = """
+                SELECT gold, total_ml, ml_capacity_units
                 FROM global_inventory
                 WHERE id = 1;
             """
-            result = connection.execute(sqlalchemy.text(query_gold))
-            current_gold_row = result.mappings().fetchone()
-            if not current_gold_row:
+            result = connection.execute(sqlalchemy.text(query))
+            inventory = result.mappings().fetchone()
+
+            if not inventory:
                 logger.error("Global inventory record not found.")
                 raise HTTPException(status_code=500, detail="Global inventory record not found.")
 
-            current_gold = current_gold_row['gold']
-            logger.debug(f"Current Gold: {current_gold}")
+            current_gold = inventory['gold']
+            current_total_ml = inventory['total_ml']
+            ml_capacity_units = inventory['ml_capacity_units']
+            ml_capacity_limit = ml_capacity_units * ut.ML_CAPACITY_PER_UNIT
+
+            logger.debug(f"Current Gold: {current_gold}, Total ML: {current_total_ml}, ML Capacity Limit: {ml_capacity_limit}")
 
             # Calculate total gold cost
             total_gold_cost = sum(barrel.price * barrel.quantity for barrel in barrels_delivered)
@@ -70,74 +76,79 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 logger.error(f"Insufficient gold. Available: {current_gold}, Required: {total_gold_cost}")
                 raise HTTPException(status_code=400, detail="Insufficient gold to complete purchase.")
 
-            # Add ML of each color to global_inventory
-            logger.debug("Adding ML from delivered barrels to global_inventory.")
+            # Calculate total ML to add
+            total_ml_to_add = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered)
+            total_ml_after_adding = current_total_ml + total_ml_to_add
+            logger.debug(f"Total ML to Add: {total_ml_to_add}, Total ML After Adding: {total_ml_after_adding}")
+
+            # Check if ML capacity is sufficient
+            if total_ml_after_adding > ml_capacity_limit:
+                logger.error(f"Insufficient ML capacity. ML Capacity Limit: {ml_capacity_limit}, Total ML After Adding: {total_ml_after_adding}")
+                raise HTTPException(status_code=400, detail="Insufficient ML capacity to store the delivered barrels.")
+
+            # Aggregate ML additions per color
+            total_red_ml = 0
+            total_green_ml = 0
+            total_blue_ml = 0
+            total_dark_ml = 0
+
             for barrel in barrels_delivered:
                 red_flag, green_flag, blue_flag, dark_flag = barrel.potion_type
 
-                # Calculate ML to add per colors
                 red_ml_to_add = red_flag * barrel.ml_per_barrel * barrel.quantity
                 green_ml_to_add = green_flag * barrel.ml_per_barrel * barrel.quantity
                 blue_ml_to_add = blue_flag * barrel.ml_per_barrel * barrel.quantity
                 dark_ml_to_add = dark_flag * barrel.ml_per_barrel * barrel.quantity
-                total_ml_to_add = barrel.ml_per_barrel * barrel.quantity
 
-                logger.debug(f"Adding ML for SKU {barrel.sku}: Red={red_ml_to_add}, Green={green_ml_to_add}, "
-                             f"Blue={blue_ml_to_add}, Dark={dark_ml_to_add}")
+                total_red_ml += red_ml_to_add
+                total_green_ml += green_ml_to_add
+                total_blue_ml += blue_ml_to_add
+                total_dark_ml += dark_ml_to_add
 
-                update_ml_query = """
-                    UPDATE global_inventory
-                    SET red_ml = red_ml + :red_ml,
-                        green_ml = green_ml + :green_ml,
-                        blue_ml = blue_ml + :blue_ml,
-                        dark_ml = dark_ml + :dark_ml,
-                        total_ml = total_ml + :total_ml
-                    WHERE id = 1;
-                """
-                connection.execute(
-                    sqlalchemy.text(update_ml_query),
-                    {
-                        "red_ml": red_ml_to_add,
-                        "green_ml": green_ml_to_add,
-                        "blue_ml": blue_ml_to_add,
-                        "dark_ml": dark_ml_to_add,
-                        "total_ml": total_ml_to_add
-                    }
-                )
-                logger.info(f"Updated ML in global_inventory for SKU {barrel.sku}.")
+                logger.debug(f"Barrel SKU {barrel.sku}: Adding Red={red_ml_to_add}, Green={green_ml_to_add}, Blue={blue_ml_to_add}, Dark={dark_ml_to_add}")
 
-            # Subtract total gold cost from global_inventory
-            logger.debug("Subtracting total gold cost from global_inventory.")
-            update_gold_query = """
+            # Update global_inventory
+            update_inventory_query = """
                 UPDATE global_inventory
-                SET gold = gold - :total_gold_cost
+                SET red_ml = red_ml + :red_ml,
+                    green_ml = green_ml + :green_ml,
+                    blue_ml = blue_ml + :blue_ml,
+                    dark_ml = dark_ml + :dark_ml,
+                    total_ml = total_ml + :total_ml,
+                    gold = gold - :gold_spent
                 WHERE id = 1;
             """
             connection.execute(
-                sqlalchemy.text(update_gold_query),
-                {"total_gold_cost": total_gold_cost}
+                sqlalchemy.text(update_inventory_query),
+                {
+                    "red_ml": total_red_ml,
+                    "green_ml": total_green_ml,
+                    "blue_ml": total_blue_ml,
+                    "dark_ml": total_dark_ml,
+                    "total_ml": total_ml_to_add,
+                    "gold_spent": total_gold_cost
+                }
             )
-            logger.info(f"Subtracted {total_gold_cost} gold from global_inventory.")
+            logger.info(f"Updated global_inventory with new MLs and deducted gold.")
 
-            # Log updated gold and ML
-            logger.debug("Fetching updated gold and ML from global_inventory.")
+            # Log updated inventory
+            logger.debug("Fetching updated inventory from global_inventory.")
             query_updated_inventory = """
                 SELECT gold, red_ml, green_ml, blue_ml, dark_ml, total_ml
                 FROM global_inventory
                 WHERE id = 1;
             """
             updated_inventory = connection.execute(sqlalchemy.text(query_updated_inventory)).mappings().fetchone()
-            logger.debug(f"Updated Inventory - Gold: {updated_inventory['gold']}, "
-                         f"Red ML: {updated_inventory['red_ml']}, Green ML: {updated_inventory['green_ml']}, "
-                         f"Blue ML: {updated_inventory['blue_ml']}, Dark ML: {updated_inventory['dark_ml']}, "
-                         f"Total ML: {updated_inventory['total_ml']}")
+            logger.debug(f"Updated Inventory: {updated_inventory}")
 
+    except HTTPException as he:
+        logger.error(f"HTTPException in post_deliver_barrels: {he.detail}")
+        raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in post_deliver_barrels: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
     logger.info(f"Successfully processed delivery for order_id {order_id}.")
-    logger.debug(f"Delivery processed: {len(barrels_delivered)} barrels delivered, {total_gold_cost} gold deducted.")
     return {"success": True}
 
 
@@ -182,7 +193,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             logger.debug(f"Current Inventory: {current_inventory}")
 
         # Calculate purchase plan
-        purchase_plan = ut.calculate_purchase_plan(
+        purchase_plan = utl.calculate_purchase_plan(
             wholesale_catalog=wholesale_catalog,
             current_inventory=current_inventory,
             gold=current_inventory['gold'],

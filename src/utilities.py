@@ -93,13 +93,13 @@ class Utils:
             str: hour block ('night', 'morning', 'afternoon', 'evening').
         """
         try:
-            if current_hour in [2, 4, 6]:
+            if current_hour in [0, 2, 4]:
                 return "night"
-            elif current_hour in [8, 10, 12]:
+            elif current_hour in [6, 8, 10]:
                 return "morning"
-            elif current_hour in [14, 16, 18]:
+            elif current_hour in [12, 14, 16]:
                 return "afternoon"
-            elif current_hour in [20, 22, 24]:
+            elif current_hour in [18, 20, 22]:
                 return "evening"
             else:
                 return "invalid"
@@ -156,8 +156,8 @@ class Utils:
         """
         logger.debug("Calculating purchase plan based on current inventory and potion demands.")
 
-        potion_capacity_limit = potion_capacity_units * POTION_CAPACITY_PER_UNIT  # Each unit allows 50 potions
-        ml_capacity_limit = ml_capacity_units * ML_CAPACITY_PER_UNIT          # Each unit allows 10,000 ml
+        potion_capacity_limit = potion_capacity_units * POTION_CAPACITY_PER_UNIT
+        ml_capacity_limit = ml_capacity_units * ML_CAPACITY_PER_UNIT
         total_potions = current_inventory.get('total_potions', 0)
         total_ml = current_inventory.get('total_ml', 0)
 
@@ -195,7 +195,6 @@ class Utils:
             logger.debug(f"Evaluating potion: {potion_name} with demand {demand}, price {price}")
 
             # Determine which barrels contribute to this potion's potion_type
-            # For simplicity, prioritize buying barrels that match dominant color in potion_type
             dominant_color_index = composition.index(max(composition))
             color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
             dominant_color = color_map.get(dominant_color_index, 'unknown')
