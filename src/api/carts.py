@@ -87,7 +87,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     Which customers visited shop today?
     """
-    logger.info(f"Post Visits called with visit_id={visit_id} and {len(customers)} customers.")
+    logger.info(f"Post Visits called with {len(customers)} customers.")
     logger.debug(f"Customers data: {customers}")
 
     try:
@@ -99,19 +99,20 @@ def post_visits(visit_id: int, customers: list[Customer]):
             logger.debug(f"Storing customers in customer_visits.")
 
             insert_visit_query = """
-                INSERT INTO customer_visits (visit_id, visit_time, customers, in_game_day, in_game_hour)
-                VALUES (:visit_id, :visit_time, :customers, :in_game_day, :in_game_hour)
+                INSERT INTO customer_visits (visit_time, customers, in_game_day, in_game_hour)
+                VALUES (:visit_time, :customers, :in_game_day, :in_game_hour)
+                RETURNING visit_id;
             """
-            connection.execute(
+            result = connection.execute(
                 sqlalchemy.text(insert_visit_query),
                 {
-                    "visit_id": visit_id,
                     "visit_time": visit_time,
                     "customers": customers_json,
                     "in_game_day": in_game_day,
                     "in_game_hour": in_game_hour,
                 },
             )
+            visit_id = result.scalar()
             logger.debug(f"Inserted visit with visit_id={visit_id}")
 
     except HTTPException as he:
@@ -123,7 +124,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
         raise HTTPException(status_code=500, detail="Internal Server Error")
     
     logger.info(f"Successfully recorded visit_id={visit_id} with {len(customers)} customers.")
-    return {"success": True}
+    return {"success": True, "visit_id": visit_id}
 
 
 @router.post("/")
