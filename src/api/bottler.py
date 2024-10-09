@@ -50,9 +50,9 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     SELECT potion_id, current_quantity
                     FROM potions
                     WHERE red_ml = :red_ml
-                    AND green_ml = :green_ml
-                    AND blue_ml = :blue_ml
-                    AND dark_ml = :dark_ml
+                      AND green_ml = :green_ml
+                      AND blue_ml = :blue_ml
+                      AND dark_ml = :dark_ml
                     LIMIT 1;
                 """
                 result = connection.execute(
@@ -85,7 +85,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 # Check if sufficient ml is available in global_inventory
                 logger.debug("Checking if sufficient ML is available in global_inventory.")
                 query_inventory = """
-                    SELECT red_ml, green_ml, blue_ml, dark_ml
+                    SELECT red_ml, green_ml, blue_ml, dark_ml, total_potions
                     FROM global_inventory
                     WHERE id = 1;
                 """
@@ -131,7 +131,20 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
                 logger.info(f"Brewed {quantity} of potion ID {potion_id}. Updated quantity to {new_quantity}.")
 
-            # Optionally, update total_ml in global_inventory
+                new_total_potions = inventory['total_potions'] + quantity
+                logger.debug(f"Updating global_inventory.total_potions from {inventory['total_potions']} to {new_total_potions}.")
+                update_total_potions_query = """
+                    UPDATE global_inventory
+                    SET total_potions = :new_total_potions
+                    WHERE id = 1;
+                """
+                connection.execute(
+                    sqlalchemy.text(update_total_potions_query),
+                    {'new_total_potions': new_total_potions}
+                )
+                logger.debug(f"Updated total_potions to {new_total_potions}.")
+
+            # Update total_ml in global_inventory
             logger.debug("Recalculating total_ml in global_inventory.")
             query_total_ml = """
                 SELECT 
@@ -160,15 +173,15 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
             )
             logger.debug("Updated total_ml in global_inventory.")
 
-        logger.info(f"Successfully processed delivery for order_id {order_id}.")
-        return {"success": True}
-
     except HTTPException as e:
         logger.error(f"HTTPException in post_deliver_bottles: {e.detail}")
         raise e
     except Exception as e:
-        logger.exception(f"Unhandled exception in get_bottle_plan: {e}")
+        logger.exception(f"Unhandled exception in post_deliver_bottles: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    logger.info(f"Successfully processed delivery for order_id {order_id}.")
+    return {"success": True}
 
 
 @router.post("/plan", summary="Get Bottle Plan", description="Generates bottle plan based on global inventory.")
