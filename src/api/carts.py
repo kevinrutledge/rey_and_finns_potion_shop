@@ -423,17 +423,22 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 )
                 logger.debug(f"Deducted {quantity} from potion_id={potion_id}.")
 
-            # Update global_inventory gold
-            update_gold_query = """
+            # Update global_inventory gold and total_potions
+            update_global_inventory_query = """
                 UPDATE global_inventory
-                SET gold = gold + :total_gold_paid
+                SET 
+                    gold = gold + :total_gold_paid,
+                    total_potions = total_potions - :total_potions_bought
                 WHERE id = 1;
             """
             connection.execute(
-                sqlalchemy.text(update_gold_query),
-                {"total_gold_paid": total_gold_paid},
+                sqlalchemy.text(update_global_inventory_query),
+                {
+                    "total_gold_paid": total_gold_paid,
+                    "total_potions_bought": total_potions_bought
+                },
             )
-            logger.debug(f"Added {total_gold_paid} gold to global_inventory.")
+            logger.debug(f"Added {total_gold_paid} gold and subtracted {total_potions_bought} potions to global_inventory.")
 
             # Mark cart as checked out
             mark_cart_checked_out_query = """
@@ -469,6 +474,6 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     except Exception as e:
         logger.exception(f"Unhandled exception in checkout: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
+
     logger.info(f"Checkout response: {response}")
     return response
