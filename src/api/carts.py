@@ -192,7 +192,7 @@ def create_cart(new_cart: Customer):
             logger.debug(f"Inserted cart with cart_id={cart_id}")
 
         logger.info(f"Successfully created cart_id={cart_id} for customer_id={customer_id}.")
-        return {"cart_id": str(cart_id)}
+        return {"cart_id": cart_id}
 
     except Exception as e:
         logger.exception(f"Unhandled exception in create_cart: {e}")
