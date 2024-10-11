@@ -2,7 +2,7 @@ import sqlalchemy
 import logging
 from src import database as db
 from src.utilities import Utils as ut
-from src.potion_coefficients import potion_coefficients
+from src.potions import POTION_PRIORITIES
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -35,7 +35,7 @@ def get_catalog():
         logger.debug(f"In-Game Time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
 
         # Fetch potion demands for current time
-        day_potions = potion_coefficients.get(in_game_day, {}).get(hour_block, [])
+        day_potions = POTION_PRIORITIES.get(in_game_day, {}).get(hour_block, [])
         if not day_potions:
             logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Using default potions.")
         

@@ -3,7 +3,7 @@ import logging
 import math
 from src.api import auth
 from src import database as db
-from src.potion_coefficients import potion_coefficients
+from src.potions import POTION_PRIORITIES
 from src.utilities import Utils as ut
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, validator
@@ -203,7 +203,7 @@ def get_bottle_plan():
         logger.debug(f"Computed in-game time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
 
         # Fetch potion demands for current day and hour block
-        day_potions = potion_coefficients.get(in_game_day, {}).get(hour_block, [])
+        day_potions = POTION_PRIORITIES.get(in_game_day, {}).get(hour_block, [])
         if not day_potions:
             logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Returning empty plan.")
             return BottlePlanResponse(plan=[])
