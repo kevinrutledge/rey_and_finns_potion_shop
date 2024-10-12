@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from typing import Tuple
 from typing import List, Dict
 from pydantic import BaseModel
-from potions import POTION_PRIORITIES, DEFAULT_POTIONS
+from src.potions import POTION_PRIORITIES, DEFAULT_POTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class Utils:
         """
         Returns the in-game day and hour ticks_ahead hours from now.
         """
-        future_time = datetime.now(tz=LOCAL_TIMEZONE) + timedeltahours=(ticks_ahead*2)
+        future_time = datetime.now(tz=LOCAL_TIMEZONE) + timedelta(hours=(ticks_ahead * 2))
         EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
         delta = future_time - EPOCH
         total_hours = int(delta.total_seconds() // 3600)
@@ -116,34 +116,39 @@ class Utils:
         return strategy
 
 
-    @staticmethod  
-    def calculate_desired_potion_quantities(potion_capacity_units: int, pricing_strategy: str, potion_priorities: List[Dict]) -> Dict[str, int]:
-        """
-        Calculates desired potion quantities based on capacity and pricing strategy.
-        """
+    @staticmethod
+    def calculate_desired_potion_quantities(potion_capacity_units: int, current_potions: Dict[str, int], potion_priorities: List[Dict]) -> Dict[str, int]:
         desired_potions = {}
         total_capacity = potion_capacity_units * POTION_CAPACITY_PER_UNIT
+        max_quantity_per_potion = 15 if potion_capacity_units == 1 else total_capacity // len(potion_priorities)
+        increment = 5  # Increment by 5
 
-        if pricing_strategy == "PRICE_STRATEGY_PREMIUM":
-            # Focus on the first 3 potions excluding Dark Potions
-            count = 0
-            for potion in potion_priorities:
-                if potion["name"] == "Dark Potion":
-                    continue  # Exclude Dark Potion in Premium Strategy
-                desired_potions[potion["name"]] = 15  # Aim for up to 15 units
-                count += 1
-                if count == 3:
-                    break
-        elif pricing_strategy == "PRICE_STATEGY_COMPETITIVE":
-            # Focus on the first 5 potions
-            for potion in potion_priorities[:5]:
-                desired_potions[potion["name"]] = 15  # Aim for up to 15 units
-        else:
-            # Penetration Strategy: Divide capacity among 6 potions
-            total_desired_potions = int(0.8 * total_capacity)
-            quantity_per_potion = total_desired_potions // 6
-            for potion in potion_priorities[:6]:
-                desired_potions[potion["name"]] = quantity_per_potion
+        total_potions_current = sum(current_potions.values())
+        capacity_remaining = total_capacity - total_potions_current
+
+        num_potions_to_consider = 3 if potion_capacity_units == 1 else len(potion_priorities)
+
+        # Initialize desired quantities with current quantities
+        for potion in potion_priorities[:num_potions_to_consider]:
+            potion_name = potion["name"]
+            desired_potions[potion_name] = current_potions.get(potion_name, 0)
+
+        # Iteratively increment desired quantities
+        while capacity_remaining >= increment:
+            for potion in potion_priorities[:num_potions_to_consider]:
+                potion_name = potion["name"]
+                current_desired = desired_potions[potion_name]
+                if current_desired < max_quantity_per_potion:
+                    desired_potions[potion_name] += increment
+                    capacity_remaining -= increment
+                    logger.debug(f"Potion: {potion_name}, Desired Qty: {desired_potions[potion_name]}, Capacity Remaining: {capacity_remaining}")
+                    if capacity_remaining < increment:
+                        break
+                else:
+                    logger.debug(f"Potion: {potion_name} reached max quantity per potion.")
+            else:
+                # If none of the potions can be incremented further, break
+                break
 
         logger.info(f"Desired potion quantities: {desired_potions}")
         return desired_potions
@@ -164,15 +169,17 @@ class Utils:
                 recipe = potion_recipes[potion_name]
                 for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
                     ml_needed[color] += recipe[color] * quantity_needed
+                logger.debug(f"Potion: {potion_name}, Qty Needed: {quantity_needed}, ML Needed: {ml_needed}")
 
         logger.info(f"Total ml needed per color: {ml_needed}")
         return ml_needed
     
 
     @staticmethod
-    def get_barrel_purchase_plan(ml_needed: Dict[str, int], current_ml: Dict[str, int], ml_capacity_limit: int, gold: int, pricing_strategy: str) -> List[Dict]:
+    def get_barrel_purchase_plan(ml_needed: Dict[str, int], current_ml: Dict[str, int], ml_capacity_limit: int, gold: int, ml_capacity_units: int) -> List[Dict]:
         """
         Determines which barrels to purchase based on ml needed and constraints.
+        Simplified logic per user request.
         """
         barrel_prices = {
             'SMALL_RED_BARREL': {'ml': 500, 'price': 100, 'color': 'red_ml'},
@@ -191,42 +198,125 @@ class Utils:
         total_cost = 0
         total_ml_after_purchase = {color: current_ml.get(color, 0) for color in current_ml}
 
-        for color_ml in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
+        colors_priority = ['red_ml', 'green_ml', 'blue_ml']
+        if ml_capacity_units >= 4:
+            colors_priority.append('dark_ml')
+
+        for color_ml in colors_priority:
             ml_shortfall = ml_needed.get(color_ml, 0) - current_ml.get(color_ml, 0)
             if ml_shortfall <= 0:
                 continue
 
-            # Exclude Dark Barrels during Premium Strategy
-            if pricing_strategy == "PRICE_STRATEGY_PREMIUM" and color_ml == 'dark_ml':
-                logger.info(f"Skipping Dark Barrels during Premium Strategy for {color_ml}")
+            logger.debug(f"Processing color {color_ml}. ML Shortfall: {ml_shortfall}")
+
+            # Exclude dark barrels when ml_capacity_units < 4
+            if ml_capacity_units < 4 and color_ml == 'dark_ml':
+                logger.info(f"Skipping Dark Barrels due to ml capacity units < 4")
                 continue
 
-            while ml_shortfall > 0 and gold - total_cost > 0:
-                # Decide which barrel to buy
-                possible_barrels = [sku for sku, details in barrel_prices.items() if details['color'] == color_ml]
-                # Exclude Dark Barrels during Premium Strategy
-                if pricing_strategy == "PRICE_STRATEGY_PREMIUM" and color_ml == 'dark_ml':
-                    possible_barrels = []
+            # Determine barrel sizes to consider
+            barrel_sizes = []
+            if ml_capacity_units < 4:
+                # Only consider small and medium barrels
+                barrel_sizes = ['MEDIUM', 'SMALL']
+            else:
+                # Can consider large barrels
+                barrel_sizes = ['LARGE', 'MEDIUM', 'SMALL']
 
-                # Sort barrels by efficiency (ml per gold)
-                possible_barrels.sort(key=lambda x: barrel_prices[x]['ml'] / barrel_prices[x]['price'], reverse=True)
-                for barrel_sku in possible_barrels:
-                    barrel = barrel_prices[barrel_sku]
-                    if gold - total_cost >= barrel['price']:
-                        # Check capacity limit
-                        if total_ml_after_purchase[color_ml] + barrel['ml'] <= ml_capacity_limit:
-                            purchase_plan.append({'sku': barrel_sku, 'quantity': 1})
-                            total_cost += barrel['price']
-                            total_ml_after_purchase[color_ml] += barrel['ml']
-                            ml_shortfall -= barrel['ml']
-                            logger.info(f"Added {barrel_sku} to purchase plan")
-                            break
+            # Build list of possible barrels for this color
+            possible_barrels = [sku for sku in barrel_prices if barrel_prices[sku]['color'] == color_ml and any(size in sku for size in barrel_sizes)]
+
+            # Prioritize larger barrels
+            barrels_to_consider = sorted(possible_barrels, key=lambda x: barrel_prices[x]['ml'], reverse=True)
+
+            for barrel_sku in barrels_to_consider:
+                barrel = barrel_prices[barrel_sku]
+                barrel_price = barrel['price']
+                barrel_ml = barrel['ml']
+                logger.debug(f"Considering barrel {barrel_sku}: Price {barrel_price}, ML {barrel_ml}")
+
+                # Calculate maximum barrels we can buy based on ml shortfall and capacity
+                max_barrels_needed = -(-ml_shortfall // barrel_ml)  # Ceiling division
+                capacity_limit = (ml_capacity_limit - total_ml_after_purchase[color_ml]) // barrel_ml
+                max_affordable_barrels = (gold - total_cost) // barrel_price
+                quantity = min(max_barrels_needed, capacity_limit, max_affordable_barrels)
+
+                if quantity > 0:
+                    purchase_plan.append({'sku': barrel_sku, 'quantity': quantity})
+                    total_cost += barrel_price * quantity
+                    total_ml_after_purchase[color_ml] += barrel_ml * quantity
+                    ml_shortfall -= barrel_ml * quantity
+                    logger.info(f"Added {quantity} of {barrel_sku} to purchase plan. Total cost so far: {total_cost}")
+                    # If we've met the ml needed or run out of gold, break
+                    if ml_shortfall <= 0 or gold - total_cost <= 0:
+                        break
                 else:
-                    # Cannot afford any more barrels or capacity reached
-                    break
+                    logger.debug(f"Cannot afford barrel {barrel_sku} or capacity reached.")
+
+            if gold - total_cost <= 0:
+                logger.info("Gold depleted.")
+                break
 
         logger.info(f"Final barrel purchase plan: {purchase_plan}")
         return purchase_plan
+    
+
+    @staticmethod
+    def get_bottle_plan(current_ml: Dict[str, int], desired_potions: Dict[str, int], current_potions: Dict[str, int], potion_capacity_limit: int) -> List[Dict]:
+        """
+        Generates the bottle plan based on available ml, desired potion quantities, current potions, and capacity constraints.
+        Returns a list of potions to bottle in the format required by the bottler API.
+        """
+        potions_to_bottle = []
+        total_potions_after_bottling = sum(current_potions.values())
+
+        ml_available = current_ml.copy()
+
+        potion_recipes = {p['name']: p for p in DEFAULT_POTIONS}
+
+        for potion_name, desired_quantity in desired_potions.items():
+            current_quantity = current_potions.get(potion_name, 0)
+            quantity_needed = desired_quantity - current_quantity
+
+            if quantity_needed <= 0:
+                continue  # No need to bottle this potion
+
+            # Check if we have enough ml of each color
+            recipe = potion_recipes[potion_name]
+            required_ml = {color: recipe[color] * quantity_needed for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']}
+
+            # Adjust quantity_needed based on ml availability
+            max_quantity_possible = quantity_needed
+            for color in required_ml:
+                if recipe[color] > 0:
+                    max_possible = ml_available[color] // recipe[color]
+                    max_quantity_possible = min(max_quantity_possible, max_possible)
+
+            if max_quantity_possible <= 0:
+                continue  # Cannot bottle this potion due to ml constraints
+
+            # Adjust quantity_needed based on potion capacity
+            available_capacity = potion_capacity_limit - total_potions_after_bottling
+            if available_capacity <= 0:
+                break  # No capacity to bottle more potions
+
+            quantity_to_bottle = min(max_quantity_possible, available_capacity, quantity_needed)
+
+            # Recalculate required_ml for the adjusted quantity
+            required_ml = {color: recipe[color] * quantity_to_bottle for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']}
+
+            # Update ml_available and total_potions_after_bottling
+            for color in required_ml:
+                ml_available[color] -= required_ml[color]
+            total_potions_after_bottling += quantity_to_bottle
+
+            # Add to potions_to_bottle
+            potions_to_bottle.append({
+                'potion_type': [recipe['red_ml'], recipe['green_ml'], recipe['blue_ml'], recipe['dark_ml']],
+                'quantity': quantity_to_bottle
+            })
+
+        return potions_to_bottle
 
 
     @staticmethod

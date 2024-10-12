@@ -1,7 +1,7 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src.utilities import Utils as ut
+from src import utilities as ut
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from src.api import auth
@@ -93,8 +93,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
     try:
         with db.engine.begin() as connection:
             # Insert into customer_visits table with customers JSON
-            visit_time = ut.get_current_real_time()
-            in_game_day, in_game_hour = ut.compute_in_game_time(visit_time)
+            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
             customers_json = json.dumps([customer.dict() for customer in customers])
             logger.debug(f"Storing customers in customer_visits.")
 
@@ -106,7 +105,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
             result = connection.execute(
                 sqlalchemy.text(insert_visit_query),
                 {
-                    "visit_time": visit_time,
+                    "visit_time": datetime.now(tz=ut.LOCAL_TIMEZONE),
                     "customers": customers_json,
                     "in_game_day": in_game_day,
                     "in_game_hour": in_game_hour,
@@ -138,8 +137,7 @@ def create_cart(new_cart: Customer):
     try:
         with db.engine.begin() as connection:
             # Insert a new visit into customer_visits
-            visit_time = ut.get_current_real_time()
-            in_game_day, in_game_hour = ut.compute_in_game_time(visit_time)
+            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
             insert_visit_query = """
                 INSERT INTO customer_visits (visit_time, customers, in_game_day, in_game_hour)
                 VALUES (:visit_time, :customers, :in_game_day, :in_game_hour)
@@ -148,7 +146,7 @@ def create_cart(new_cart: Customer):
             visit_id = connection.execute(
                 sqlalchemy.text(insert_visit_query),
                 {
-                    "visit_time": visit_time,
+                    "visit_time": datetime.now(tz=ut.LOCAL_TIMEZONE),
                     "customers": json.dumps([]),  # Initialize with empty customers list
                     "in_game_day": in_game_day,
                     "in_game_hour": in_game_hour,
@@ -186,7 +184,7 @@ def create_cart(new_cart: Customer):
                     "customer_id": customer_id,
                     "in_game_day": in_game_day,
                     "in_game_hour": in_game_hour,
-                    "created_at": visit_time,
+                    "created_at": datetime.now(tz=ut.LOCAL_TIMEZONE),
                 },
             ).scalar()
             logger.debug(f"Inserted cart with cart_id={cart_id}")
@@ -280,7 +278,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                     {
                         "quantity": cart_item.quantity,
                         "line_item_total": total_cost,
-                        "timestamp": ut.get_current_real_time(),
+                        "timestamp": ut.Utils.get_current_in_game_time(),
                         "cart_item_id": existing_item["cart_item_id"],
                     },
                 )
@@ -300,7 +298,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                         "quantity": cart_item.quantity,
                         "price": price,
                         "line_item_total": total_cost,
-                        "timestamp": ut.get_current_real_time(),
+                        "timestamp": ut.Utils.get_current_in_game_time(),
                     },
                 ).scalar()
                 logger.info(f"Inserted new cart_item_id={cart_item_id} with quantity={cart_item.quantity}.")
@@ -454,7 +452,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             connection.execute(
                 sqlalchemy.text(mark_cart_checked_out_query),
                 {
-                    "checked_out_at": ut.get_current_real_time(),
+                    "checked_out_at": ut.Utils.get_current_in_game_time(),
                     "total_potions_bought": total_potions_bought,
                     "total_gold_paid": total_gold_paid,
                     "payment": cart_checkout.payment,
