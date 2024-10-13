@@ -226,6 +226,5 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     except Exception as e:
         logger.exception(f"Unhandled exception in deliver_capacity_plan: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
+
     return {"success": True}
-    

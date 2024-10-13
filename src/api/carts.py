@@ -1,14 +1,14 @@
 import sqlalchemy
 import logging
+import json
 from src import database as db
 from src import utilities as ut
+from sqlalchemy import bindparam, JSON
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from src.api import auth
 from datetime import datetime
 from enum import Enum
-import traceback
-import json
 
 
 logger = logging.getLogger(__name__)
@@ -92,27 +92,49 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
     try:
         with db.engine.begin() as connection:
-            # Insert into customer_visits table with customers JSON
+            # Get in-game day and hour
             in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
-            customers_json = json.dumps([customer.dict() for customer in customers])
-            logger.debug(f"Storing customers in customer_visits.")
+            logger.info(f"In-game time: {in_game_day}, {in_game_hour}")
 
-            insert_visit_query = """
-                INSERT INTO customer_visits (visit_time, customers, in_game_day, in_game_hour)
-                VALUES (:visit_time, :customers, :in_game_day, :in_game_hour)
-                RETURNING visit_id;
-            """
-            result = connection.execute(
-                sqlalchemy.text(insert_visit_query),
+            # Convert customers to list of dicts
+            customers_json = [customer.dict() for customer in customers]
+
+            # Prepare the SQL query with bind parameters
+            insert_customer_visit_query = sqlalchemy.text("""
+                INSERT INTO customer_visits (visit_id, customers, in_game_day, in_game_hour, visit_time)
+                VALUES (:visit_id, :customers, :in_game_day, :in_game_hour, NOW())
+            """).bindparams(bindparam('customers', type_=JSON))
+
+            # Execute query without wrapping with sqlalchemy.text() again
+            connection.execute(
+                insert_customer_visit_query,
                 {
-                    "visit_time": datetime.now(tz=ut.LOCAL_TIMEZONE),
-                    "customers": customers_json,
+                    "visit_id": visit_id,
+                    "customers": customers_json,  # Pass as Python list
                     "in_game_day": in_game_day,
-                    "in_game_hour": in_game_hour,
-                },
+                    "in_game_hour": in_game_hour
+                }
             )
-            visit_id = result.scalar()
-            logger.debug(f"Inserted visit with visit_id={visit_id}")
+            logger.info(f"Inserted customer_visit with visit_id: {visit_id}")
+
+            # Insert each customer into customers table
+            insert_customer_query = """
+                INSERT INTO customers (visit_id, customer_name, character_class, level, in_game_day, in_game_hour)
+                VALUES (:visit_id, :customer_name, :character_class, :level, :in_game_day, :in_game_hour)
+            """
+            for customer in customers:
+                connection.execute(
+                    sqlalchemy.text(insert_customer_query),
+                    {
+                        "visit_id": visit_id,
+                        "customer_name": customer.customer_name,
+                        "character_class": customer.character_class,
+                        "level": customer.level,
+                        "in_game_day": in_game_day,
+                        "in_game_hour": in_game_hour
+                    }
+                )
+                logger.debug(f"Inserted customer: {customer.customer_name}")
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_visits: {he.detail}")
@@ -307,17 +329,14 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         with db.engine.begin() as connection:
             # Fetch cart details
             fetch_cart_query = """
-                SELECT 
-                    ca.checked_out
+                SELECT ca.checked_out
                 FROM carts ca
                 WHERE ca.cart_id = :cart_id
                 LIMIT 1;
             """
-            result = connection.execute(
-                sqlalchemy.text(fetch_cart_query),
-                {"cart_id": cart_id},
-            )
+            result = connection.execute(sqlalchemy.text(fetch_cart_query), {"cart_id": cart_id})
             cart = result.mappings().fetchone()
+
             if not cart:
                 logger.error(f"Cart with cart_id={cart_id} does not exist.")
                 raise HTTPException(status_code=404, detail="Cart not found.")
@@ -327,68 +346,57 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
             # Fetch cart items
             fetch_cart_items_query = """
-                SELECT 
-                    ci.potion_id, 
-                    ci.quantity, 
-                    ci.line_item_total, 
-                    p.price 
+                SELECT ci.cart_item_id, ci.potion_id, ci.quantity, p.price 
                 FROM cart_items ci
                 JOIN potions p ON ci.potion_id = p.potion_id
                 WHERE ci.cart_id = :cart_id;
             """
-            result = connection.execute(
-                sqlalchemy.text(fetch_cart_items_query),
-                {"cart_id": cart_id},
-            )
+            result = connection.execute(sqlalchemy.text(fetch_cart_items_query), {"cart_id": cart_id})
             cart_items = result.mappings().fetchall()
 
             if not cart_items:
                 logger.error(f"No items found in cart_id={cart_id}.")
                 raise HTTPException(status_code=400, detail="Cart is empty.")
 
+            # Get in-game day and hour
+            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
+            logger.info(f"In-game time: {in_game_day}, {in_game_hour}")
+
             total_potions_bought = 0
             total_gold_paid = 0
 
-            # Verify inventory and calculate totals
+            # Process each cart item
             for item in cart_items:
-                potion_id = item["potion_id"]
-                quantity = item["quantity"]
-                line_item_total = item["line_item_total"]
-                price = item["price"]
+                cart_item_id = item['cart_item_id']
+                potion_id = item['potion_id']
+                quantity = item['quantity']
+                price = item['price']
+                line_item_total = quantity * price
 
-                # Fetch potion inventory
-                fetch_potion_query = """
-                    SELECT current_quantity 
-                    FROM potions 
-                    WHERE potion_id = :potion_id
-                    LIMIT 1;
+                # Update cart_items with price, line_item_total, in_game_day, in_game_hour
+                update_cart_item_query = """
+                    UPDATE cart_items
+                    SET price = :price,
+                        line_item_total = :line_item_total,
+                        in_game_day = :in_game_day,
+                        in_game_hour = :in_game_hour
+                    WHERE cart_item_id = :cart_item_id;
                 """
-                result = connection.execute(
-                    sqlalchemy.text(fetch_potion_query),
-                    {"potion_id": potion_id},
+                connection.execute(
+                    sqlalchemy.text(update_cart_item_query),
+                    {
+                        "price": price,
+                        "line_item_total": line_item_total,
+                        "in_game_day": in_game_day,
+                        "in_game_hour": in_game_hour,
+                        "cart_item_id": cart_item_id
+                    }
                 )
-                potion = result.mappings().fetchone()
-                if not potion:
-                    logger.error(f"Potion with potion_id={potion_id} not found.")
-                    raise HTTPException(status_code=404, detail="Potion not found.")
-
-                current_quantity = potion["current_quantity"]
-                if quantity > current_quantity:
-                    logger.error(f"Insufficient inventory for potion_id={potion_id}. Requested: {quantity}, Available: {current_quantity}.")
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Insufficient inventory for potion_id={potion_id}.",
-                    )
 
                 total_potions_bought += quantity
                 total_gold_paid += line_item_total
 
-            # Update inventory and gold
-            for item in cart_items:
-                potion_id = item["potion_id"]
-                quantity = item["quantity"]
-
-                # Deduct potion quantity
+                # Deduct potions from inventory
                 update_potion_query = """
                     UPDATE potions
                     SET current_quantity = current_quantity - :quantity
@@ -396,15 +404,37 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 """
                 connection.execute(
                     sqlalchemy.text(update_potion_query),
-                    {"quantity": quantity, "potion_id": potion_id},
+                    {
+                        "quantity": quantity,
+                        "potion_id": potion_id
+                    }
                 )
-                logger.debug(f"Deducted {quantity} from potion_id={potion_id}.")
+                logger.debug(f"Processed cart item {cart_item_id} for potion {potion_id}")
 
-            # Update global_inventory gold and total_potions
+            # Update cart as checked out
+            update_cart_query = """
+                UPDATE carts
+                SET checked_out = TRUE,
+                    checked_out_at = NOW(),
+                    total_potions_bought = :total_potions_bought,
+                    total_gold_paid = :total_gold_paid,
+                    payment = :payment
+                WHERE cart_id = :cart_id;
+            """
+            connection.execute(
+                sqlalchemy.text(update_cart_query),
+                {
+                    "total_potions_bought": total_potions_bought,
+                    "total_gold_paid": total_gold_paid,
+                    "payment": cart_checkout.payment,
+                    "cart_id": cart_id
+                }
+            )
+
+            # Update global inventory
             update_global_inventory_query = """
                 UPDATE global_inventory
-                SET 
-                    gold = gold + :total_gold_paid,
+                SET gold = gold + :total_gold_paid,
                     total_potions = total_potions - :total_potions_bought
                 WHERE id = 1;
             """
@@ -413,32 +443,10 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 {
                     "total_gold_paid": total_gold_paid,
                     "total_potions_bought": total_potions_bought
-                },
+                }
             )
-            logger.debug(f"Added {total_gold_paid} gold and subtracted {total_potions_bought} potions to global_inventory.")
 
-            # Mark cart as checked out
-            mark_cart_checked_out_query = """
-                UPDATE carts
-                SET 
-                    checked_out = TRUE,
-                    checked_out_at = :checked_out_at,
-                    total_potions_bought = :total_potions_bought,
-                    total_gold_paid = :total_gold_paid,
-                    payment = :payment
-                WHERE cart_id = :cart_id;
-            """
-            connection.execute(
-                sqlalchemy.text(mark_cart_checked_out_query),
-                {
-                    "checked_out_at": datetime.now(tz=ut.LOCAL_TIMEZONE),
-                    "total_potions_bought": total_potions_bought,
-                    "total_gold_paid": total_gold_paid,
-                    "payment": cart_checkout.payment,
-                    "cart_id": cart_id,
-                },
-            )
-            logger.info(f"Marked cart_id={cart_id} as checked out.")
+            logger.info(f"Cart {cart_id} checked out successfully. Total potions: {total_potions_bought}, Total gold: {total_gold_paid}")
 
         response = {
             "total_potions_bought": total_potions_bought,

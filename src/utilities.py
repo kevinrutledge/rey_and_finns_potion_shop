@@ -371,7 +371,7 @@ class Utils:
                 if normalized[i] + difference >= 0:
                     normalized[i] += difference
                     break
-        logger.debug(f"Normalized potion_type from {potion_type} to {normalized}")
+        # logger.debug(f"Normalized potion_type from {potion_type} to {normalized}")
         return normalized
     
 

@@ -1,9 +1,11 @@
 import sqlalchemy
 import logging
+import json
 from src import database as db
 from src import utilities as ut
 from src import potions as po
 from src.api import auth
+from sqlalchemy import bindparam, JSON
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
@@ -84,7 +86,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             # Check if ML capacity is sufficient
             if total_ml_after_adding > ml_capacity_limit:
                 logger.error(f"Insufficient ML capacity. ML Capacity Limit: {ml_capacity_limit}, Total ML After Adding: {total_ml_after_adding}")
-                raise HTTPException(status_code=400, detail="Insufficient ML capacity to store the delivered barrels.")
+                raise HTTPException(status_code=400, detail="Insufficient ML capacity to store delivered barrels.")
 
             # Aggregate ML additions per color
             total_red_ml = 0
@@ -163,6 +165,54 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     try:
         with db.engine.begin() as connection:
+            # Get in-game day and hour
+            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
+            logger.info(f"In-game time: {in_game_day}, {in_game_hour}")
+
+            # Convert wholesale_catalog to list of dicts
+            wholesale_catalog_json = [barrel.dict() for barrel in wholesale_catalog]
+
+            # Prepare and execute insert into barrel_visits
+            insert_barrel_visit_query = sqlalchemy.text("""
+                INSERT INTO barrel_visits (wholesale_catalog, in_game_day, in_game_hour, visit_time)
+                VALUES (:wholesale_catalog, :in_game_day, :in_game_hour, NOW())
+                RETURNING barrel_visit_id;
+            """).bindparams(bindparam('wholesale_catalog', type_=JSON))
+
+            result = connection.execute(
+                insert_barrel_visit_query,
+                {
+                    "wholesale_catalog": wholesale_catalog_json,
+                    "in_game_day": in_game_day,
+                    "in_game_hour": in_game_hour
+                }
+            )
+            barrel_visit_id = result.scalar()
+            logger.info(f"Inserted barrel_visit_id: {barrel_visit_id}")
+
+            # Prepare insert into barrels
+            insert_barrel_query = sqlalchemy.text("""
+                INSERT INTO barrels (barrel_visit_id, sku, ml_per_barrel, potion_type, price, quantity, in_game_day, in_game_hour)
+                VALUES (:barrel_visit_id, :sku, :ml_per_barrel, :potion_type, :price, :quantity, :in_game_day, :in_game_hour)
+            """).bindparams(bindparam('potion_type', type_=JSON))
+
+            # Insert each barrel into barrels table
+            for barrel in wholesale_catalog:
+                connection.execute(
+                    insert_barrel_query,
+                    {
+                        "barrel_visit_id": barrel_visit_id,
+                        "sku": barrel.sku,
+                        "ml_per_barrel": barrel.ml_per_barrel,
+                        "potion_type": barrel.potion_type,
+                        "price": barrel.price,
+                        "quantity": barrel.quantity,
+                        "in_game_day": in_game_day,
+                        "in_game_hour": in_game_hour
+                    }
+                )
+                logger.debug(f"Inserted barrel with SKU: {barrel.sku}")
+
             # Fetch current inventory and capacities
             query = """
                 SELECT gold, potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml
@@ -207,7 +257,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         pricing_strategy = ut.Utils.select_pricing_strategy(potion_capacity_units)
         logger.info(f"Selected pricing strategy: {pricing_strategy}")
 
-        # Get potion priorities for the future day and strategy
+        # Get potion priorities for future day and strategy
         potion_priorities = po.POTION_PRIORITIES[future_day][pricing_strategy]
         logger.debug(f"Potion priorities for {future_day} and strategy {pricing_strategy}: {potion_priorities}")
 
@@ -240,7 +290,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             pricing_strategy=pricing_strategy
         )
 
-        # Map purchase plan to match the catalog SKUs and quantities
+        # Map purchase plan to match catalog SKUs and quantities
         catalog_skus = {item.sku: item for item in wholesale_catalog}
         final_purchase_plan = []
         for purchase in purchase_plan:

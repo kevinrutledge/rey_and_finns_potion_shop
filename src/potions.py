@@ -85,8 +85,8 @@ DEFAULT_POTIONS = [
         'current_quantity': 0
     },
     {
-        'sku': 'MAGENTA_POTION',
-        'name': 'Magenta Potion',
+        'sku': 'PURPLE_POTION',
+        'name': 'Purple Potion',
         'red_ml': 50,
         'green_ml': 0,
         'blue_ml': 50,
@@ -198,7 +198,7 @@ POTION_PRIORITIES = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price": 50},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
         ],
@@ -206,7 +206,7 @@ POTION_PRIORITIES = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 35},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 45},
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 35},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 45},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 45},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 45},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 45}
         ],
@@ -214,7 +214,7 @@ POTION_PRIORITIES = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 30},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 40},
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 30},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 40},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 40},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 40},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 40}
         ],
@@ -222,7 +222,7 @@ POTION_PRIORITIES = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 25},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 35},
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 25},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 35},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 35},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 35},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 35}
         ]
@@ -233,7 +233,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price": 50},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
         ],
         "PRICE_STRATEGY_PENETRATION": [
@@ -241,7 +241,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 35},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 35},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 45},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 45},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 45},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 45}
         ],
         "PRICE_STRATEGY_TIERED": [
@@ -249,7 +249,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 30},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 30},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 40},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 40},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 40},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 40}
         ],
         "PRICE_STRATEGY_DYNAMIC": [
@@ -257,7 +257,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 25},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 25},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 35},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 35},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 35},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 35}
         ]
     },
@@ -301,7 +301,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price": 50},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
         ],
         "PRICE_STRATEGY_PENETRATION": [
@@ -309,7 +309,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 35},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 45},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 45},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 45},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 45},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 45}
         ],
         "PRICE_STRATEGY_TIERED": [
@@ -317,7 +317,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 30},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 40},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 40},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 40},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 40},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 40}
         ],
         "PRICE_STRATEGY_DYNAMIC": [
@@ -325,7 +325,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 25},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 35},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 35},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 35},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 35},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 35}
         ]
     },
@@ -369,7 +369,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
             {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price": 50},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price": 50},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
         ],
         "PRICE_STRATEGY_PENETRATION": [
@@ -377,7 +377,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 35},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 35},
             {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price" : 45},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 45},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 45},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 45}
         ],
         "PRICE_STRATEGY_TIERED": [
@@ -385,7 +385,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 30},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 30},
             {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price" : 40},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 40},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 40},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 40}
         ],
         "PRICE_STRATEGY_DYNAMIC": [
@@ -393,7 +393,7 @@ POTION_PRIORITIES = {
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 25},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 25},
             {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price" : 35},
-            {"name": "Magenta Potion", "composition": [50, 0, 50, 0], "price" : 35},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 35},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 35}
         ]
     }

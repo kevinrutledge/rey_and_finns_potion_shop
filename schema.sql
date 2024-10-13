@@ -12,21 +12,23 @@ DROP TABLE IF EXISTS barrel_visits CASCADE;
 -- Barrel Visits Table (Parent)
 CREATE TABLE barrel_visits (
     barrel_visit_id BIGSERIAL PRIMARY KEY,
-    visit_time TIMESTAMPTZ NOT NULL,
     wholesale_catalog JSON,
-    in_game_day VARCHAR,
-    in_game_hour INT
+    in_game_day TEXT,
+    in_game_hour INT,
+    visit_time TIMESTAMPTZ NOT NULL
 );
 
 -- Barrels Table (Reference Barrel Visits)
 CREATE TABLE barrels (
     barrel_id BIGSERIAL PRIMARY KEY,
     barrel_visit_id BIGINT REFERENCES barrel_visits(barrel_visit_id),
-    sku VARCHAR NOT NULL,
+    sku TEXT NOT NULL,
     ml_per_barrel INT NOT NULL,
     potion_type JSON NOT NULL,
     price INT NOT NULL,
     quantity INT NOT NULL
+    in_game_day TEXT,
+    in_game_hour INT;
 );
 
 -- Global Inventory Table (Independent)
@@ -46,15 +48,14 @@ CREATE TABLE global_inventory (
 -- Potions Table (Independent)
 CREATE TABLE potions (
     potion_id BIGSERIAL PRIMARY KEY,
-    name VARCHAR NOT NULL,
-    sku VARCHAR NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    sku TEXT NOT NULL UNIQUE,
     red_ml INT NOT NULL,
     green_ml INT NOT NULL,
     blue_ml INT NOT NULL,
     dark_ml INT NOT NULL,
     total_ml INT NOT NULL,
     price INT NOT NULL,
-    description TEXT,
     current_quantity INT NOT NULL
 );
 
@@ -62,32 +63,34 @@ CREATE TABLE potions (
 CREATE TABLE customers (
     customer_id BIGSERIAL PRIMARY KEY,
     visit_id BIGINT REFERENCES customer_visits(visit_id),
-    customer_name VARCHAR NOT NULL,
-    character_class VARCHAR NOT NULL,
-    level INT NOT NULL
+    customer_name TEXT NOT NULL,
+    character_class TEXT NOT NULL,
+    level INT NOT NULL,
+    in_game_day TEXT,
+    in_game_hour INT
 );
 
 -- Customer Visits Table (Parent)
 CREATE TABLE customer_visits (
     visit_id BIGSERIAL PRIMARY KEY,
-    visit_time TIMESTAMPTZ NOT NULL,
     customers JSON,
-    in_game_day VARCHAR,
-    in_game_hour INT
+    in_game_day TEXT,
+    in_game_hour INT,
+    visit_time TIMESTAMPTZ NOT NULL
 );
 
 -- Carts Table (References Customers)
 CREATE TABLE carts (
     cart_id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES customers(customer_id),
-    in_game_day VARCHAR,
+    in_game_day TEXT,
     in_game_hour INT,
-    created_at TIMESTAMPTZ NOT NULL,
     checked_out BOOLEAN DEFAULT FALSE,
     checked_out_at TIMESTAMPTZ,
     total_potions_bought INT DEFAULT 0,
     total_gold_paid INT DEFAULT 0,
-    payment VARCHAR
+    payment TEXT
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 -- Cart Items Table (References Carts and Potions)
@@ -98,16 +101,18 @@ CREATE TABLE cart_items (
     quantity INT NOT NULL,
     price INT NOT NULL,
     line_item_total INT NOT NULL,
+    in_game_day TEXT,
+    in_game_hour INT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Ledger Entries Table (References Potions)
 CREATE TABLE ledger_entries (
     ledger_entry_id BIGSERIAL PRIMARY KEY,
-    change_type VARCHAR NOT NULL,
-    sub_type VARCHAR,
+    change_type TEXT NOT NULL,
+    sub_type TEXT,
     amount INT NOT NULL,
-    ml_type VARCHAR,
+    ml_type TEXT,
     potion_id INT REFERENCES potions(potion_id),
     description TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
