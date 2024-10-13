@@ -127,7 +127,8 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     green_ml = green_ml - :green_ml,
                     blue_ml = blue_ml - :blue_ml,
                     dark_ml = dark_ml - :dark_ml,
-                    total_potions = total_potions + :total_potions
+                    total_potions = total_potions + :total_potions,
+                    total_ml = total_ml - :red_ml - :green_ml - :blue_ml - :dark_ml
                 WHERE id = 1;
             """
             connection.execute(
