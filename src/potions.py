@@ -8,7 +8,7 @@ DEFAULT_POTIONS = [
         'blue_ml': 0,
         'dark_ml': 0,
         'total_ml': 100,
-        'price': 40,
+        'price': 45,
         'description': 'Hypothesis: Restores vitality.',
         'current_quantity': 0
     },
@@ -20,7 +20,7 @@ DEFAULT_POTIONS = [
         'blue_ml': 100,
         'dark_ml': 0,
         'total_ml': 100,
-        'price': 40,
+        'price': 65,
         'description': 'Hypothesis: Grants wisdom.',
         'current_quantity': 0
     },
@@ -32,7 +32,7 @@ DEFAULT_POTIONS = [
         'blue_ml': 0,
         'dark_ml': 0,
         'total_ml': 100,
-        'price': 40,
+        'price': 45,
         'description': 'Hypothesis: Enhances strength.',
         'current_quantity': 0
     },
@@ -163,10 +163,10 @@ POTION_PRIORITIES = {
         "PRICE_STRATEGY_SKIMMING": [
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
+            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
-            {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price": 50},
-            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
+            {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price": 50}
         ],
         "PRICE_STRATEGY_PENETRATION": [
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 35},
@@ -365,12 +365,12 @@ POTION_PRIORITIES = {
     },
     "Aracanaday": {
         "PRICE_STRATEGY_SKIMMING": [
-            {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
-            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
-            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
+            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 45},
+            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 45},
+            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50},
+            {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 50},
             {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price": 50},
-            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
-            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50}
         ],
         "PRICE_STRATEGY_PENETRATION": [
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 45},

@@ -157,22 +157,30 @@ def create_cart(new_cart: Customer):
 
     try:
         with db.engine.begin() as connection:
-            # Insert customer into customers table
-            insert_customer_query = """
-                INSERT INTO customers (customer_name, character_class, level)
-                VALUES (:customer_name, :character_class, :level)
-                RETURNING customer_id;
+            # Find existing customer
+            find_customer_query = """
+                SELECT customer_id FROM customers
+                WHERE customer_name = :customer_name
+                  AND character_class = :character_class
+                  AND level = :level
+                ORDER BY customer_id DESC
+                LIMIT 1;
             """
             result = connection.execute(
-                sqlalchemy.text(insert_customer_query),
+                sqlalchemy.text(find_customer_query),
                 {
                     "customer_name": new_cart.customer_name,
                     "character_class": new_cart.character_class,
                     "level": new_cart.level,
                 },
             )
-            customer_id = result.scalar()
-            logger.debug(f"Inserted customer with customer_id={customer_id}")
+            customer = result.mappings().fetchone()
+            if customer:
+                customer_id = customer['customer_id']
+                logger.debug(f"Found existing customer with customer_id={customer_id}")
+            else:
+                logger.error(f"Customer not found for name: {new_cart.customer_name}")
+                raise HTTPException(status_code=404, detail="Customer not found.")
 
             # Insert new cart into carts table
             in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
