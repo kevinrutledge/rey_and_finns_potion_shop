@@ -63,13 +63,20 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
             total_potions = global_inventory['total_potions']
 
             # Fetch potion recipes
-            potion_recipes = {(
-                p['red_ml'], p['green_ml'], p['blue_ml'], p['dark_ml']
-            ): p for p in po.DEFAULT_POTIONS}
+            potion_recipes = {}
+            for potion in po.DEFAULT_POTIONS:
+                potion_type = ut.Utils.normalize_potion_type([
+                    potion['red_ml'],
+                    potion['green_ml'],
+                    potion['blue_ml'],
+                    potion['dark_ml']
+                ])
+                potion_recipes[tuple(potion_type)] = potion
 
             # Aggregate ml to deduct and potions to add
             ml_to_deduct = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
             potions_to_add = {}
+            total_new_potions = 0
 
             for potion in potions_delivered:
                 potion_type = potion.potion_type
@@ -108,8 +115,8 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     potions_to_add[potion_name] = quantity
 
                 # Update total_potions
-                total_potions += quantity
-                if total_potions > potion_capacity_limit:
+                total_new_potions += quantity
+                if total_potions + total_new_potions > potion_capacity_limit:
                     logger.error("Exceeding potion capacity limit")
                     raise HTTPException(status_code=400, detail="Exceeding potion capacity limit")
 
@@ -130,7 +137,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     "green_ml": ml_to_deduct['green_ml'],
                     "blue_ml": ml_to_deduct['blue_ml'],
                     "dark_ml": ml_to_deduct['dark_ml'],
-                    "total_potions": sum(potions_to_add.values())
+                    "total_potions": total_new_potions
                 }
             )
 
@@ -174,7 +181,7 @@ def get_bottle_plan():
         with db.engine.begin() as connection:
             # Fetch current inventory and capacities
             query = """
-                SELECT potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml
+                SELECT potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml, total_potions
                 FROM global_inventory
                 WHERE id = 1;
             """
@@ -194,6 +201,7 @@ def get_bottle_plan():
                 'dark_ml': global_inventory['dark_ml'],
             }
             potion_capacity_limit = potion_capacity_units * ut.POTION_CAPACITY_PER_UNIT
+            total_potions = global_inventory['total_potions']
 
             # Fetch current potions
             query_potions = """
@@ -204,36 +212,37 @@ def get_bottle_plan():
             potions = result.mappings().all()
             current_potions = {row['name']: row['current_quantity'] for row in potions}
 
-        # Determine future in-game time
-        future_day, future_hour = ut.Utils.get_future_in_game_time(2)
+        # Determine future in-game time (3 ticks ahead)
+        future_day, future_hour = ut.Utils.get_future_in_game_time(ticks_ahead=3)
         logger.info(f"Future in-game time: {future_day}, Hour: {future_hour}")
 
         # Select pricing strategy
         pricing_strategy = ut.Utils.select_pricing_strategy(potion_capacity_units)
+        logger.info(f"Selected pricing strategy: {pricing_strategy}")
 
         # Get potion priorities for future day and pricing strategy
         potion_priorities = po.POTION_PRIORITIES[future_day][pricing_strategy]
+        logger.debug(f"Potion priorities for {future_day} and strategy {pricing_strategy}: {potion_priorities}")
 
         # Calculate desired potion quantities
         desired_potions = ut.Utils.calculate_desired_potion_quantities(
-            potion_capacity_units,
-            pricing_strategy,
-            potion_priorities
+            potion_capacity_units=potion_capacity_units,
+            current_potions=current_potions,
+            potion_priorities=potion_priorities,
+            pricing_strategy=pricing_strategy
         )
+
+        # Get potion recipes
+        potion_recipes = {p['name']: p for p in po.DEFAULT_POTIONS}
 
         # Generate bottle plan
         bottle_plan = ut.Utils.get_bottle_plan(
-            current_ml,
-            desired_potions,
-            current_potions,
-            potion_capacity_limit
+            current_ml=current_ml,
+            desired_potions=desired_potions,
+            current_potions=current_potions,
+            potion_capacity_limit=potion_capacity_limit,
+            potion_recipes=potion_recipes
         )
-
-        # Adjust potion_type to sum to exactly 100
-        for item in bottle_plan:
-            potion_type = item['potion_type']
-            potion_type_normalized = ut.Utils.normalize_potion_type(potion_type)
-            item['potion_type'] = potion_type_normalized
 
         logger.info(f"Generated bottle plan: {bottle_plan}")
 

@@ -81,7 +81,7 @@ def get_capacity_plan():
                     gold,
                     potion_capacity_units,
                     ml_capacity_units,
-                    (SELECT SUM(current_quantity) FROM potions) AS total_potions,
+                    total_potions,
                     total_ml
                 FROM global_inventory
                 WHERE id = 1;
@@ -97,7 +97,7 @@ def get_capacity_plan():
             potion_capacity_units = inventory['potion_capacity_units']
             ml_capacity_units = inventory['ml_capacity_units']
             total_potions = inventory['total_potions'] or 0
-            total_ml = inventory['total_ml']
+            total_ml = inventory['total_ml'] or 0
 
             # Calculate capacities
             potion_capacity_limit = potion_capacity_units * ut.POTION_CAPACITY_PER_UNIT
@@ -112,37 +112,51 @@ def get_capacity_plan():
             # Determine if we need to purchase more capacity
             potion_capacity_to_buy = 0
             ml_capacity_to_buy = 0
-            threshold = 0.75  # 75%
+            threshold = 0.5  # 50%
 
-            if potion_usage >= threshold:
-                # Purchase additional capacity units
-                potion_capacity_to_buy = 1 # TODO make a variable to calculate this if rate of sells is exponential increase
-                logger.info("Potion capacity usage exceeded threshold. Planning to purchase additional potion capacity.")
+            if potion_usage >= threshold and gold >= ut.CAPACITY_UNIT_COST:
+                # Purchase additional capacity units incrementally
+                potion_capacity_to_buy = 1
+                logger.info("Potion capacity usage exceeded 50%. Planning to purchase additional potion capacity.")
 
-            if ml_usage >= threshold:
-                ml_capacity_to_buy = 1 # TODO make a variable to calculate this if rate of sells is exponential increase
-                logger.info("ML capacity usage exceeded threshold. Planning to purchase additional ML capacity.")
+            if ml_usage >= threshold and gold >= ut.CAPACITY_UNIT_COST:
+                ml_capacity_to_buy = 1
+                logger.info("ML capacity usage exceeded 50%. Planning to purchase additional ML capacity.")
 
             # Calculate total cost
             total_capacity_units_to_buy = potion_capacity_to_buy + ml_capacity_to_buy
             total_cost = total_capacity_units_to_buy * ut.CAPACITY_UNIT_COST
 
             if total_cost > gold:
-                # Not enough gold to purchase capacities
-                logger.warning("Not enough gold to purchase additional capacities.")
-                potion_capacity_to_buy = 0
-                ml_capacity_to_buy = 0
-            else:
-                logger.debug(f"Total capacity units to buy: {total_capacity_units_to_buy}, Total cost: {total_cost}")
-
-            return {
-                "potion_capacity": potion_capacity_to_buy,
-                "ml_capacity": ml_capacity_to_buy
-            }
+                # Adjust purchases if not enough gold
+                if gold >= ut.CAPACITY_UNIT_COST:
+                    if potion_capacity_to_buy and gold >= ut.CAPACITY_UNIT_COST:
+                        potion_capacity_to_buy = 1
+                        ml_capacity_to_buy = 0
+                        total_cost = ut.CAPACITY_UNIT_COST
+                    elif ml_capacity_to_buy and gold >= ut.CAPACITY_UNIT_COST:
+                        ml_capacity_to_buy = 1
+                        potion_capacity_to_buy = 0
+                        total_cost = ut.CAPACITY_UNIT_COST
+                    else:
+                        potion_capacity_to_buy = 0
+                        ml_capacity_to_buy = 0
+                        total_cost = 0
+                else:
+                    potion_capacity_to_buy = 0
+                    ml_capacity_to_buy = 0
+                    total_cost = 0
+                logger.warning("Adjusted capacity purchase plan due to insufficient gold.")
 
     except Exception as e:
         logger.exception(f"Unhandled exception in get_capacity_plan: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    logger.debug(f"Total capacity units to buy: {total_capacity_units_to_buy}, Total cost: {total_cost}")
+    return {
+        "potion_capacity": potion_capacity_to_buy,
+        "ml_capacity": ml_capacity_to_buy
+    }
 
 
 # Gets called once a day
@@ -153,7 +167,7 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     capacity unit costs 1000 gold.
     """
     logger = logging.getLogger("inventory.deliver")
-    logger.info(f"POST /inventory/deliver/{order_id} called.")
+    logger.info("POST /inventory/deliver called.")
     logger.debug(f"CapacityPurchase data: {capacity_purchase}")
     
     try:

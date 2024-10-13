@@ -1,7 +1,7 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src.utilities import Utils as ut
+from src import utilities as ut
 from src.potions import POTION_PRIORITIES
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -27,30 +27,45 @@ def get_catalog():
     """
     logger.info("GET /catalog/ endpoint called.")
     try:
-        # Determine current in game time
-        real_time = ut.get_current_real_time()
-        in_game_day, in_game_hour = ut.compute_in_game_time(real_time)
-        hour_block = ut.get_hour_block(in_game_hour)
-        logger.debug(f"Current Real Time: {real_time}")
-        logger.debug(f"In-Game Time - Day: {in_game_day}, Hour: {in_game_hour}, Block: {hour_block}")
-
-        # Fetch potion demands for current time
-        day_potions = POTION_PRIORITIES.get(in_game_day, {}).get(hour_block, [])
-        if not day_potions:
-            logger.warning(f"No potion coefficients found for Day: {in_game_day}, Hour Block: {hour_block}. Using default potions.")
-        
-        logger.debug(f"Potion Demands for Current Time: {day_potions}")
-
-        # Fetch all potions with current_quantity > 0
         with db.engine.begin() as connection:
+            # Fetch current inventory and capacities
             query = """
+                SELECT potion_capacity_units, total_potions
+                FROM global_inventory
+                WHERE id = 1;
+            """
+            result = connection.execute(sqlalchemy.text(query))
+            global_inventory = result.mappings().fetchone()
+
+            if not global_inventory:
+                logger.error("Global inventory record not found.")
+                raise HTTPException(status_code=500, detail="Global inventory record not found.")
+
+            potion_capacity_units = global_inventory['potion_capacity_units']
+            total_potions = global_inventory['total_potions']
+            potion_capacity_limit = potion_capacity_units * ut.POTION_CAPACITY_PER_UNIT
+
+            # Determine current in-game time
+            current_day, current_hour = ut.Utils.get_current_in_game_time()
+            logger.debug(f"Current In-Game Time - Day: {current_day}, Hour: {current_hour}")
+
+            # Select pricing strategy based on potion capacity units
+            pricing_strategy = ut.Utils.select_pricing_strategy(potion_capacity_units)
+            logger.info(f"Selected pricing strategy: {pricing_strategy}")
+
+            # Get potion priorities for current day and pricing strategy
+            potion_priorities = POTION_PRIORITIES[current_day][pricing_strategy]
+            logger.debug(f"Potion priorities for {current_day} and strategy {pricing_strategy}: {potion_priorities}")
+
+            # Fetch all potions with current_quantity > 0
+            query_potions = """
                 SELECT potion_id, sku, name, price, current_quantity,
                        red_ml, green_ml, blue_ml, dark_ml
                 FROM potions
                 WHERE current_quantity > 0;
             """
-            logger.debug(f"Executing SQL Query: {query.strip()}")
-            result = connection.execute(sqlalchemy.text(query))
+            logger.debug(f"Executing SQL Query: {query_potions.strip()}")
+            result = connection.execute(sqlalchemy.text(query_potions))
             all_available_potions = result.mappings().fetchall()
             logger.debug(f"Total Available Potions: {len(all_available_potions)}")
 
@@ -72,70 +87,77 @@ def get_catalog():
                 for potion in all_available_potions
             ]
 
-        logger.debug(f"Processed Available Potions: {available_potions}")
+            # Determine number of potions to consider based on strategy
+            if pricing_strategy == "PRICE_STRATEGY_SKIMMING":
+                num_potions_to_consider = 3
+            elif pricing_strategy == "PRICE_STRATEGY_PENETRATION":
+                num_potions_to_consider = 5
+            else:
+                num_potions_to_consider = len(potion_priorities)
 
-        # Prioritize potions based on demand
-        prioritized_potions = []
-        catalog_limit = 6
+            potion_priorities = potion_priorities[:num_potions_to_consider]
 
-        for demand_potion in day_potions:
-            # Match potions based on name and composition
-            matching_potions = [
-                potion for potion in available_potions
-                if potion["name"] == demand_potion["name"] and
-                   potion["potion_type"] == demand_potion["composition"]
-            ]
+            # Build the catalog items based on potion priorities
+            catalog_items = []
+            catalog_limit = 6
 
-            if matching_potions:
-                potion = matching_potions[0]
-                catalog_item = CatalogItem(
-                    sku=potion["sku"],
-                    name=potion["name"],
-                    quantity=potion["current_quantity"],
-                    price=potion["price"],
-                    potion_type=potion["potion_type"]
+            for priority_potion in potion_priorities:
+                # Match available potions based on name and composition
+                matching_potions = [
+                    potion for potion in available_potions
+                    if potion["name"] == priority_potion["name"] and
+                    potion["potion_type"] == priority_potion["composition"]
+                ]
+
+                if matching_potions:
+                    potion = matching_potions[0]
+                    catalog_item = CatalogItem(
+                        sku=potion["sku"],
+                        name=potion["name"],
+                        quantity=potion["current_quantity"],
+                        price=potion["price"],
+                        potion_type= ut.Utils.normalize_potion_type(potion["potion_type"])
+                    )
+                    catalog_items.append(catalog_item)
+                    logger.debug(f"Added to Catalog based on priority: {catalog_item}")
+                    if len(catalog_items) >= catalog_limit:
+                        break
+
+            # Fill remaining catalog slots with other available potions if needed
+            if len(catalog_items) < catalog_limit:
+                remaining_slots = catalog_limit - len(catalog_items)
+                logger.debug(f"Filling remaining {remaining_slots} catalog slots with other available potions.")
+
+                # Exclude already added potions
+                additional_potions = [
+                    potion for potion in available_potions
+                    if not any(p.sku == potion["sku"] for p in catalog_items)
+                ]
+
+                # Sort additional potions by quantity descending
+                additional_potions_sorted = sorted(
+                    additional_potions,
+                    key=lambda x: x["current_quantity"],
+                    reverse=True
                 )
-                prioritized_potions.append(catalog_item)
-                logger.debug(f"Added to Catalog based on demand: {catalog_item}")
-                if len(prioritized_potions) >= catalog_limit:
-                    break
 
-        # Fill remaining catalog slots with other available potions
-        if len(prioritized_potions) < catalog_limit:
-            remaining_slots = catalog_limit - len(prioritized_potions)
-            logger.debug(f"Filling remaining {remaining_slots} catalog slots with other available potions.")
-
-            # Exclude already added potions
-            additional_potions = [
-                potion for potion in available_potions
-                if not any(p.sku == potion["sku"] for p in prioritized_potions)
-            ]
-
-            # Sort additional potions by overall demand (descending) or any other priority
-            additional_potions_sorted = sorted(
-                additional_potions,
-                key=lambda x: x["current_quantity"],
-                reverse=True
-            )
-
-            for potion in additional_potions_sorted[:remaining_slots]:
-                catalog_item = CatalogItem(
-                    sku=potion["sku"],
-                    name=potion["name"],
-                    quantity=potion["current_quantity"],
-                    price=potion["price"],
-                    potion_type=potion["potion_type"]
-                )
-                prioritized_potions.append(catalog_item)
-                logger.debug(f"Added to Catalog as additional: {catalog_item}")
-
-        logger.info(f"Final Catalog Items (Total: {len(prioritized_potions)}): {prioritized_potions}")
+                for potion in additional_potions_sorted[:remaining_slots]:
+                    catalog_item = CatalogItem(
+                        sku=potion["sku"],
+                        name=potion["name"],
+                        quantity=potion["current_quantity"],
+                        price=potion["price"],
+                        potion_type= ut.Utils.normalize_potion_type(potion["potion_type"])
+                    )
+                    catalog_items.append(catalog_item)
+                    logger.debug(f"Added to Catalog as additional: {catalog_item}")
 
     except HTTPException as he:
-        logger.error(f"HTTPException in checkout: {he.detail}")
+        logger.error(f"HTTPException in get_catalog: {he.detail}")
         raise he
     except Exception as e:
-        logger.exception(f"Unhandled exception in checkout: {e}")
+        logger.exception(f"Unhandled exception in get_catalog: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
     
-    return prioritized_potions
+    logger.info(f"Final Catalog Items (Total: {len(catalog_items)}): {catalog_items}")
+    return catalog_items

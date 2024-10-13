@@ -147,7 +147,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     except Exception as e:
         logger.exception(f"Unhandled exception in post_deliver_barrels: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
+    
     logger.info(f"Successfully processed delivery for order_id {order_id}.")
     return {"success": True}
 
@@ -197,28 +197,47 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
             current_potions = {row['name']: row['current_quantity'] for row in potions}
+            total_potions = sum(current_potions.values())
 
-        # Determine future in-game time
-        future_day, future_hour = ut.Utils.get_future_in_game_time(3)
-        logger.info(f"Future in-game time: {future_day}, Hour: {future_hour}")
+        # Determine future in-game day and hour (4 ticks ahead)
+        future_day, future_hour = ut.Utils.get_future_in_game_time(ticks_ahead=4)
+        logger.info(f"Future in-game time (4 ticks ahead): {future_day}, Hour: {future_hour}")
 
-        # Select pricing strategy
-        potion_priorities = po.POTION_PRIORITIES[future_day]['PRICE_STRATEGY_PREMIUM']
-        logger.debug(f"Potion priorities: {potion_priorities}")
+        # Select pricing strategy based on potion capacity units
+        pricing_strategy = ut.Utils.select_pricing_strategy(potion_capacity_units)
+        logger.info(f"Selected pricing strategy: {pricing_strategy}")
+
+        # Get potion priorities for the future day and strategy
+        potion_priorities = po.POTION_PRIORITIES[future_day][pricing_strategy]
+        logger.debug(f"Potion priorities for {future_day} and strategy {pricing_strategy}: {potion_priorities}")
 
         # Calculate desired potion quantities
         desired_potions = ut.Utils.calculate_desired_potion_quantities(
-            potion_capacity_units,
-            current_potions,
-            potion_priorities
+            potion_capacity_units=potion_capacity_units,
+            current_potions=current_potions,
+            potion_priorities=potion_priorities,
+            pricing_strategy=pricing_strategy
         )
 
-        # Calculate ml needed per color
-        ml_needed = ut.Utils.calculate_ml_needed(desired_potions, current_potions)
+        # Get potion recipes from DEFAULT_POTIONS
+        potion_recipes = {p['name']: p for p in po.DEFAULT_POTIONS}
 
-        # Determine barrels to purchase
+        # Calculate ml needed per color to meet desired potion quantities
+        ml_needed = ut.Utils.calculate_ml_needed(
+            desired_potions=desired_potions,
+            current_potions=current_potions,
+            potion_recipes=potion_recipes
+        )
+
+        # Generate barrel purchase plan
         purchase_plan = ut.Utils.get_barrel_purchase_plan(
-            ml_needed, current_ml, ml_capacity_limit, gold, ml_capacity_units
+            ml_needed=ml_needed,
+            current_ml=current_ml,
+            ml_capacity_limit=ml_capacity_limit,
+            gold=gold,
+            ml_capacity_units=ml_capacity_units,
+            wholesale_catalog=wholesale_catalog,
+            pricing_strategy=pricing_strategy
         )
 
         # Map purchase plan to match the catalog SKUs and quantities

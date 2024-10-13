@@ -116,7 +116,6 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_visits: {he.detail}")
-        logger.debug(traceback.format_exc())
         raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in post_visits: {e}")
@@ -136,28 +135,10 @@ def create_cart(new_cart: Customer):
 
     try:
         with db.engine.begin() as connection:
-            # Insert a new visit into customer_visits
-            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
-            insert_visit_query = """
-                INSERT INTO customer_visits (visit_time, customers, in_game_day, in_game_hour)
-                VALUES (:visit_time, :customers, :in_game_day, :in_game_hour)
-                RETURNING visit_id;
-            """
-            visit_id = connection.execute(
-                sqlalchemy.text(insert_visit_query),
-                {
-                    "visit_time": datetime.now(tz=ut.LOCAL_TIMEZONE),
-                    "customers": json.dumps([]),  # Initialize with empty customers list
-                    "in_game_day": in_game_day,
-                    "in_game_hour": in_game_hour,
-                },
-            ).scalar()
-            logger.debug(f"Inserted visit with visit_id={visit_id}")
-
-            # Insert customer with visit_id
+            # Insert customer into customers table
             insert_customer_query = """
-                INSERT INTO customers (customer_name, character_class, level, visit_id)
-                VALUES (:customer_name, :character_class, :level, :visit_id)
+                INSERT INTO customers (customer_name, character_class, level)
+                VALUES (:customer_name, :character_class, :level)
                 RETURNING customer_id;
             """
             result = connection.execute(
@@ -166,13 +147,13 @@ def create_cart(new_cart: Customer):
                     "customer_name": new_cart.customer_name,
                     "character_class": new_cart.character_class,
                     "level": new_cart.level,
-                    "visit_id": visit_id,
                 },
             )
             customer_id = result.scalar()
             logger.debug(f"Inserted customer with customer_id={customer_id}")
 
             # Insert new cart into carts table
+            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
             insert_cart_query = """
                 INSERT INTO carts (customer_id, in_game_day, in_game_hour, created_at)
                 VALUES (:customer_id, :in_game_day, :in_game_hour, :created_at)
@@ -278,7 +259,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                     {
                         "quantity": cart_item.quantity,
                         "line_item_total": total_cost,
-                        "timestamp": ut.Utils.get_current_in_game_time(),
+                        "timestamp": datetime.now(tz=ut.LOCAL_TIMEZONE),
                         "cart_item_id": existing_item["cart_item_id"],
                     },
                 )
@@ -298,7 +279,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                         "quantity": cart_item.quantity,
                         "price": price,
                         "line_item_total": total_cost,
-                        "timestamp": ut.Utils.get_current_in_game_time(),
+                        "timestamp": datetime.now(tz=ut.LOCAL_TIMEZONE),
                     },
                 ).scalar()
                 logger.info(f"Inserted new cart_item_id={cart_item_id} with quantity={cart_item.quantity}.")
@@ -327,9 +308,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             # Fetch cart details
             fetch_cart_query = """
                 SELECT 
-                    ca.checked_out, 
-                    ca.total_potions_bought, 
-                    ca.total_gold_paid 
+                    ca.checked_out
                 FROM carts ca
                 WHERE ca.cart_id = :cart_id
                 LIMIT 1;
@@ -452,7 +431,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             connection.execute(
                 sqlalchemy.text(mark_cart_checked_out_query),
                 {
-                    "checked_out_at": ut.Utils.get_current_in_game_time(),
+                    "checked_out_at": datetime.now(tz=ut.LOCAL_TIMEZONE),
                     "total_potions_bought": total_potions_bought,
                     "total_gold_paid": total_gold_paid,
                     "payment": cart_checkout.payment,
