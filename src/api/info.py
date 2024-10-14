@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from src.api import auth
@@ -12,9 +13,13 @@ class Timestamp(BaseModel):
     day: str
     hour: int
 
+logger = logging.getLogger(__name__)
+
 @router.post("/current_time")
 def post_time(timestamp: Timestamp):
     """
     Share current time.
     """
+    logger.debug(f"Current time: {timestamp}")
+
     return "OK"

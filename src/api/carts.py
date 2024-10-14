@@ -1,6 +1,5 @@
 import sqlalchemy
 import logging
-import json
 from src import database as db
 from src import utilities as ut
 from sqlalchemy import bindparam, JSON
