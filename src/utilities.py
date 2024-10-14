@@ -49,33 +49,23 @@ class Utils:
         Returns current in-game day and hour.
         """
         real_time = datetime.now(tz=LOCAL_TIMEZONE)
-        logger.debug(f"Real Time: {real_time}")
-
         adjusted_time = real_time + GAME_TIME_OFFSET
-        logger.debug(f"Adjusted Time (Real Time + Game Time Offset): {adjusted_time}")
-
         EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
         delta = adjusted_time - EPOCH
         total_hours = int(delta.total_seconds() // 3600)
-        logger.debug(f"Total Hours since EPOCH: {total_hours}")
-
         in_game_day_index = (total_hours // 24) % DAYS_PER_WEEK
         in_game_day = IN_GAME_DAYS[in_game_day_index]
-        logger.debug(f"In-Game Day Index: {in_game_day_index}, In-Game Day: {in_game_day}")
 
         # Apply Even/Odd Rounding Logic
         if adjusted_time.hour % 2 == 1:
             # Odd hour: round up to next even hour
             rounded_time = (adjusted_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-            logger.debug(f"Rounded Time (Odd Hour, Rounded Up): {rounded_time}")
         else:
             # Even hour: round down to same hour
             rounded_time = adjusted_time.replace(minute=0, second=0, microsecond=0)
-            logger.debug(f"Rounded Time (Even Hour, Rounded Down): {rounded_time}")
 
         # Update in-game hour
         in_game_hour = rounded_time.hour
-        logger.debug(f"In-Game Hour: {in_game_hour}")
 
         # Check if day changes due to rounding
         if rounded_time.date() != adjusted_time.date():
@@ -83,7 +73,6 @@ class Utils:
             in_game_day = IN_GAME_DAYS[in_game_day_index]
             logger.debug(f"Day changed after rounding. New In-Game Day Index: {in_game_day_index}, In-Game Day: {in_game_day}")
 
-        logger.info(f"Current In-Game Time: {in_game_day}, {in_game_hour}:00")
         return in_game_day, in_game_hour
     
 
@@ -93,33 +82,23 @@ class Utils:
         Returns in-game day and hour ticks_ahead hours from now.
         """
         total_ticks_ahead = TICKS_AHEAD + ticks_ahead
-        logger.debug(f"Total Ticks Ahead (Current Offset + Requested): {total_ticks_ahead}")
-
         future_time = datetime.now(tz=LOCAL_TIMEZONE) + timedelta(hours=TICK_HOURS * total_ticks_ahead)
-        logger.debug(f"Future Time (Real Time + Total Ticks Ahead): {future_time}")
-
         EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
         delta = future_time - EPOCH
         total_hours = int(delta.total_seconds() // 3600)
-        logger.debug(f"Total Hours since EPOCH: {total_hours}")
-
         in_game_day_index = (total_hours // 24) % DAYS_PER_WEEK
         in_game_day = IN_GAME_DAYS[in_game_day_index]
-        logger.debug(f"In-Game Day Index: {in_game_day_index}, In-Game Day: {in_game_day}")
 
         # Apply Even/Odd Rounding Logic
         if future_time.hour % 2 == 1:
             # Odd hour: round up to next even hour
             rounded_time = (future_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-            logger.debug(f"Rounded Time (Odd Hour, Rounded Up): {rounded_time}")
         else:
             # Even hour: round down to same hour
             rounded_time = future_time.replace(minute=0, second=0, microsecond=0)
-            logger.debug(f"Rounded Time (Even Hour, Rounded Down): {rounded_time}")
 
         # Update in-game hour
         in_game_hour = rounded_time.hour
-        logger.debug(f"In-Game Hour: {in_game_hour}")
 
         # Check if day changes due to rounding
         if rounded_time.date() != future_time.date():
@@ -127,7 +106,6 @@ class Utils:
             in_game_day = IN_GAME_DAYS[in_game_day_index]
             logger.debug(f"Day changed after rounding. New In-Game Day Index: {in_game_day_index}, In-Game Day: {in_game_day}")
 
-        logger.info(f"Future In-Game Time (Ticks Ahead: {ticks_ahead}): {in_game_day}, {in_game_hour}:00")
         return in_game_day, in_game_hour
 
 
