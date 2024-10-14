@@ -2,6 +2,7 @@ import sqlalchemy
 import logging
 from src import database as db
 from src import utilities as ut
+from src import game_constants as gc
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
@@ -100,8 +101,8 @@ def get_capacity_plan():
             total_ml = inventory['total_ml'] or 0
 
             # Calculate capacities
-            potion_capacity_limit = potion_capacity_units * ut.POTION_CAPACITY_PER_UNIT
-            ml_capacity_limit = ml_capacity_units * ut.ML_CAPACITY_PER_UNIT
+            potion_capacity_limit = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
+            ml_capacity_limit = ml_capacity_units * gc.ML_CAPACITY_PER_UNIT
 
             # Calculate usage percentages
             potion_usage = (total_potions / potion_capacity_limit) if potion_capacity_limit > 0 else 0
@@ -150,22 +151,22 @@ def get_capacity_plan():
 
             # Calculate total cost
             total_capacity_units_to_buy = potion_capacity_to_buy + ml_capacity_to_buy
-            total_cost = total_capacity_units_to_buy * ut.CAPACITY_UNIT_COST
+            total_cost = total_capacity_units_to_buy * gc.CAPACITY_UNIT_COST
 
             # Adjust purchases if not enough gold
             if total_cost > gold:
                 logger.warning("Not enough gold to purchase both capacities. Adjusting purchase plan.")
-                if gold >= ut.CAPACITY_UNIT_COST:
+                if gold >= gc.CAPACITY_UNIT_COST:
                     # Can only afford one unit
                     if ml_capacity_to_buy == 1 and capacity_unit_diff >= 1:
                         # Prioritize ml capacity
                         potion_capacity_to_buy = 0
-                        total_cost = ut.CAPACITY_UNIT_COST
+                        total_cost = gc.CAPACITY_UNIT_COST
                         logger.info("Prioritizing ml capacity due to gold constraints and capacity unit difference.")
                     else:
                         # Prioritize potion capacity
                         ml_capacity_to_buy = 0
-                        total_cost = ut.CAPACITY_UNIT_COST
+                        total_cost = gc.CAPACITY_UNIT_COST
                         logger.info("Prioritizing potion capacity due to gold constraints.")
                 else:
                     # Cannot afford any capacity units
@@ -220,7 +221,7 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
 
             # Calculate total cost
             total_capacity_units_purchased = capacity_purchase.potion_capacity + capacity_purchase.ml_capacity
-            total_cost = total_capacity_units_purchased * ut.CAPACITY_UNIT_COST
+            total_cost = total_capacity_units_purchased * gc.CAPACITY_UNIT_COST
 
             if total_cost > gold:
                 logger.error(f"Insufficient gold to purchase capacities. Gold available: {gold}, Total cost: {total_cost}")

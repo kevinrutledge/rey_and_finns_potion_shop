@@ -3,8 +3,8 @@ import logging
 import math
 from src.api import auth
 from src import database as db
-from src import game_constants as gc
 from src import utilities as ut
+from src import game_constants as gc
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, validator
 from typing import List, Dict
@@ -59,7 +59,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 'blue_ml': global_inventory['blue_ml'],
                 'dark_ml': global_inventory['dark_ml'],
             }
-            potion_capacity_limit = potion_capacity_units * ut.POTION_CAPACITY_PER_UNIT
+            potion_capacity_limit = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
             total_potions = global_inventory['total_potions']
 
             # Fetch potion recipes
@@ -201,7 +201,7 @@ def get_bottle_plan():
                 'blue_ml': global_inventory['blue_ml'],
                 'dark_ml': global_inventory['dark_ml'],
             }
-            potion_capacity_limit = potion_capacity_units * ut.POTION_CAPACITY_PER_UNIT
+            potion_capacity_limit = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
             total_potions = global_inventory['total_potions']
 
             # Fetch current potions

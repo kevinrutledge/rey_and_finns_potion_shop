@@ -65,7 +65,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             current_gold = inventory['gold']
             current_total_ml = inventory['total_ml']
             ml_capacity_units = inventory['ml_capacity_units']
-            ml_capacity_limit = ml_capacity_units * ut.ML_CAPACITY_PER_UNIT
+            ml_capacity_limit = ml_capacity_units * gc.ML_CAPACITY_PER_UNIT
 
             logger.debug(f"Current Gold: {current_gold}, Total ML: {current_total_ml}, ML Capacity Limit: {ml_capacity_limit}")
 
@@ -235,7 +235,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 'blue_ml': global_inventory['blue_ml'],
                 'dark_ml': global_inventory['dark_ml'],
             }
-            ml_capacity_limit = ml_capacity_units * ut.ML_CAPACITY_PER_UNIT
+            ml_capacity_limit = ml_capacity_units * gc.ML_CAPACITY_PER_UNIT
 
             logger.debug(f"Global Inventory: {global_inventory}")
 

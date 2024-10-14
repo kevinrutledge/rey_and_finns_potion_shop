@@ -2,7 +2,7 @@ import sqlalchemy
 import logging
 from src import database as db
 from src import utilities as ut
-from src.game_constants import POTION_PRIORITIES
+from src import game_constants as gc
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -43,7 +43,7 @@ def get_catalog():
 
             potion_capacity_units = global_inventory['potion_capacity_units']
             total_potions = global_inventory['total_potions']
-            potion_capacity_limit = potion_capacity_units * ut.POTION_CAPACITY_PER_UNIT
+            potion_capacity_limit = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
 
             # Determine current in-game time
             current_day, current_hour = ut.Utils.get_current_in_game_time()
