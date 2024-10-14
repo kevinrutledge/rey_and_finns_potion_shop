@@ -54,7 +54,7 @@ def get_catalog():
             logger.info(f"Selected pricing strategy: {pricing_strategy}")
 
             # Get potion priorities for current day and pricing strategy
-            potion_priorities = POTION_PRIORITIES[current_day][pricing_strategy]
+            potion_priorities = gc.POTION_PRIORITIES[current_day][pricing_strategy]
             logger.debug(f"Potion priorities for {current_day} and strategy {pricing_strategy}: {potion_priorities}")
 
             # Fetch all potions with current_quantity > 0
