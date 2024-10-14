@@ -1,19 +1,15 @@
 import math
+import sqlalchemy
 import logging
+from src import database as db
+from src import game_constants as gc
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Tuple
 from typing import List, Dict
 from pydantic import BaseModel
-from src.potions import POTION_PRIORITIES, DEFAULT_POTIONS
 
 logger = logging.getLogger(__name__)
-
-# Constants for capacity calculations
-POTION_CAPACITY_PER_UNIT = 50       # Each potion capacity unit allows storage of 50 potions
-ML_CAPACITY_PER_UNIT = 10000        # Each ML capacity unit allows storage of 10000 ml
-CAPACITY_UNIT_COST = 1000           # Cost per capacity unit in gold
-DAYS_PER_WEEK = 7                   # Days of week constant
 
 # Game time adjustment constants
 TICK_HOURS = 2
@@ -21,15 +17,6 @@ TICKS_AHEAD = 3
 GAME_TIME_OFFSET = timedelta(hours=TICK_HOURS * TICKS_AHEAD)
 
 LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
-IN_GAME_DAYS = [
-    "Hearthday",
-    "Crownday",
-    "Blesseday",
-    "Soulday",
-    "Edgeday",
-    "Bloomday",
-    "Aracanaday"
-]
 
 class Barrel(BaseModel):
     sku: str
@@ -48,32 +35,28 @@ class Utils:
         """
         Returns current in-game day and hour.
         """
-        real_time = datetime.now(tz=LOCAL_TIMEZONE)
-        adjusted_time = real_time + GAME_TIME_OFFSET
-        EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
-        delta = adjusted_time - EPOCH
-        total_hours = int(delta.total_seconds() // 3600)
-        in_game_day_index = (total_hours // 24) % DAYS_PER_WEEK
-        in_game_day = IN_GAME_DAYS[in_game_day_index]
-
-        # Apply Even/Odd Rounding Logic
-        if adjusted_time.hour % 2 == 1:
-            # Odd hour: round up to next even hour
-            rounded_time = (adjusted_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-        else:
-            # Even hour: round down to same hour
-            rounded_time = adjusted_time.replace(minute=0, second=0, microsecond=0)
-
-        # Update in-game hour
-        in_game_hour = rounded_time.hour
-
-        # Check if day changes due to rounding
-        if rounded_time.date() != adjusted_time.date():
-            in_game_day_index = (in_game_day_index + 1) % DAYS_PER_WEEK
-            in_game_day = IN_GAME_DAYS[in_game_day_index]
-            logger.debug(f"Day changed after rounding. New In-Game Day Index: {in_game_day_index}, In-Game Day: {in_game_day}")
-
-        return in_game_day, in_game_hour
+        try:
+            with db.engine.begin() as connection:
+                query = """
+                    SELECT in_game_day, in_game_hour
+                    FROM in_game_time
+                    ORDER BY created_at DESC
+                    LIMIT 1;
+                """
+                logger.debug(f"Executing query to fetch latest in-game time: {query.strip()}")
+                result = connection.execute(sqlalchemy.text(query))
+                row = result.fetchone()
+                if row:
+                    in_game_day = row['in_game_day']
+                    in_game_hour = row['in_game_hour']
+                    logger.debug(f"Fetched in-game time from DB: Day: {in_game_day}, Hour: {in_game_hour}")
+                    return in_game_day, in_game_hour
+                else:
+                    logger.error("No in-game time found in database.")
+                    raise ValueError("No in-game time found in database.")
+        except Exception as e:
+            logger.exception(f"Exception in get_latest_in_game_time_from_db: {e}")
+            raise
     
 
     @staticmethod
@@ -86,8 +69,8 @@ class Utils:
         EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
         delta = future_time - EPOCH
         total_hours = int(delta.total_seconds() // 3600)
-        in_game_day_index = (total_hours // 24) % DAYS_PER_WEEK
-        in_game_day = IN_GAME_DAYS[in_game_day_index]
+        in_game_day_index = (total_hours // 24) % gc.DAYS_PER_WEEK
+        in_game_day = gc.IN_GAME_DAYS[in_game_day_index]
 
         # Apply Even/Odd Rounding Logic
         if future_time.hour % 2 == 1:
@@ -102,8 +85,8 @@ class Utils:
 
         # Check if day changes due to rounding
         if rounded_time.date() != future_time.date():
-            in_game_day_index = (in_game_day_index + 1) % DAYS_PER_WEEK
-            in_game_day = IN_GAME_DAYS[in_game_day_index]
+            in_game_day_index = (in_game_day_index + 1) % gc.DAYS_PER_WEEK
+            in_game_day = gc.IN_GAME_DAYS[in_game_day_index]
             logger.debug(f"Day changed after rounding. New In-Game Day Index: {in_game_day_index}, In-Game Day: {in_game_day}")
 
         return in_game_day, in_game_hour
@@ -135,7 +118,7 @@ class Utils:
         Calculates desired potion quantities based on capacity and pricing strategy.
         """
         desired_potions = {}
-        total_capacity = potion_capacity_units * POTION_CAPACITY_PER_UNIT
+        total_capacity = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
         total_potions_current = sum(current_potions.values())
         capacity_remaining = total_capacity - total_potions_current
 

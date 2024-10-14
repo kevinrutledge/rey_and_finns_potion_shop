@@ -3,7 +3,7 @@ import logging
 import math
 from src.api import auth
 from src import database as db
-from src import potions as po
+from src import game_constants as gc
 from src import utilities as ut
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, validator
@@ -64,7 +64,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
             # Fetch potion recipes
             potion_recipes = {}
-            for potion in po.DEFAULT_POTIONS:
+            for potion in gc.DEFAULT_POTIONS:
                 potion_type = ut.Utils.normalize_potion_type([
                     potion['red_ml'],
                     potion['green_ml'],
@@ -222,7 +222,7 @@ def get_bottle_plan():
         logger.info(f"Selected pricing strategy: {pricing_strategy}")
 
         # Get potion priorities for future day and pricing strategy
-        potion_priorities = po.POTION_PRIORITIES[future_day][pricing_strategy]
+        potion_priorities = gc.POTION_PRIORITIES[future_day][pricing_strategy]
         logger.debug(f"Potion priorities for {future_day} and strategy {pricing_strategy}: {potion_priorities}")
 
         # Calculate desired potion quantities
@@ -234,7 +234,7 @@ def get_bottle_plan():
         )
 
         # Get potion recipes
-        potion_recipes = {p['name']: p for p in po.DEFAULT_POTIONS}
+        potion_recipes = {p['name']: p for p in gc.DEFAULT_POTIONS}
 
         # Generate bottle plan
         bottle_plan = ut.Utils.get_bottle_plan(

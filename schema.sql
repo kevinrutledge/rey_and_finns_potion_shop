@@ -117,3 +117,11 @@ CREATE TABLE ledger_entries (
     description TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Create in_game_time Table
+CREATE TABLE in_game_time (
+    time_id BIGSERIAL PRIMARY KEY,
+    in_game_day TEXT NOT NULL,
+    in_game_hour INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

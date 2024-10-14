@@ -2,7 +2,7 @@ import sqlalchemy
 import logging
 import traceback
 from src import database as db
-from src import potions as po
+from src import game_constants as gc
 from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel
 from src.api import auth
@@ -186,7 +186,7 @@ def reset():
                 VALUES (:sku, :name, :red_ml, :green_ml, :blue_ml, :dark_ml, :total_ml, :price, :description, :current_quantity);
             """
             logger.debug(f"Preparing to insert default potions.")
-            for potion in po.DEFAULT_POTIONS:
+            for potion in gc.DEFAULT_POTIONS:
                 logger.debug(f"Inserting potion: {potion}")
                 connection.execute(
                     sqlalchemy.text(insert_potions_query),

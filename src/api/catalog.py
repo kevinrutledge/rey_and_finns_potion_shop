@@ -2,7 +2,7 @@ import sqlalchemy
 import logging
 from src import database as db
 from src import utilities as ut
-from src.potions import POTION_PRIORITIES
+from src.game_constants import POTION_PRIORITIES
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List

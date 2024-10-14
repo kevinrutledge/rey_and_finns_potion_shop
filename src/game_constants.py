@@ -1,3 +1,41 @@
+"""
+Game Constants and Configuration
+
+This module contains constant values and configurations used throughout Potion Exchange application.
+Includes definitions for default potions, pricing strategies, and in-game time schedules.
+"""
+
+from typing import List, Dict
+
+
+# Constants for capacity calculations
+POTION_CAPACITY_PER_UNIT = 50       # Each potion capacity unit allows storage of 50 potions
+ML_CAPACITY_PER_UNIT = 10000        # Each ML capacity unit allows storage of 10000 ml
+CAPACITY_UNIT_COST = 1000           # Cost per capacity unit in gold
+DAYS_PER_WEEK = 7                   # Days of week constant
+
+# Define days of week in Potion Exchange world
+IN_GAME_DAYS = [
+    "Hearthday",
+    "Crownday",
+    "Blesseday",
+    "Soulday",
+    "Edgeday",
+    "Bloomday",
+    "Aracanaday"
+]
+
+# Define in-game hours for each day (ticks every 2 hours)
+DAYS_AND_HOURS: Dict[str, List[int]] = {
+    "Hearthday": [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22],
+    "Crownday": [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22],
+    "Blesseday": [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22],
+    "Soulday": [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22],
+    "Edgeday": [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22],
+    "Bloomday": [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22],
+    "Aracanaday": [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]
+}
+
 # Defined default potions
 DEFAULT_POTIONS = [
     {
@@ -156,7 +194,7 @@ Each day contains different pricing strategies based on storage capacities:
 3. PRICE_STRATEGY_TIERED (100 - 200 potions and 20000 - 40000 ml capacity)
 3. PRICE_STRATEGY_DYNAMIC (200 potions or more and 40000 or more ml capacity)
 
-Each strategy includes a list of potions with their composition and adjusted prices.
+Each strategy includes list of potions with their composition and adjusted prices.
 """
 POTION_PRIORITIES = {
     "Hearthday": {

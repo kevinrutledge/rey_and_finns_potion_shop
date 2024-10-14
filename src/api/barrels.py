@@ -3,7 +3,7 @@ import logging
 import json
 from src import database as db
 from src import utilities as ut
-from src import potions as po
+from src import game_constants as gc
 from src.api import auth
 from sqlalchemy import bindparam, JSON
 from fastapi import APIRouter, Depends, HTTPException
@@ -258,7 +258,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         logger.info(f"Selected pricing strategy: {pricing_strategy}")
 
         # Get potion priorities for future day and strategy
-        potion_priorities = po.POTION_PRIORITIES[future_day][pricing_strategy]
+        potion_priorities = gc.POTION_PRIORITIES[future_day][pricing_strategy]
         logger.debug(f"Potion priorities for {future_day} and strategy {pricing_strategy}: {potion_priorities}")
 
         # Calculate desired potion quantities
@@ -270,7 +270,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         )
 
         # Get potion recipes from DEFAULT_POTIONS
-        potion_recipes = {p['name']: p for p in po.DEFAULT_POTIONS}
+        potion_recipes = {p['name']: p for p in gc.DEFAULT_POTIONS}
 
         # Calculate ml needed per color to meet desired potion quantities
         ml_needed = ut.Utils.calculate_ml_needed(
