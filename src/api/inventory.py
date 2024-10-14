@@ -115,7 +115,7 @@ def get_capacity_plan():
             potion_capacity_to_buy = 0
             ml_capacity_to_buy = 0
 
-            # Implementing the purchasing strategy based on your requirements
+            # TODO: Implement purchasing logic per PRICE_STRATEGY
             if gold >= 2000:
                 if capacity_unit_diff <= 0:
                     # Potion capacity units less than or equal to ml capacity units
