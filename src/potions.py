@@ -161,10 +161,10 @@ Each strategy includes a list of potions with their composition and adjusted pri
 POTION_PRIORITIES = {
     "Hearthday": {
         "PRICE_STRATEGY_SKIMMING": [
-            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
-            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
-            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
+            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
+            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
+            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
             {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price": 50}
         ],
