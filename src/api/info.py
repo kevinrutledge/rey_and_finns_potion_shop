@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from src.api import auth
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/info",
     tags=["info"],
@@ -13,7 +15,6 @@ class Timestamp(BaseModel):
     day: str
     hour: int
 
-logger = logging.getLogger(__name__)
 
 @router.post("/current_time")
 def post_time(timestamp: Timestamp):
