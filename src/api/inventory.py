@@ -16,8 +16,8 @@ router = APIRouter(
 )
 
 class CapacityPurchase(BaseModel):
-    status: str
-    total_cost: int
+    potion_capacity: int
+    ml_capacity: int
 
 @router.get("/audit", summary="Audit Inventory", description="Retrieve current state of global inventory.")
 def get_inventory():
@@ -109,54 +109,74 @@ def get_capacity_plan():
 
             logger.debug(f"Potion usage: {potion_usage*100:.2f}%, ML usage: {ml_usage*100:.2f}%")
 
-            # Determine if we need to purchase more capacity
+            # Determine capacity unit difference
+            capacity_unit_diff = potion_capacity_units - ml_capacity_units
+
             potion_capacity_to_buy = 0
             ml_capacity_to_buy = 0
-            threshold = 0.5  # 50%
 
-            if potion_usage >= threshold and gold >= ut.CAPACITY_UNIT_COST:
-                # Purchase additional capacity units incrementally
-                potion_capacity_to_buy = 1
-                logger.info("Potion capacity usage exceeded 50%. Planning to purchase additional potion capacity.")
-
-            if ml_usage >= threshold and gold >= ut.CAPACITY_UNIT_COST:
-                ml_capacity_to_buy = 1
-                logger.info("ML capacity usage exceeded 50%. Planning to purchase additional ML capacity.")
+            # Implementing the purchasing strategy based on your requirements
+            if gold >= 2000:
+                if capacity_unit_diff <= 0:
+                    # Potion capacity units less than or equal to ml capacity units
+                    potion_capacity_to_buy = 1
+                    logger.info("Gold > 2000 and capacity units equal or potion less. Purchasing potion capacity.")
+                elif capacity_unit_diff >= 1:
+                    # Potion capacity units exceed ml capacity units
+                    ml_capacity_to_buy = 1
+                    logger.info("Gold > 2000 and potion capacity units exceed ml by 1 or more. Purchasing ml capacity.")
+            elif gold >= 1300:
+                if potion_usage >= 0.5 or ml_usage >= 0.5:
+                    if capacity_unit_diff <= 0:
+                        potion_capacity_to_buy = 1
+                        logger.info("Gold > 1300, usage >= 50%, capacity units equal or potion less. Purchasing potion capacity.")
+                    elif capacity_unit_diff >= 1:
+                        ml_capacity_to_buy = 1
+                        logger.info("Gold > 1300, usage >= 50%, potion capacity units exceed ml. Purchasing ml capacity.")
+            elif gold >= 1000:
+                if potion_usage >= 0.5 and ml_usage >= 0.5:
+                    if capacity_unit_diff <= 0:
+                        potion_capacity_to_buy = 1
+                        logger.info("Gold >= 1000, both usage >= 50%, capacity units equal or potion less. Purchasing potion capacity.")
+                    elif capacity_unit_diff >=1:
+                        ml_capacity_to_buy = 1
+                        logger.info("Gold >= 1000, both usage >= 50%, potion capacity units exceed ml. Purchasing ml capacity.")
 
             # Calculate total cost
             total_capacity_units_to_buy = potion_capacity_to_buy + ml_capacity_to_buy
             total_cost = total_capacity_units_to_buy * ut.CAPACITY_UNIT_COST
 
+            # Adjust purchases if not enough gold
             if total_cost > gold:
-                # Adjust purchases if not enough gold
+                logger.warning("Not enough gold to purchase both capacities. Adjusting purchase plan.")
                 if gold >= ut.CAPACITY_UNIT_COST:
-                    if potion_capacity_to_buy and gold >= ut.CAPACITY_UNIT_COST:
-                        potion_capacity_to_buy = 1
-                        ml_capacity_to_buy = 0
-                        total_cost = ut.CAPACITY_UNIT_COST
-                    elif ml_capacity_to_buy and gold >= ut.CAPACITY_UNIT_COST:
-                        ml_capacity_to_buy = 1
+                    # Can only afford one unit
+                    if ml_capacity_to_buy == 1 and capacity_unit_diff >= 1:
+                        # Prioritize ml capacity
                         potion_capacity_to_buy = 0
                         total_cost = ut.CAPACITY_UNIT_COST
+                        logger.info("Prioritizing ml capacity due to gold constraints and capacity unit difference.")
                     else:
-                        potion_capacity_to_buy = 0
+                        # Prioritize potion capacity
                         ml_capacity_to_buy = 0
-                        total_cost = 0
+                        total_cost = ut.CAPACITY_UNIT_COST
+                        logger.info("Prioritizing potion capacity due to gold constraints.")
                 else:
+                    # Cannot afford any capacity units
                     potion_capacity_to_buy = 0
                     ml_capacity_to_buy = 0
                     total_cost = 0
-                logger.warning("Adjusted capacity purchase plan due to insufficient gold.")
+                    logger.warning("Insufficient gold to purchase any capacity units.")
+
+            logger.debug(f"Final capacity units to buy: Potion={potion_capacity_to_buy}, ML={ml_capacity_to_buy}, Total cost: {total_cost}")
+            return {
+                "potion_capacity": potion_capacity_to_buy,
+                "ml_capacity": ml_capacity_to_buy
+            }
 
     except Exception as e:
         logger.exception(f"Unhandled exception in get_capacity_plan: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
-    logger.debug(f"Total capacity units to buy: {total_capacity_units_to_buy}, Total cost: {total_cost}")
-    return {
-        "potion_capacity": potion_capacity_to_buy,
-        "ml_capacity": ml_capacity_to_buy
-    }
 
 
 # Gets called once a day
@@ -223,6 +243,9 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
             )
             logger.info(f"Updated capacities and deducted gold. New potion capacity units: {new_potion_capacity_units}, New ml capacity units: {new_ml_capacity_units}, New gold: {new_gold}")
             
+    except HTTPException as he:
+        logger.error(f"HTTPException in deliver_capacity_plan: {he.detail}")
+        raise he
     except Exception as e:
         logger.exception(f"Unhandled exception in deliver_capacity_plan: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
