@@ -45,7 +45,7 @@ class Utils:
                 """
                 logger.debug(f"Executing query to fetch latest in-game time: {query.strip()}")
                 result = connection.execute(sqlalchemy.text(query))
-                row = result.fetchone()
+                row = result.mappings().fetchone()
                 if row:
                     in_game_day = row['in_game_day']
                     in_game_hour = row['in_game_hour']
