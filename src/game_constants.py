@@ -5,7 +5,6 @@ from typing import List, Dict
 POTION_CAPACITY_PER_UNIT = 50       # Each potion capacity unit allows storage of 50 potions
 ML_CAPACITY_PER_UNIT = 10000        # Each ML capacity unit allows storage of 10000 ml
 CAPACITY_UNIT_COST = 1000           # Cost per capacity unit in gold
-DAYS_PER_WEEK = 7                   # Days of week constant
 
 # Define days of week in Potion Exchange world
 IN_GAME_DAYS = [
@@ -235,11 +234,11 @@ POTION_PRIORITIES = {
         ],
         "PRICE_STRATEGY_PENETRATION": [
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
+            {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
+            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
             {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
-            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50},
-            {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
-            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40}
+            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
         ],
         "PRICE_STRATEGY_TIERED": [
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 30},
