@@ -1,22 +1,10 @@
-import math
-import sqlalchemy
 import logging
-from src import database as db
 from src import game_constants as gc
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from typing import Tuple
 from typing import List, Dict
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-
-# Game time adjustment constants
-TICK_HOURS = 2
-TICKS_AHEAD = 3
-GAME_TIME_OFFSET = timedelta(hours=TICK_HOURS * TICKS_AHEAD)
-
-LOCAL_TIMEZONE = ZoneInfo("America/Los_Angeles")
 
 class Barrel(BaseModel):
     sku: str
@@ -30,37 +18,6 @@ class BarrelPurchase(BaseModel):
     quantity: int
 
 class Utils:
-    @staticmethod
-    def get_current_in_game_time() -> Tuple[str, int]:
-        """
-        Returns current in-game day and hour.
-        """
-        try:
-            with db.engine.begin() as connection:
-                # Get current in-game day and hour
-                query_game_time = """
-                    SELECT in_game_day, in_game_hour
-                    FROM in_game_time
-                    ORDER BY created_at DESC
-                    LIMIT 1;
-                """
-                logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
-                result = connection.execute(sqlalchemy.text(query_game_time))
-                row = result.mappings().fetchone()
-                if row:
-                    current_in_game_day = row['in_game_day']
-                    current_in_game_hour = row['in_game_hour']
-                else:
-                    logger.error("No in-game time found in database.")
-                    raise ValueError("No in-game time found in database.")
-                
-        except Exception as e:
-            logger.exception(f"Exception in get_latest_in_game_time_from_db: {e}")
-            raise
-
-        return current_in_game_day, current_in_game_hour
-    
-
     @staticmethod
     def get_future_in_game_time(current_in_game_day: str, current_in_game_hour: int, ticks_ahead: int) -> Tuple[str, int]:
         """
