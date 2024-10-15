@@ -200,12 +200,12 @@ POTION_PRIORITIES = {
             {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price": 50}
         ],
         "PRICE_STRATEGY_PENETRATION": [
-            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 35},
-            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 35},
-            {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 45},
-            {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 45},
-            {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price" : 45},
-            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 45}
+            {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
+            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
+            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
+            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50},
+            {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
+            {"name": "Cyan Potion", "composition": [0, 50, 50, 0], "price": 50}
         ],
         "PRICE_STRATEGY_TIERED": [
             {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 30},
@@ -234,12 +234,12 @@ POTION_PRIORITIES = {
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40}
         ],
         "PRICE_STRATEGY_PENETRATION": [
-            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 35},
-            {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price" : 45},
-            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price" : 35},
-            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price" : 45},
-            {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price" : 45},
-            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price" : 45}
+            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
+            {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
+            {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
+            {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50},
+            {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
+            {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40}
         ],
         "PRICE_STRATEGY_TIERED": [
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price" : 30},
