@@ -223,7 +223,6 @@ def create_cart(new_cart: Customer):
                     "customer_id": customer_id,
                     "in_game_day": current_in_game_day,
                     "in_game_hour": current_in_game_hour,
-                    "created_at": datetime.now(tz=ut.LOCAL_TIMEZONE),
                 },
             ).scalar()
             logger.debug(f"Inserted cart with cart_id={cart_id}")
@@ -309,7 +308,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                 # Update existing cart item
                 update_cart_item_query = """
                     UPDATE cart_items
-                    SET quantity = :quantity, line_item_total = :line_item_total, timestamp = :timestamp
+                    SET quantity = :quantity, line_item_total = :line_item_total, timestamp = NOW()
                     WHERE cart_item_id = :cart_item_id;
                 """
                 connection.execute(
@@ -317,7 +316,6 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                     {
                         "quantity": cart_item.quantity,
                         "line_item_total": total_cost,
-                        "timestamp": datetime.now(tz=ut.LOCAL_TIMEZONE),
                         "cart_item_id": existing_item["cart_item_id"],
                     },
                 )
@@ -337,7 +335,6 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                         "quantity": cart_item.quantity,
                         "price": price,
                         "line_item_total": total_cost,
-                        "timestamp": datetime.now(tz=ut.LOCAL_TIMEZONE),
                     },
                 ).scalar()
                 logger.info(f"Inserted new cart_item_id={cart_item_id} with quantity={cart_item.quantity}.")
