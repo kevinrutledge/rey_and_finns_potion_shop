@@ -35,7 +35,6 @@ def get_catalog():
                 ORDER BY created_at DESC
                 LIMIT 1;
             """
-            logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
             result = connection.execute(sqlalchemy.text(query_game_time))
             row = result.mappings().fetchone()
             if row:
