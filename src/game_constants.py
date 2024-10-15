@@ -1,10 +1,3 @@
-"""
-Game Constants and Configuration
-
-This module contains constant values and configurations used throughout Potion Exchange application.
-Includes definitions for default potions, pricing strategies, and in-game time schedules.
-"""
-
 from typing import List, Dict
 
 

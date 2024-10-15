@@ -180,6 +180,23 @@ def get_bottle_plan():
 
     try:
         with db.engine.begin() as connection:
+            # Get current in-game day and hour
+            query_game_time = """
+                SELECT in_game_day, in_game_hour
+                FROM in_game_time
+                ORDER BY created_at DESC
+                LIMIT 1;
+            """
+            logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
+            result = connection.execute(sqlalchemy.text(query_game_time))
+            row = result.mappings().fetchone()
+            if row:
+                current_in_game_day = row['in_game_day']
+                current_in_game_hour = row['in_game_hour']
+            else:
+                logger.error("No in-game time found in database.")
+                raise ValueError("No in-game time found in database.")
+
             # Fetch current inventory and capacities
             query = """
                 SELECT potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml, total_potions
@@ -214,7 +231,7 @@ def get_bottle_plan():
             current_potions = {row['name']: row['current_quantity'] for row in potions}
 
         # Determine future in-game time (3 ticks ahead)
-        future_day, future_hour = ut.Utils.get_future_in_game_time(ticks_ahead=3)
+        future_day, future_hour = ut.Utils.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=3)
         logger.info(f"Future in-game time: {future_day}, Hour: {future_hour}")
 
         # Select pricing strategy

@@ -37,59 +37,74 @@ class Utils:
         """
         try:
             with db.engine.begin() as connection:
-                query = """
+                # Get current in-game day and hour
+                query_game_time = """
                     SELECT in_game_day, in_game_hour
                     FROM in_game_time
                     ORDER BY created_at DESC
                     LIMIT 1;
                 """
-                logger.debug(f"Executing query to fetch latest in-game time: {query.strip()}")
-                result = connection.execute(sqlalchemy.text(query))
+                logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
+                result = connection.execute(sqlalchemy.text(query_game_time))
                 row = result.mappings().fetchone()
                 if row:
-                    in_game_day = row['in_game_day']
-                    in_game_hour = row['in_game_hour']
-                    logger.debug(f"Fetched in-game time from DB: Day: {in_game_day}, Hour: {in_game_hour}")
-                    return in_game_day, in_game_hour
+                    current_in_game_day = row['in_game_day']
+                    current_in_game_hour = row['in_game_hour']
                 else:
                     logger.error("No in-game time found in database.")
                     raise ValueError("No in-game time found in database.")
+                
         except Exception as e:
             logger.exception(f"Exception in get_latest_in_game_time_from_db: {e}")
             raise
+
+        return current_in_game_day, current_in_game_hour
     
 
     @staticmethod
-    def get_future_in_game_time(ticks_ahead: int) -> Tuple[str, int]:
+    def get_future_in_game_time(current_in_game_day: str, current_in_game_hour: int, ticks_ahead: int) -> Tuple[str, int]:
         """
         Returns in-game day and hour ticks_ahead hours from now.
         """
-        total_ticks_ahead = TICKS_AHEAD + ticks_ahead
-        future_time = datetime.now(tz=LOCAL_TIMEZONE) + timedelta(hours=TICK_HOURS * total_ticks_ahead)
-        EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=LOCAL_TIMEZONE)
-        delta = future_time - EPOCH
-        total_hours = int(delta.total_seconds() // 3600)
-        in_game_day_index = (total_hours // 24) % gc.DAYS_PER_WEEK
-        in_game_day = gc.IN_GAME_DAYS[in_game_day_index]
+        try:
+            # Validate current_in_game_day
+            if current_in_game_day not in gc.IN_GAME_DAYS:
+                logger.error(f"Invalid in-game day: {current_in_game_day}")
+                raise ValueError(f"Invalid in-game day: {current_in_game_day}")
 
-        # Apply Even/Odd Rounding Logic
-        if future_time.hour % 2 == 1:
-            # Odd hour: round up to next even hour
-            rounded_time = (future_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-        else:
-            # Even hour: round down to same hour
-            rounded_time = future_time.replace(minute=0, second=0, microsecond=0)
+            # Validate in_game_hour
+            hours_in_day = gc.DAYS_AND_HOURS[current_in_game_day]
+            if current_in_game_hour not in hours_in_day:
+                logger.error(f"Invalid in-game hour: {current_in_game_hour} for day {current_in_game_day}")
+                raise ValueError(f"Invalid in-game hour: {current_in_game_hour} for day {current_in_game_day}")
 
-        # Update in-game hour
-        in_game_hour = rounded_time.hour
+            # Get indices for day and hour
+            day_index = gc.IN_GAME_DAYS.index(current_in_game_day)
+            hour_index = hours_in_day.index(current_in_game_hour)
 
-        # Check if day changes due to rounding
-        if rounded_time.date() != future_time.date():
-            in_game_day_index = (in_game_day_index + 1) % gc.DAYS_PER_WEEK
-            in_game_day = gc.IN_GAME_DAYS[in_game_day_index]
-            logger.debug(f"Day changed after rounding. New In-Game Day Index: {in_game_day_index}, In-Game Day: {in_game_day}")
+            # Calculate total ticks
+            ticks_per_day = len(hours_in_day)
+            total_ticks = len(gc.IN_GAME_DAYS) * ticks_per_day
 
-        return in_game_day, in_game_hour
+            # Calculate current tick number
+            current_tick_number = day_index * ticks_per_day + hour_index
+
+            # Calculate future tick number
+            future_tick_number = (current_tick_number + ticks_ahead) % total_ticks
+
+            # Determine future day and hour indices
+            future_day_index = future_tick_number // ticks_per_day
+            future_hour_index = future_tick_number % ticks_per_day
+
+            # Get future day and hour
+            future_day = gc.IN_GAME_DAYS[future_day_index]
+            future_hour = gc.DAYS_AND_HOURS[future_day][future_hour_index]
+        
+        except Exception as e:
+            logger.exception(f"Exception in get_current_in_game_time: {e}")
+            raise
+
+        return future_day, future_hour
 
 
     @staticmethod

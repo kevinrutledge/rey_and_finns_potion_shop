@@ -28,6 +28,23 @@ def get_catalog():
     logger.info("GET /catalog/ endpoint called.")
     try:
         with db.engine.begin() as connection:
+            # Get current in-game day and hour
+            query_game_time = """
+                SELECT in_game_day, in_game_hour
+                FROM in_game_time
+                ORDER BY created_at DESC
+                LIMIT 1;
+            """
+            logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
+            result = connection.execute(sqlalchemy.text(query_game_time))
+            row = result.mappings().fetchone()
+            if row:
+                current_in_game_day = row['in_game_day']
+                current_in_game_hour = row['in_game_hour']
+            else:
+                logger.error("No in-game time found in database.")
+                raise ValueError("No in-game time found in database.")
+
             # Fetch current inventory and capacities
             query = """
                 SELECT potion_capacity_units, total_potions
@@ -45,17 +62,13 @@ def get_catalog():
             total_potions = global_inventory['total_potions']
             potion_capacity_limit = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
 
-            # Determine current in-game time
-            current_day, current_hour = ut.Utils.get_current_in_game_time()
-            logger.debug(f"Current In-Game Time - Day: {current_day}, Hour: {current_hour}")
-
             # Select pricing strategy based on potion capacity units
             pricing_strategy = ut.Utils.select_pricing_strategy(potion_capacity_units)
             logger.info(f"Selected pricing strategy: {pricing_strategy}")
 
             # Get potion priorities for current day and pricing strategy
-            potion_priorities = gc.POTION_PRIORITIES[current_day][pricing_strategy]
-            logger.debug(f"Potion priorities for {current_day} and strategy {pricing_strategy}: {potion_priorities}")
+            potion_priorities = gc.POTION_PRIORITIES[current_in_game_day][pricing_strategy]
+            logger.debug(f"Potion priorities for {current_in_game_day} and strategy {pricing_strategy}: {potion_priorities}")
 
             # Fetch all potions with current_quantity > 0
             query_potions = """

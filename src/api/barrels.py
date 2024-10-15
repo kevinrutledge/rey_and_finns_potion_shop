@@ -165,9 +165,24 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     try:
         with db.engine.begin() as connection:
-            # Get in-game day and hour
-            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
-            logger.info(f"In-game time: {in_game_day}, {in_game_hour}")
+            # Get current in-game day and hour
+            query_game_time = """
+                SELECT in_game_day, in_game_hour
+                FROM in_game_time
+                ORDER BY created_at DESC
+                LIMIT 1;
+            """
+            logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
+            result = connection.execute(sqlalchemy.text(query_game_time))
+            row = result.mappings().fetchone()
+            if row:
+                current_in_game_day = row['in_game_day']
+                current_in_game_hour = row['in_game_hour']
+            else:
+                logger.error("No in-game time found in database.")
+                raise ValueError("No in-game time found in database.")
+            
+            logger.info(f"In-game time: {current_in_game_day}, {current_in_game_hour}")
 
             # Convert wholesale_catalog to list of dicts
             wholesale_catalog_json = [barrel.dict() for barrel in wholesale_catalog]
@@ -183,8 +198,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 insert_barrel_visit_query,
                 {
                     "wholesale_catalog": wholesale_catalog_json,
-                    "in_game_day": in_game_day,
-                    "in_game_hour": in_game_hour
+                    "in_game_day": current_in_game_day,
+                    "in_game_hour": current_in_game_hour
                 }
             )
             barrel_visit_id = result.scalar()
@@ -207,8 +222,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         "potion_type": barrel.potion_type,
                         "price": barrel.price,
                         "quantity": barrel.quantity,
-                        "in_game_day": in_game_day,
-                        "in_game_hour": in_game_hour
+                        "in_game_day": current_in_game_day,
+                        "in_game_hour": current_in_game_hour
                     }
                 )
                 logger.debug(f"Inserted barrel with SKU: {barrel.sku}")
@@ -250,7 +265,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             total_potions = sum(current_potions.values())
 
         # Determine future in-game day and hour (4 ticks ahead)
-        future_day, future_hour = ut.Utils.get_future_in_game_time(ticks_ahead=4)
+        future_day, future_hour = ut.Utils.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=4)
         logger.info(f"Future in-game time (4 ticks ahead): {future_day}, Hour: {future_hour}")
 
         # Select pricing strategy based on potion capacity units

@@ -91,9 +91,22 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
     try:
         with db.engine.begin() as connection:
-            # Get in-game day and hour
-            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
-            logger.info(f"In-game time: {in_game_day}, {in_game_hour}")
+            # Get current in-game day and hour
+            query_game_time = """
+                SELECT in_game_day, in_game_hour
+                FROM in_game_time
+                ORDER BY created_at DESC
+                LIMIT 1;
+            """
+            logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
+            result = connection.execute(sqlalchemy.text(query_game_time))
+            row = result.mappings().fetchone()
+            if row:
+                current_in_game_day = row['in_game_day']
+                current_in_game_hour = row['in_game_hour']
+            else:
+                logger.error("No in-game time found in database.")
+                raise ValueError("No in-game time found in database.")
 
             # Convert customers to list of dicts
             customers_json = [customer.dict() for customer in customers]
@@ -110,8 +123,8 @@ def post_visits(visit_id: int, customers: list[Customer]):
                 {
                     "visit_id": visit_id,
                     "customers": customers_json,  # Pass as Python list
-                    "in_game_day": in_game_day,
-                    "in_game_hour": in_game_hour
+                    "in_game_day": current_in_game_day,
+                    "in_game_hour": current_in_game_hour
                 }
             )
             logger.info(f"Inserted customer_visit with visit_id: {visit_id}")
@@ -129,8 +142,8 @@ def post_visits(visit_id: int, customers: list[Customer]):
                         "customer_name": customer.customer_name,
                         "character_class": customer.character_class,
                         "level": customer.level,
-                        "in_game_day": in_game_day,
-                        "in_game_hour": in_game_hour
+                        "in_game_day": current_in_game_day,
+                        "in_game_hour": current_in_game_hour
                     }
                 )
                 logger.debug(f"Inserted customer: {customer.customer_name}")
@@ -156,6 +169,23 @@ def create_cart(new_cart: Customer):
 
     try:
         with db.engine.begin() as connection:
+            # Get current in-game day and hour
+            query_game_time = """
+                SELECT in_game_day, in_game_hour
+                FROM in_game_time
+                ORDER BY created_at DESC
+                LIMIT 1;
+            """
+            logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
+            result = connection.execute(sqlalchemy.text(query_game_time))
+            row = result.mappings().fetchone()
+            if row:
+                current_in_game_day = row['in_game_day']
+                current_in_game_hour = row['in_game_hour']
+            else:
+                logger.error("No in-game time found in database.")
+                raise ValueError("No in-game time found in database.")
+
             # Find existing customer
             find_customer_query = """
                 SELECT customer_id FROM customers
@@ -182,7 +212,6 @@ def create_cart(new_cart: Customer):
                 raise HTTPException(status_code=404, detail="Customer not found.")
 
             # Insert new cart into carts table
-            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
             insert_cart_query = """
                 INSERT INTO carts (customer_id, in_game_day, in_game_hour, created_at)
                 VALUES (:customer_id, :in_game_day, :in_game_hour, :created_at)
@@ -192,8 +221,8 @@ def create_cart(new_cart: Customer):
                 sqlalchemy.text(insert_cart_query),
                 {
                     "customer_id": customer_id,
-                    "in_game_day": in_game_day,
-                    "in_game_hour": in_game_hour,
+                    "in_game_day": current_in_game_day,
+                    "in_game_hour": current_in_game_hour,
                     "created_at": datetime.now(tz=ut.LOCAL_TIMEZONE),
                 },
             ).scalar()
@@ -334,6 +363,23 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
     try:
         with db.engine.begin() as connection:
+            # Get current in-game day and hour
+            query_game_time = """
+                SELECT in_game_day, in_game_hour
+                FROM in_game_time
+                ORDER BY created_at DESC
+                LIMIT 1;
+            """
+            logger.debug(f"Executing query to fetch latest in-game time: {query_game_time.strip()}")
+            result = connection.execute(sqlalchemy.text(query_game_time))
+            row = result.mappings().fetchone()
+            if row:
+                current_in_game_day = row['in_game_day']
+                current_in_game_hour = row['in_game_hour']
+            else:
+                logger.error("No in-game time found in database.")
+                raise ValueError("No in-game time found in database.")
+
             # Fetch cart details
             fetch_cart_query = """
                 SELECT ca.checked_out
@@ -365,10 +411,6 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 logger.error(f"No items found in cart_id={cart_id}.")
                 raise HTTPException(status_code=400, detail="Cart is empty.")
 
-            # Get in-game day and hour
-            in_game_day, in_game_hour = ut.Utils.get_current_in_game_time()
-            logger.info(f"In-game time: {in_game_day}, {in_game_hour}")
-
             total_potions_bought = 0
             total_gold_paid = 0
 
@@ -394,8 +436,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                     {
                         "price": price,
                         "line_item_total": line_item_total,
-                        "in_game_day": in_game_day,
-                        "in_game_hour": in_game_hour,
+                        "in_game_day": current_in_game_day,
+                        "in_game_hour": current_in_game_hour,
                         "cart_item_id": cart_item_id
                     }
                 )
