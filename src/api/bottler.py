@@ -1,6 +1,5 @@
 import sqlalchemy
 import logging
-import math
 from src.api import auth
 from src import database as db
 from src import utilities as ut
