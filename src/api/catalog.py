@@ -70,6 +70,22 @@ def get_catalog():
             potion_priorities = gc.POTION_PRIORITIES[current_in_game_day][pricing_strategy]
             logger.debug(f"Potion priorities for {current_in_game_day} and strategy {pricing_strategy}: {potion_priorities}")
 
+            # Update potion prices in the database
+            update_potion_price_query = """
+                UPDATE potions
+                SET price = :price
+                WHERE name = :name;
+            """
+            for potion in potion_priorities:
+                connection.execute(
+                    sqlalchemy.text(update_potion_price_query),
+                    {
+                        "price": potion["price"],
+                        "name": potion["name"],
+                    }
+                )
+                logger.debug(f"Updated price for potion {potion['name']} to {potion['price']}.")
+
             # Fetch all potions with current_quantity > 0
             query_potions = """
                 SELECT potion_id, sku, name, price, current_quantity,

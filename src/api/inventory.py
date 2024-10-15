@@ -201,10 +201,7 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
         with db.engine.begin() as connection:
             # Fetch current gold and capacities
             query = """
-                SELECT 
-                    gold,
-                    potion_capacity_units,
-                    ml_capacity_units
+                SELECT gold, potion_capacity_units, ml_capacity_units
                 FROM global_inventory
                 WHERE id = 1;
             """
@@ -214,41 +211,41 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
             if not inventory:
                 logger.error("Global inventory record not found.")
                 raise HTTPException(status_code=500, detail="Global inventory record not found.")
-            
-            gold = inventory['gold']
-            potion_capacity_units = inventory['potion_capacity_units']
-            ml_capacity_units = inventory['ml_capacity_units']
+
+            current_gold = inventory['gold']
+            current_potion_capacity_units = inventory['potion_capacity_units']
+            current_ml_capacity_units = inventory['ml_capacity_units']
+
+            logger.debug(f"Current gold: {current_gold}")
 
             # Calculate total cost
             total_capacity_units_purchased = capacity_purchase.potion_capacity + capacity_purchase.ml_capacity
             total_cost = total_capacity_units_purchased * gc.CAPACITY_UNIT_COST
 
-            if total_cost > gold:
-                logger.error(f"Insufficient gold to purchase capacities. Gold available: {gold}, Total cost: {total_cost}")
-                raise HTTPException(status_code=400, detail="Insufficient gold to purchase capacities.")
+            logger.debug(f"Total capacity units purchased: {total_capacity_units_purchased}, Total cost: {total_cost}")
 
-            # Update capacities and gold
-            new_potion_capacity_units = potion_capacity_units + capacity_purchase.potion_capacity
-            new_ml_capacity_units = ml_capacity_units + capacity_purchase.ml_capacity
-            new_gold = gold - total_cost
+            # Check if sufficient gold is available
+            if current_gold < total_cost:
+                logger.error(f"Insufficient gold. Available: {current_gold}, Required: {total_cost}")
+                raise HTTPException(status_code=400, detail="Insufficient gold to complete capacity purchase.")
 
-            update_query = """
+            # Update capacities and deduct gold
+            update_inventory_query = """
                 UPDATE global_inventory
-                SET
-                    potion_capacity_units = :new_potion_capacity_units,
-                    ml_capacity_units = :new_ml_capacity_units,
-                    gold = :new_gold
+                SET potion_capacity_units = potion_capacity_units + :potion_capacity,
+                    ml_capacity_units = ml_capacity_units + :ml_capacity,
+                    gold = gold - :total_cost
                 WHERE id = 1;
             """
             connection.execute(
-                sqlalchemy.text(update_query),
+                sqlalchemy.text(update_inventory_query),
                 {
-                    "new_potion_capacity_units": new_potion_capacity_units,
-                    "new_ml_capacity_units": new_ml_capacity_units,
-                    "new_gold": new_gold
+                    "potion_capacity": capacity_purchase.potion_capacity,
+                    "ml_capacity": capacity_purchase.ml_capacity,
+                    "total_cost": total_cost
                 }
             )
-            logger.info(f"Updated capacities and deducted gold. New potion capacity units: {new_potion_capacity_units}, New ml capacity units: {new_ml_capacity_units}, New gold: {new_gold}")
+            logger.info(f"Updated capacities and deducted gold. New potion capacity units: {current_potion_capacity_units + capacity_purchase.potion_capacity}, New ml capacity units: {current_ml_capacity_units + capacity_purchase.ml_capacity}, New gold: {current_gold - total_cost}")
             
     except HTTPException as he:
         logger.error(f"HTTPException in deliver_capacity_plan: {he.detail}")
