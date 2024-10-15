@@ -211,10 +211,9 @@ def create_cart(new_cart: Customer):
                 logger.error(f"Customer not found for name: {new_cart.customer_name}")
                 raise HTTPException(status_code=404, detail="Customer not found.")
 
-            # Insert new cart into carts table
             insert_cart_query = """
                 INSERT INTO carts (customer_id, in_game_day, in_game_hour, created_at)
-                VALUES (:customer_id, :in_game_day, :in_game_hour, :created_at)
+                VALUES (:customer_id, :in_game_day, :in_game_hour, NOW())
                 RETURNING cart_id;
             """
             cart_id = connection.execute(
