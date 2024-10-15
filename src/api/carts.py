@@ -323,7 +323,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                 # Insert new cart item
                 insert_cart_item_query = """
                     INSERT INTO cart_items (cart_id, potion_id, quantity, price, line_item_total, timestamp)
-                    VALUES (:cart_id, :potion_id, :quantity, :price, :line_item_total, NOW()))
+                    VALUES (:cart_id, :potion_id, :quantity, :price, :line_item_total, NOW())
                     RETURNING cart_item_id;
                 """
                 cart_item_id = connection.execute(
