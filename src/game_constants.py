@@ -226,9 +226,9 @@ POTION_PRIORITIES = {
     },
     "Crownday": {
         "PRICE_STRATEGY_SKIMMING": [
+            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
             {"name": "Red Potion", "composition": [100, 0, 0, 0], "price": 40},
             {"name": "Blue Potion", "composition": [0, 0, 100, 0], "price": 50},
-            {"name": "Green Potion", "composition": [0, 100, 0, 0], "price": 40},
             {"name": "Purple Potion", "composition": [50, 0, 50, 0], "price": 50},
             {"name": "Yellow Potion", "composition": [50, 50, 0, 0], "price": 50},
             {"name": "Dark Potion", "composition": [0, 0, 0, 100], "price": 50}
