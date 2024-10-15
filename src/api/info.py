@@ -24,7 +24,7 @@ def post_time(timestamp: Timestamp):
     Share current time and record it in database.
     """
     logger.info("Endpoint /info/current_time called.")
-    logger.debug(f"Received timestamp: current day: {timestamp.day}, current hour: timestamp.hour")
+    logger.debug(f"Current day: {timestamp.day}, current hour: {timestamp.hour}")
 
     try:
         with db.engine.begin() as connection:
