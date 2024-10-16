@@ -107,23 +107,31 @@ class Utils:
         # Initialize desired quantities with current quantities
         for potion in potions_to_consider:
             potion_name = potion["name"]
-            desired_potions[potion_name] = current_potions.get(potion_name, 0)
+            current_quantity = current_potions.get(potion_name, 0)
 
-        # Increment desired quantities in increments of 5
-        increment = 5
-        while capacity_remaining >= increment:
-            for potion in potions_to_consider:
-                potion_name = potion["name"]
-                desired_potions[potion_name] += increment
-                capacity_remaining -= increment
-                logger.debug(f"Potion: {potion_name}, Desired Qty: {desired_potions[potion_name]}, Capacity Remaining: {capacity_remaining}")
-                if capacity_remaining < increment:
-                    break
-            else:
+            # Skip potions with 30 or more in inventory**
+            if current_quantity >= 30:
+                logger.info(f"Skipping {potion_name} as it already has {current_quantity} in inventory.")
                 continue
-            break
 
-        logger.info(f"Desired potion quantities: {desired_potions}")
+            # Set desired quantity to reach 30
+            desired_quantity = min(30, current_quantity)
+            desired_potions[potion_name] = desired_quantity
+
+        # Distribute remaining capacity among desired potions
+        while capacity_remaining > 0 and desired_potions:
+            for potion_name in desired_potions:
+                current_quantity = current_potions.get(potion_name, 0)
+                if desired_potions[potion_name] < 30:
+                    desired_potions[potion_name] += 1
+                    capacity_remaining -= 1
+                    logger.debug(f"Incremented {potion_name} to {desired_potions[potion_name]}")
+                    if capacity_remaining <= 0:
+                        break
+            else:
+                break  # Break if no potions can be incremented further
+
+        logger.info(f"Desired potion quantities after capping at 30: {desired_potions}")
         return desired_potions
 
 
