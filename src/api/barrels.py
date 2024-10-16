@@ -254,12 +254,12 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
             # Fetch current potions
             query_potions = """
-                SELECT name, current_quantity
+                SELECT sku, current_quantity
                 FROM potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
-            current_potions = {row['name']: row['current_quantity'] for row in potions}
+            current_potions = {row['sku']: row['current_quantity'] for row in potions}
             total_potions = sum(current_potions.values())
 
         # Determine future in-game day and hour (4 ticks ahead)
@@ -283,7 +283,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         )
 
         # Get potion recipes from DEFAULT_POTIONS
-        potion_recipes = {p['name']: p for p in gc.DEFAULT_POTIONS}
+        potion_recipes = {p['sku']: p for p in gc.DEFAULT_POTIONS}
 
         # Calculate ml needed per color to meet desired potion quantities
         ml_needed = ut.Utils.calculate_ml_needed(

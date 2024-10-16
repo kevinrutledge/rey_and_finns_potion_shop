@@ -20,13 +20,6 @@ class PotionInventory(BaseModel):
     potion_type: list[int]
     quantity: int
 
-class BottlePlanItem(BaseModel):
-    potion_type: List[int]  # [red_ml, green_ml, blue_ml, dark_ml]
-    quantity: int
-
-class BottlePlanResponse(BaseModel):
-    plan: List[BottlePlanItem]
-
 
 @router.post("/deliver/{order_id}", summary="Deliver Bottles", description="Process delivery of bottles.")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
@@ -92,15 +85,15 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     logger.error(f"No matching potion found for potion_type {potion_type_normalized}")
                     raise HTTPException(status_code=400, detail=f"No matching potion found for potion_type {potion_type_normalized}")
 
-                potion_name = matching_potion['name']
+                potion_sku = matching_potion['sku']
 
                 # Check if we have enough ml to produce this potion
                 required_ml = {color: matching_potion[color] * quantity for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']}
 
                 for color in required_ml:
                     if current_ml[color] < required_ml[color]:
-                        logger.error(f"Insufficient {color} to produce {quantity} of {potion_name}")
-                        raise HTTPException(status_code=400, detail=f"Insufficient {color} to produce {quantity} of {potion_name}")
+                        logger.error(f"Insufficient {color} to produce {quantity} of {potion_sku}")
+                        raise HTTPException(status_code=400, detail=f"Insufficient {color} to produce {quantity} of {potion_sku}")
 
                 # Update ml_to_deduct
                 for color in required_ml:
@@ -108,10 +101,10 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     current_ml[color] -= required_ml[color]  # Update current_ml for subsequent checks
 
                 # Update potions_to_add
-                if potion_name in potions_to_add:
-                    potions_to_add[potion_name] += quantity
+                if potion_sku in potions_to_add:
+                    potions_to_add[potion_sku] += quantity
                 else:
-                    potions_to_add[potion_name] = quantity
+                    potions_to_add[potion_sku] = quantity
 
                 # Update total_potions
                 total_new_potions += quantity
@@ -142,17 +135,17 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
             )
 
             # Update potions table
-            for potion_name, quantity in potions_to_add.items():
+            for potion_sku, quantity in potions_to_add.items():
                 update_potion_query = """
                     UPDATE potions
                     SET current_quantity = current_quantity + :quantity
-                    WHERE name = :potion_name;
+                    WHERE sku = :potion_sku;
                 """
                 connection.execute(
                     sqlalchemy.text(update_potion_query),
                     {
                         "quantity": quantity,
-                        "potion_name": potion_name
+                        "potion_sku": potion_sku
                     }
                 )
             logger.info(f"Successfully processed delivery for order_id {order_id}.")
@@ -221,12 +214,12 @@ def get_bottle_plan():
 
             # Fetch current potions
             query_potions = """
-                SELECT name, current_quantity
+                SELECT sku, current_quantity
                 FROM potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
-            current_potions = {row['name']: row['current_quantity'] for row in potions}
+            current_potions = {row['sku']: row['current_quantity'] for row in potions}
 
         # Determine future in-game time (3 ticks ahead)
         future_day, future_hour = ut.Utils.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=3)
@@ -249,7 +242,7 @@ def get_bottle_plan():
         )
 
         # Get potion recipes
-        potion_recipes = {p['name']: p for p in gc.DEFAULT_POTIONS}
+        potion_recipes = {p['sku']: p for p in gc.DEFAULT_POTIONS}
 
         # Generate bottle plan
         bottle_plan = ut.Utils.get_bottle_plan(

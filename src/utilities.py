@@ -106,26 +106,26 @@ class Utils:
 
         # Initialize desired quantities with current quantities
         for potion in potions_to_consider:
-            potion_name = potion["name"]
-            current_quantity = current_potions.get(potion_name, 0)
+            potion_sku = potion["sku"]
+            current_quantity = current_potions.get(potion_sku, 0)
 
             # Skip potions with 30 or more in inventory**
             if current_quantity >= 30:
-                logger.info(f"Skipping {potion_name} as it already has {current_quantity} in inventory.")
+                logger.info(f"Skipping {potion_sku} as it already has {current_quantity} in inventory.")
                 continue
 
             # Set desired quantity to reach 30
             desired_quantity = min(30, current_quantity)
-            desired_potions[potion_name] = desired_quantity
+            desired_potions[potion_sku] = desired_quantity
 
         # Distribute remaining capacity among desired potions
         while capacity_remaining > 0 and desired_potions:
-            for potion_name in desired_potions:
-                current_quantity = current_potions.get(potion_name, 0)
-                if desired_potions[potion_name] < 30:
-                    desired_potions[potion_name] += 1
+            for potion_sku in desired_potions:
+                current_quantity = current_potions.get(potion_sku, 0)
+                if desired_potions[potion_sku] < 30:
+                    desired_potions[potion_sku] += 1
                     capacity_remaining -= 1
-                    logger.debug(f"Incremented {potion_name} to {desired_potions[potion_name]}")
+                    logger.debug(f"Incremented {potion_sku} to {desired_potions[potion_sku]}")
                     if capacity_remaining <= 0:
                         break
             else:
@@ -146,14 +146,14 @@ class Utils:
         """
         ml_needed = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
 
-        for potion_name, desired_quantity in desired_potions.items():
-            current_quantity = current_potions.get(potion_name, 0)
+        for potion_sku, desired_quantity in desired_potions.items():
+            current_quantity = current_potions.get(potion_sku, 0)
             quantity_needed = desired_quantity - current_quantity
             if quantity_needed > 0:
-                recipe = potion_recipes[potion_name]
+                recipe = potion_recipes[potion_sku]
                 for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
                     ml_needed[color] += recipe[color] * quantity_needed
-                logger.debug(f"Potion: {potion_name}, Qty Needed: {quantity_needed}, ML Needed: {ml_needed}")
+                logger.debug(f"Potion: {potion_sku}, Qty Needed: {quantity_needed}, ML Needed: {ml_needed}")
 
         logger.info(f"Total ml needed per color: {ml_needed}")
         return ml_needed
@@ -188,7 +188,7 @@ class Utils:
 
         # Define colors to consider based on capacity units
         colors_priority = ['red_ml', 'green_ml', 'blue_ml']
-        if ml_capacity_units >= 4 and pricing_strategy != "PRICE_STRATEGY_SKIMMING":
+        if ml_capacity_units >= 3 and pricing_strategy != "PRICE_STRATEGY_SKIMMING":
             colors_priority.append('dark_ml')
 
         for color_ml in colors_priority:
@@ -198,9 +198,9 @@ class Utils:
 
             logger.debug(f"Processing color {color_ml}. ML Shortfall: {ml_shortfall}")
 
-            # Exclude dark barrels when ml_capacity_units < 4
-            if ml_capacity_units < 4 and color_ml == 'dark_ml':
-                logger.info(f"Skipping Dark Barrels due to ml capacity units < 4")
+            # Exclude dark barrels when ml_capacity_units < 3
+            if ml_capacity_units < 3 and color_ml == 'dark_ml':
+                logger.info(f"Skipping Dark Barrels due to ml capacity units < 3")
                 continue
 
             # Determine barrel sizes to consider
@@ -272,15 +272,15 @@ class Utils:
 
         ml_available = current_ml.copy()
 
-        for potion_name, desired_quantity in desired_potions.items():
-            current_quantity = current_potions.get(potion_name, 0)
+        for potion_sku, desired_quantity in desired_potions.items():
+            current_quantity = current_potions.get(potion_sku, 0)
             quantity_needed = desired_quantity - current_quantity
 
             if quantity_needed <= 0:
                 continue  # No need to bottle this potion
 
             # Check if we have enough ml of each color
-            recipe = potion_recipes[potion_name]
+            recipe = potion_recipes[potion_sku]
             required_ml = {color: recipe[color] * quantity_needed for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']}
 
             # Adjust quantity_needed based on ml availability
@@ -319,7 +319,7 @@ class Utils:
                 'quantity': quantity_to_bottle
             })
 
-            logger.info(f"Planned to bottle {quantity_to_bottle} of {potion_name}.")
+            logger.info(f"Planned to bottle {quantity_to_bottle} of {potion_sku}.")
 
         logger.info(f"Final bottle plan: {potions_to_bottle}")
         return potions_to_bottle

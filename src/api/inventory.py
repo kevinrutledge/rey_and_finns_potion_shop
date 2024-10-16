@@ -36,8 +36,6 @@ def get_inventory():
                 FROM global_inventory
                 WHERE id = 1;
             """
-            logger.debug(f"Executing SQL Query: {query.strip()}")
-
             result = connection.execute(sqlalchemy.text(query))
             row = result.mappings().fetchone()
 
@@ -117,13 +115,13 @@ def get_capacity_plan():
             ml_capacity_to_buy = 0
 
             # TODO: Implement purchasing logic per PRICE_STRATEGY
-            if gold >= 4000:
+            if gold >= 5000:
                 if capacity_unit_diff <= 0:
                     # Potion capacity units less than or equal to ml capacity units
                     potion_capacity_to_buy = 1
                     ml_capacity_to_buy = 1
                     logger.info("Gold > 4000 and capacity units equal or potion less. Purchasing potion capacity.")
-            elif gold >= 2000:
+            elif gold >= 3000:
                 if capacity_unit_diff <= 0:
                     # Potion capacity units less than or equal to ml capacity units
                     potion_capacity_to_buy = 1
@@ -132,7 +130,7 @@ def get_capacity_plan():
                     # Potion capacity units exceed ml capacity units
                     ml_capacity_to_buy = 1
                     logger.info("Gold > 2000 and potion capacity units exceed ml by 1 or more. Purchasing ml capacity.")
-            elif gold >= 1300:
+            elif gold >= 2300:
                 if potion_usage >= 0.5 or ml_usage >= 0.5:
                     if capacity_unit_diff <= 0:
                         potion_capacity_to_buy = 1
@@ -140,7 +138,7 @@ def get_capacity_plan():
                     elif capacity_unit_diff >= 1:
                         ml_capacity_to_buy = 1
                         logger.info("Gold > 1300, usage >= 50%, potion capacity units exceed ml. Purchasing ml capacity.")
-            elif gold >= 1000:
+            elif gold >= 2000:
                 if potion_usage >= 0.5 and ml_usage >= 0.5:
                     if capacity_unit_diff <= 0:
                         potion_capacity_to_buy = 1

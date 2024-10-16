@@ -145,7 +145,6 @@ def post_visits(visit_id: int, customers: list[Customer]):
                         "in_game_hour": current_in_game_hour
                     }
                 )
-                logger.debug(f"Inserted customer: {customer.customer_name}")
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_visits: {he.detail}")

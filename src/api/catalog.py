@@ -73,17 +73,17 @@ def get_catalog():
             update_potion_price_query = """
                 UPDATE potions
                 SET price = :price
-                WHERE name = :name;
+                WHERE sku = :sku;
             """
             for potion in potion_priorities:
                 connection.execute(
                     sqlalchemy.text(update_potion_price_query),
                     {
                         "price": potion["price"],
-                        "name": potion["name"],
+                        "sku": potion["sku"],
                     }
                 )
-                logger.debug(f"Updated price for potion {potion['name']} to {potion['price']}.")
+                logger.debug(f"Updated price for potion {potion['sku']} to {potion['price']}.")
 
             # Fetch all potions with current_quantity > 0
             query_potions = """
@@ -92,7 +92,6 @@ def get_catalog():
                 FROM potions
                 WHERE current_quantity > 0;
             """
-            logger.debug(f"Executing SQL Query: {query_potions.strip()}")
             result = connection.execute(sqlalchemy.text(query_potions))
             all_available_potions = result.mappings().fetchall()
             logger.debug(f"Total Available Potions: {len(all_available_potions)}")
@@ -130,10 +129,10 @@ def get_catalog():
             catalog_limit = 6
 
             for priority_potion in potion_priorities:
-                # Match available potions based on name and composition
+                # Match available potions based on sku and composition
                 matching_potions = [
                     potion for potion in available_potions
-                    if potion["name"] == priority_potion["name"] and
+                    if potion["sku"] == priority_potion["sku"] and
                     potion["potion_type"] == priority_potion["composition"]
                 ]
 
