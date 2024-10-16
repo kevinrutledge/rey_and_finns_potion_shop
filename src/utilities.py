@@ -188,7 +188,7 @@ class Utils:
 
         # Define colors to consider based on capacity units
         colors_priority = ['red_ml', 'green_ml', 'blue_ml']
-        if ml_capacity_units >= 3 and pricing_strategy != "PRICE_STRATEGY_SKIMMING":
+        if ml_capacity_units >= 4 and pricing_strategy != "PRICE_STRATEGY_SKIMMING":
             colors_priority.append('dark_ml')
 
         for color_ml in colors_priority:
@@ -198,9 +198,9 @@ class Utils:
 
             logger.debug(f"Processing color {color_ml}. ML Shortfall: {ml_shortfall}")
 
-            # Exclude dark barrels when ml_capacity_units < 3
-            if ml_capacity_units < 3 and color_ml == 'dark_ml':
-                logger.info(f"Skipping Dark Barrels due to ml capacity units < 3")
+            # Exclude dark barrels when ml_capacity_units < 4
+            if ml_capacity_units < 4 and color_ml == 'dark_ml':
+                logger.info(f"Skipping Dark Barrels due to ml capacity units < 4")
                 continue
 
             # Determine barrel sizes to consider
