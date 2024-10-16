@@ -490,6 +490,13 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
             logger.info(f"Cart {cart_id} checked out successfully. Total potions: {total_potions_bought}, Total gold: {total_gold_paid}")
 
+            # Fetch and log updated gold. TODO Delete this check once ledgers is implemented.
+            global_inventory_gold = connection.execute(
+                sqlalchemy.text("SELECT gold FROM global_inventory WHERE id = 1;")
+            )
+            updated_gold = global_inventory_gold.scalar()
+            logger.info(f"Updated global_inventory.gold to {updated_gold} after checkout.")
+
         response = {
             "total_potions_bought": total_potions_bought,
             "total_gold_paid": total_gold_paid,
