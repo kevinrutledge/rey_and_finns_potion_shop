@@ -285,17 +285,17 @@ POTION_PRIORITIES = {
     },
     "Soulday": {
         "PRICE_STRATEGY_SKIMMING": [
-            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40},
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40}
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 55},
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 45},
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 45}
         ],
         "PRICE_STRATEGY_PENETRATION": [
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 45},
-            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price" : 35},
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price" : 35},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 35},
-            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price" : 45},
-            {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price": 45}
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price" : 45},
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 45},
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price" : 55},
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price" : 45},
+            {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price": 45},
+            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 45}
         ],
         "PRICE_STRATEGY_TIERED": [
             {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40},
