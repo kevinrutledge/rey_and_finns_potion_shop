@@ -115,7 +115,7 @@ class Utils:
                 continue
 
             # Set desired quantity to reach 30
-            desired_quantity = min(30, current_quantity)
+            desired_quantity = 20
             desired_potions[potion_sku] = desired_quantity
 
         # Distribute remaining capacity among desired potions
