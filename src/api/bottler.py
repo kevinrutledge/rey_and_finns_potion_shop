@@ -2,11 +2,10 @@ import sqlalchemy
 import logging
 from src.api import auth
 from src import database as db
-from src import utilities as ut
-from src import game_constants as gc
+from src import potion_utilities as pu
+from src import potion_config as pc
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, validator
-from typing import List, Dict
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -31,124 +30,89 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
     try:
         with db.engine.begin() as connection:
-            # Fetch current inventory and capacities
-            query = """
-                SELECT potion_capacity_units, red_ml, green_ml, blue_ml, dark_ml, total_potions
-                FROM global_inventory
-                WHERE id = 1;
+            # Fetch bottling order corresponding to order_id
+            query_order = """
+                SELECT bottling_plan, status
+                FROM bottling_orders
+                WHERE order_id = :order_id;
             """
-            result = connection.execute(sqlalchemy.text(query))
-            global_inventory = result.mappings().fetchone()
+            result = connection.execute(sqlalchemy.text(query_order), {'order_id': order_id})
+            order = result.mappings().fetchone()
 
-            if not global_inventory:
-                logger.error("Global inventory record not found.")
-                raise HTTPException(status_code=500, detail="Global inventory record not found.")
+            if not order:
+                logger.error(f"Bottling order with order_id {order_id} not found.")
+                raise HTTPException(status_code=400, detail=f"Bottling order with order_id {order_id} not found.")
 
-            potion_capacity_units = global_inventory['potion_capacity_units']
-            current_ml = {
-                'red_ml': global_inventory['red_ml'],
-                'green_ml': global_inventory['green_ml'],
-                'blue_ml': global_inventory['blue_ml'],
-                'dark_ml': global_inventory['dark_ml'],
-            }
-            potion_capacity_limit = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
-            total_potions = global_inventory['total_potions']
+            if order['status'] != 'pending':
+                logger.error(f"Bottling order with order_id {order_id} is not pending.")
+                raise HTTPException(status_code=400, detail=f"Bottling order with order_id {order_id} is not pending.")
 
-            # Fetch potion recipes
-            potion_recipes = {}
-            for potion in gc.DEFAULT_POTIONS:
-                potion_type = ut.Utils.normalize_potion_type([
-                    potion['red_ml'],
-                    potion['green_ml'],
-                    potion['blue_ml'],
-                    potion['dark_ml']
-                ])
-                potion_recipes[tuple(potion_type)] = potion
+            bottling_plan = order['bottling_plan']  # Should be a dict mapping SKU to quantity
+            logger.debug(f"Bottling Plan for order_id {order_id}: {bottling_plan}")
 
-            # Aggregate ml to deduct and potions to add
-            ml_to_deduct = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
-            potions_to_add = {}
-            total_new_potions = 0
-
+            # Verify that delivered potions match bottling plan
+            delivered_potions_dict = {}
             for potion in potions_delivered:
-                potion_type = potion.potion_type
-                quantity = potion.quantity
+                potion_type_normalized = pu.Utilities.normalize_potion_type(potion.potion_type)
+                potion_def = None
+                # Find matching potion SKU
+                for sku, definition in pc.POTION_DEFINITIONS.items():
+                    potion_type_def = [
+                        definition.get('red_ml', 0),
+                        definition.get('green_ml', 0),
+                        definition.get('blue_ml', 0),
+                        definition.get('dark_ml', 0)
+                    ]
+                    potion_type_def_normalized = pu.Utilities.normalize_potion_type(potion_type_def)
+                    if potion_type_normalized == potion_type_def_normalized:
+                        potion_def = definition
+                        potion_sku = sku
+                        break
 
-                # Normalize potion_type to sum to 100
-                potion_type_normalized = ut.Utils.normalize_potion_type(potion_type)
-
-                # Find matching potion recipe
-                potion_key = tuple(potion_type_normalized)
-                matching_potion = potion_recipes.get(potion_key)
-
-                if not matching_potion:
+                if not potion_def:
                     logger.error(f"No matching potion found for potion_type {potion_type_normalized}")
                     raise HTTPException(status_code=400, detail=f"No matching potion found for potion_type {potion_type_normalized}")
 
-                potion_sku = matching_potion['sku']
+                if potion_sku not in bottling_plan:
+                    logger.error(f"Delivered potion SKU {potion_sku} not in bottling plan.")
+                    raise HTTPException(status_code=400, detail=f"Delivered potion SKU {potion_sku} not in bottling plan.")
 
-                # Check if we have enough ml to produce this potion
-                required_ml = {color: matching_potion[color] * quantity for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']}
+                expected_quantity = bottling_plan[potion_sku]
+                if potion.quantity != expected_quantity:
+                    logger.error(f"Quantity mismatch for SKU {potion_sku}: Expected {expected_quantity}, Delivered {potion.quantity}")
+                    raise HTTPException(status_code=400, detail=f"Quantity mismatch for SKU {potion_sku}")
 
-                for color in required_ml:
-                    if current_ml[color] < required_ml[color]:
-                        logger.error(f"Insufficient {color} to produce {quantity} of {potion_sku}")
-                        raise HTTPException(status_code=400, detail=f"Insufficient {color} to produce {quantity} of {potion_sku}")
+                delivered_potions_dict[potion_sku] = potion.quantity
 
-                # Update ml_to_deduct
-                for color in required_ml:
-                    ml_to_deduct[color] += required_ml[color]
-                    current_ml[color] -= required_ml[color]  # Update current_ml for subsequent checks
-
-                # Update potions_to_add
-                if potion_sku in potions_to_add:
-                    potions_to_add[potion_sku] += quantity
-                else:
-                    potions_to_add[potion_sku] = quantity
-
-                # Update total_potions
-                total_new_potions += quantity
-                if total_potions + total_new_potions > potion_capacity_limit:
-                    logger.error("Exceeding potion capacity limit")
-                    raise HTTPException(status_code=400, detail="Exceeding potion capacity limit")
-
-            # Deduct ml from global_inventory
-            update_ml_query = """
-                UPDATE global_inventory
-                SET red_ml = red_ml - :red_ml,
-                    green_ml = green_ml - :green_ml,
-                    blue_ml = blue_ml - :blue_ml,
-                    dark_ml = dark_ml - :dark_ml,
-                    total_potions = total_potions + :total_potions,
-                    total_ml = total_ml - :red_ml - :green_ml - :blue_ml - :dark_ml
-                WHERE id = 1;
-            """
-            connection.execute(
-                sqlalchemy.text(update_ml_query),
-                {
-                    "red_ml": ml_to_deduct['red_ml'],
-                    "green_ml": ml_to_deduct['green_ml'],
-                    "blue_ml": ml_to_deduct['blue_ml'],
-                    "dark_ml": ml_to_deduct['dark_ml'],
-                    "total_potions": total_new_potions
-                }
-            )
-
-            # Update potions table
-            for potion_sku, quantity in potions_to_add.items():
+            # Update potions inventory
+            for sku, quantity in delivered_potions_dict.items():
                 update_potion_query = """
                     UPDATE potions
                     SET current_quantity = current_quantity + :quantity
-                    WHERE sku = :potion_sku;
+                    WHERE sku = :sku;
                 """
-                connection.execute(
-                    sqlalchemy.text(update_potion_query),
-                    {
-                        "quantity": quantity,
-                        "potion_sku": potion_sku
-                    }
-                )
-            logger.info(f"Successfully processed delivery for order_id {order_id}.")
+                connection.execute(sqlalchemy.text(update_potion_query), {'quantity': quantity, 'sku': sku})
+                logger.debug(f"Added {quantity} of {sku} to potions inventory.")
+
+            # Update global potion count
+            total_delivered_potions = sum(delivered_potions_dict.values())
+            update_global_inventory = """
+                UPDATE global_inventory
+                SET total_potions = total_potions + :total_potions
+                WHERE id = 1;
+            """
+            connection.execute(sqlalchemy.text(update_global_inventory), {'total_potions': total_delivered_potions})
+
+            # Mark bottling order as completed
+            update_order_status = """
+                UPDATE bottling_orders
+                SET status = 'completed'
+                WHERE order_id = :order_id;
+            """
+            connection.execute(sqlalchemy.text(update_order_status), {'order_id': order_id})
+            logger.info(f"Marked bottling order_id {order_id} as completed.")
+
+        logger.info(f"Successfully processed delivery for order_id {order_id}.")
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_deliver_bottles: {he.detail}")
@@ -186,11 +150,11 @@ def get_bottle_plan():
                 current_in_game_hour = row['in_game_hour']
             else:
                 logger.error("No in-game time found in database.")
-                raise ValueError("No in-game time found in database.")
+                raise HTTPException(status_code=500, detail="No in-game time found in database.")
 
             # Fetch current inventory and capacities
             query = """
-                SELECT potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml, total_potions
+                SELECT gold, potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml
                 FROM global_inventory
                 WHERE id = 1;
             """
@@ -201,57 +165,77 @@ def get_bottle_plan():
                 logger.error("Global inventory record not found.")
                 raise HTTPException(status_code=500, detail="Global inventory record not found.")
 
+            gold = global_inventory['gold']
             potion_capacity_units = global_inventory['potion_capacity_units']
             ml_capacity_units = global_inventory['ml_capacity_units']
-            current_ml = {
+            ml_inventory = {
                 'red_ml': global_inventory['red_ml'],
                 'green_ml': global_inventory['green_ml'],
                 'blue_ml': global_inventory['blue_ml'],
                 'dark_ml': global_inventory['dark_ml'],
             }
-            potion_capacity_limit = potion_capacity_units * gc.POTION_CAPACITY_PER_UNIT
-            total_potions = global_inventory['total_potions']
+            potion_capacity_limit = potion_capacity_units * pc.POTION_CAPACITY_PER_UNIT
 
-            # Fetch current potions
+            # Fetch current potion inventory
             query_potions = """
                 SELECT sku, current_quantity
                 FROM potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
-            current_potions = {row['sku']: row['current_quantity'] for row in potions}
+            potion_inventory = {row['sku']: row['current_quantity'] for row in potions}
 
-        # Determine future in-game time (3 ticks ahead)
-        future_day, future_hour = ut.Utils.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=3)
-        logger.info(f"Future in-game time: {future_day}, Hour: {future_hour}")
+        # Determine future in-game time (e.g., 2 ticks ahead)
+        future_day, future_hour = pu.Utilities.get_future_in_game_time(
+            current_in_game_day, current_in_game_hour, ticks_ahead=2
+        )
+        logger.info(f"Future in-game time (2 ticks ahead): {future_day}, Hour: {future_hour}")
 
-        # Select pricing strategy
-        pricing_strategy = ut.Utils.select_pricing_strategy(potion_capacity_units)
-        logger.info(f"Selected pricing strategy: {pricing_strategy}")
+        # Determine pricing strategy
+        current_strategy = pu.PotionShopLogic.determine_pricing_strategy(
+            gold=gold,
+            ml_capacity_units=ml_capacity_units,
+            potion_capacity_units=potion_capacity_units
+        )
+        logger.info(f"Determined pricing strategy: {current_strategy}")
 
-        # Get potion priorities for future day and pricing strategy
-        potion_priorities = gc.POTION_PRIORITIES[future_day][pricing_strategy]
-        logger.debug(f"Potion priorities for {future_day} and strategy {pricing_strategy}: {potion_priorities}")
+        # Get potion priorities
+        potion_priorities = pu.PotionShopLogic.get_potion_priorities(
+            current_day=future_day,
+            current_strategy=current_strategy,
+            potion_priorities=pc.POTION_PRIORITIES
+        )
 
-        # Calculate desired potion quantities
-        desired_potions = ut.Utils.calculate_desired_potion_quantities(
-            potion_capacity_units=potion_capacity_units,
-            current_potions=current_potions,
+        # Calculate potion bottling plan
+        bottling_plan = pu.PotionShopLogic.calculate_potion_bottling_plan(
+            current_strategy=current_strategy,
             potion_priorities=potion_priorities,
-            pricing_strategy=pricing_strategy
+            potion_inventory=potion_inventory,
+            potion_capacity_units=potion_capacity_units,
+            ml_inventory=ml_inventory,
+            ml_capacity_units=ml_capacity_units,
+            gold=gold
         )
 
-        # Get potion recipes
-        potion_recipes = {p['sku']: p for p in gc.DEFAULT_POTIONS}
-
-        # Generate bottle plan
-        bottle_plan = ut.Utils.get_bottle_plan(
-            current_ml=current_ml,
-            desired_potions=desired_potions,
-            current_potions=current_potions,
-            potion_capacity_limit=potion_capacity_limit,
-            potion_recipes=potion_recipes
-        )
+        # Prepare bottle plan
+        
+        bottle_plan = []
+        for sku, quantity in bottling_plan.items():
+            potion_def = pc.POTION_DEFINITIONS.get(sku)
+            if not potion_def:
+                logger.error(f"Potion definition for SKU {sku} not found.")
+                continue
+            potion_type = [
+                potion_def.get('red_ml', 0),
+                potion_def.get('green_ml', 0),
+                potion_def.get('blue_ml', 0),
+                potion_def.get('dark_ml', 0)
+            ]
+            potion_type_normalized = pu.Utilities.normalize_potion_type(potion_type)
+            bottle_plan.append({
+                "potion_type": potion_type_normalized,
+                "quantity": quantity
+            })
 
         logger.info(f"Generated bottle plan: {bottle_plan}")
 

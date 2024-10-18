@@ -1,7 +1,7 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src import game_constants as gc
+from src import potion_config as gc
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth

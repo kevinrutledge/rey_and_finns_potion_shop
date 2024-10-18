@@ -1,8 +1,8 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src import utilities as ut
-from src import game_constants as gc
+from src import potion_utilities as pu
+from src import potion_config as pc
 from src.api import auth
 from sqlalchemy import bindparam, JSON
 from fastapi import APIRouter, Depends, HTTPException
@@ -47,14 +47,13 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
     try:
         with db.engine.begin() as connection:
-            # Fetch current gold and ML capacity from global_inventory
-            logger.debug("Fetching current gold and ML capacity from global_inventory.")
-            query = """
+             # Fetch current gold and ML capacity from global_inventory
+            query_inventory = """
                 SELECT gold, total_ml, ml_capacity_units
                 FROM global_inventory
                 WHERE id = 1;
             """
-            result = connection.execute(sqlalchemy.text(query))
+            result = connection.execute(sqlalchemy.text(query_inventory))
             inventory = result.mappings().fetchone()
 
             if not inventory:
@@ -64,11 +63,9 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             current_gold = inventory['gold']
             current_total_ml = inventory['total_ml']
             ml_capacity_units = inventory['ml_capacity_units']
-            ml_capacity_limit = ml_capacity_units * gc.ML_CAPACITY_PER_UNIT
+            ml_capacity_limit = ml_capacity_units * pc.ML_CAPACITY_PER_UNIT
 
-            logger.debug(f"Current Gold: {current_gold}, Total ML: {current_total_ml}, ML Capacity Limit: {ml_capacity_limit}")
-
-            # Calculate total gold cost
+            # Calculate total gold cost (should match purchase plan)
             total_gold_cost = sum(barrel.price * barrel.quantity for barrel in barrels_delivered)
             logger.debug(f"Total Gold Cost for Delivery: {total_gold_cost}")
 
@@ -80,7 +77,6 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             # Calculate total ML to add
             total_ml_to_add = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered)
             total_ml_after_adding = current_total_ml + total_ml_to_add
-            logger.debug(f"Total ML to Add: {total_ml_to_add}, Total ML After Adding: {total_ml_after_adding}")
 
             # Check if ML capacity is sufficient
             if total_ml_after_adding > ml_capacity_limit:
@@ -88,25 +84,15 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 raise HTTPException(status_code=400, detail="Insufficient ML capacity to store delivered barrels.")
 
             # Aggregate ML additions per color
-            total_red_ml = 0
-            total_green_ml = 0
-            total_blue_ml = 0
-            total_dark_ml = 0
+            ml_additions = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
 
             for barrel in barrels_delivered:
-                red_flag, green_flag, blue_flag, dark_flag = barrel.potion_type
-
-                red_ml_to_add = red_flag * barrel.ml_per_barrel * barrel.quantity
-                green_ml_to_add = green_flag * barrel.ml_per_barrel * barrel.quantity
-                blue_ml_to_add = blue_flag * barrel.ml_per_barrel * barrel.quantity
-                dark_ml_to_add = dark_flag * barrel.ml_per_barrel * barrel.quantity
-
-                total_red_ml += red_ml_to_add
-                total_green_ml += green_ml_to_add
-                total_blue_ml += blue_ml_to_add
-                total_dark_ml += dark_ml_to_add
-
-                logger.debug(f"Barrel SKU {barrel.sku}: Adding Red={red_ml_to_add}, Green={green_ml_to_add}, Blue={blue_ml_to_add}, Dark={dark_ml_to_add}")
+                color_index = barrel.potion_type.index(1)
+                color_keys = ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']
+                color_key = color_keys[color_index]
+                ml_to_add = barrel.ml_per_barrel * barrel.quantity
+                ml_additions[color_key] += ml_to_add
+                logger.debug(f"Adding {ml_to_add} of {color_key} from barrel SKU {barrel.sku}")
 
             # Update global_inventory
             update_inventory_query = """
@@ -122,25 +108,12 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             connection.execute(
                 sqlalchemy.text(update_inventory_query),
                 {
-                    "red_ml": total_red_ml,
-                    "green_ml": total_green_ml,
-                    "blue_ml": total_blue_ml,
-                    "dark_ml": total_dark_ml,
+                    **ml_additions,
                     "total_ml": total_ml_to_add,
                     "gold_spent": total_gold_cost
                 }
             )
             logger.info(f"Updated global_inventory with new MLs and deducted gold.")
-
-            # Log updated inventory
-            logger.debug("Fetching updated inventory from global_inventory.")
-            query_updated_inventory = """
-                SELECT gold, red_ml, green_ml, blue_ml, dark_ml, total_ml
-                FROM global_inventory
-                WHERE id = 1;
-            """
-            updated_inventory = connection.execute(sqlalchemy.text(query_updated_inventory)).mappings().fetchone()
-            logger.debug(f"Updated Inventory: {updated_inventory}")
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_deliver_barrels: {he.detail}")
@@ -148,7 +121,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     except Exception as e:
         logger.exception(f"Unhandled exception in post_deliver_barrels: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
+
     logger.info(f"Successfully processed delivery for order_id {order_id}.")
     return {"success": True}
 
@@ -179,7 +152,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             else:
                 logger.error("No in-game time found in database.")
                 raise ValueError("No in-game time found in database.")
-            
+
             logger.info(f"In-game time: {current_in_game_day}, {current_in_game_hour}")
 
             # Convert wholesale_catalog to list of dicts
@@ -227,98 +200,104 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 logger.debug(f"Inserted barrel with SKU: {barrel.sku}")
 
             # Fetch current inventory and capacities
-            query = """
+            query_inventory = """
                 SELECT gold, potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml
                 FROM global_inventory
                 WHERE id = 1;
             """
-            result = connection.execute(sqlalchemy.text(query))
+            result = connection.execute(sqlalchemy.text(query_inventory))
             global_inventory = result.mappings().fetchone()
 
             if not global_inventory:
                 logger.error("Global inventory record not found.")
                 raise HTTPException(status_code=500, detail="Global inventory record not found.")
 
-            potion_capacity_units = global_inventory['potion_capacity_units']
-            ml_capacity_units = global_inventory['ml_capacity_units']
             gold = global_inventory['gold']
-            current_ml = {
+            ml_capacity_units = global_inventory['ml_capacity_units']
+            potion_capacity_units = global_inventory['potion_capacity_units']
+            ml_inventory = {
                 'red_ml': global_inventory['red_ml'],
                 'green_ml': global_inventory['green_ml'],
                 'blue_ml': global_inventory['blue_ml'],
                 'dark_ml': global_inventory['dark_ml'],
             }
-            ml_capacity_limit = ml_capacity_units * gc.ML_CAPACITY_PER_UNIT
 
-            logger.debug(f"Global Inventory: {global_inventory}")
-
-            # Fetch current potions
+            # Fetch current potion inventory
             query_potions = """
                 SELECT sku, current_quantity
                 FROM potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
-            current_potions = {row['sku']: row['current_quantity'] for row in potions}
-            total_potions = sum(current_potions.values())
+            potion_inventory = {row['sku']: row['current_quantity'] for row in potions}
 
-        # Determine future in-game day and hour (4 ticks ahead)
-        future_day, future_hour = ut.Utils.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=4)
-        logger.info(f"Future in-game time (4 ticks ahead): {future_day}, Hour: {future_hour}")
+        # Determine future in-game day and hour (3 ticks ahead)
+        future_day, future_hour = pu.Utilities.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=3)
+        logger.info(f"Future in-game time (3 ticks ahead): {future_day}, Hour: {future_hour}")
 
-        # Select pricing strategy based on potion capacity units
-        pricing_strategy = ut.Utils.select_pricing_strategy(potion_capacity_units)
-        logger.info(f"Selected pricing strategy: {pricing_strategy}")
-
-        # Get potion priorities for future day and strategy
-        potion_priorities = gc.POTION_PRIORITIES[future_day][pricing_strategy]
-        logger.debug(f"Potion priorities for {future_day} and strategy {pricing_strategy}: {potion_priorities}")
-
-        # Calculate desired potion quantities
-        desired_potions = ut.Utils.calculate_desired_potion_quantities(
-            potion_capacity_units=potion_capacity_units,
-            current_potions=current_potions,
-            potion_priorities=potion_priorities,
-            pricing_strategy=pricing_strategy
-        )
-
-        # Get potion recipes from DEFAULT_POTIONS
-        potion_recipes = {p['sku']: p for p in gc.DEFAULT_POTIONS}
-
-        # Calculate ml needed per color to meet desired potion quantities
-        ml_needed = ut.Utils.calculate_ml_needed(
-            desired_potions=desired_potions,
-            current_potions=current_potions,
-            potion_recipes=potion_recipes
-        )
-
-        # Generate barrel purchase plan
-        purchase_plan = ut.Utils.get_barrel_purchase_plan(
-            ml_needed=ml_needed,
-            current_ml=current_ml,
-            ml_capacity_limit=ml_capacity_limit,
+        # Determine pricing strategy
+        current_strategy = pu.PotionShopLogic.determine_pricing_strategy(
             gold=gold,
             ml_capacity_units=ml_capacity_units,
-            wholesale_catalog=wholesale_catalog,
-            pricing_strategy=pricing_strategy
+            potion_capacity_units=potion_capacity_units
+        )
+        logger.info(f"Determined pricing strategy: {current_strategy}")
+
+        # Get potion priorities
+        potion_priorities = pu.PotionShopLogic.get_potion_priorities(
+            current_day=future_day,
+            current_strategy=current_strategy,
+            potion_priorities=pc.POTION_PRIORITIES
         )
 
-        # Map purchase plan to match catalog SKUs and quantities
-        catalog_skus = {item.sku: item for item in wholesale_catalog}
-        final_purchase_plan = []
-        for purchase in purchase_plan:
-            sku = purchase['sku']
-            quantity = purchase['quantity']
-            if sku in catalog_skus:
-                available_quantity = catalog_skus[sku].quantity
-                purchase_quantity = min(quantity, available_quantity)
-                if purchase_quantity > 0:
-                    final_purchase_plan.append({'sku': sku, 'quantity': purchase_quantity})
-                    logger.debug(f"Adding {purchase_quantity} of {sku} to final purchase plan.")
-            else:
-                logger.debug(f"SKU {sku} not found in catalog.")
+        # Fetch potion definitions
+        potion_definitions = pc.POTION_DEFINITIONS
 
-        logger.info(f"Generated purchase plan: {final_purchase_plan}")
+        # Calculate desired bottling plan (without ml adjustments)
+        desired_bottling_plan = pu.PotionShopLogic.calculate_potion_bottling_plan(
+            current_strategy=current_strategy,
+            potion_priorities=potion_priorities,
+            potion_inventory=potion_inventory,
+            potion_capacity_units=potion_capacity_units,
+            ml_inventory=ml_inventory,
+            ml_capacity_units=ml_capacity_units,
+            gold=gold,
+            adjust_for_ml_inventory=False  # Get desired quantities
+        )
+
+        # Calculate adjusted bottling plan (with ml adjustments)
+        bottling_plan = pu.PotionShopLogic.calculate_potion_bottling_plan(
+            current_strategy=current_strategy,
+            potion_priorities=potion_priorities,
+            potion_inventory=potion_inventory,
+            potion_capacity_units=potion_capacity_units,
+            ml_inventory=ml_inventory,
+            ml_capacity_units=ml_capacity_units,
+            gold=gold,
+            adjust_for_ml_inventory=True  # Adjust for ml_inventory
+        )
+
+        # Calculate ml needed based on desired bottling plan
+        ml_needed = pu.PotionShopLogic.calculate_ml_needed_for_bottling_plan(
+            bottling_plan=desired_bottling_plan,
+            potion_definitions=potion_definitions
+        )
+
+        logger.debug(f"Desired bottling plan: {desired_bottling_plan}")
+        logger.info(f"ML needed for desired bottling plan: {ml_needed}")
+
+        # Decide barrels to purchase
+        purchase_plan = pu.PotionShopLogic.decide_barrels_to_purchase(
+            current_strategy=current_strategy,
+            potion_priorities=potion_priorities,
+            ml_inventory=ml_inventory,
+            ml_capacity_units=ml_capacity_units,
+            gold=gold,
+            future_potion_needs=desired_bottling_plan,  # Use desired plan
+            wholesale_catalog=[barrel.dict() for barrel in wholesale_catalog]
+        )
+
+        logger.info(f"Generated purchase plan: {purchase_plan}")
 
     except HTTPException as he:
         logger.error(f"HTTPException in get_wholesale_purchase_plan: {he.detail}")
@@ -328,5 +307,4 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
     logger.info("Ending get_wholesale_purchase_plan endpoint.")
-    logger.debug(f"Returning purchase_plan: {final_purchase_plan}")
-    return final_purchase_plan
+    return purchase_plan

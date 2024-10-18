@@ -1,7 +1,7 @@
 import sqlalchemy
 import logging
 from src import database as db
-from src import utilities as ut
+from src import potion_utilities as pu
 from sqlalchemy import bindparam, JSON
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
