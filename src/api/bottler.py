@@ -25,37 +25,20 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     """
     Process delivery of bottles to global_inventory.
     """
-    logger.info(f"Processing delivery for order_id={order_id}. Number of potions delivered: {len(potions_delivered)}.")
+    logger.info(f"Processing delivery of bottles. Number of potions delivered: {len(potions_delivered)}.")
     logger.debug(f"Potions Delivered: {potions_delivered}")
 
     try:
         with db.engine.begin() as connection:
-            # Fetch bottling order corresponding to order_id
-            query_order = """
-                SELECT bottling_plan, status
-                FROM bottling_orders
-                WHERE order_id = :order_id;
-            """
-            result = connection.execute(sqlalchemy.text(query_order), {'order_id': order_id})
-            order = result.mappings().fetchone()
-
-            if not order:
-                logger.error(f"Bottling order with order_id {order_id} not found.")
-                raise HTTPException(status_code=400, detail=f"Bottling order with order_id {order_id} not found.")
-
-            if order['status'] != 'pending':
-                logger.error(f"Bottling order with order_id {order_id} is not pending.")
-                raise HTTPException(status_code=400, detail=f"Bottling order with order_id {order_id} is not pending.")
-
-            bottling_plan = order['bottling_plan']  # Should be a dict mapping SKU to quantity
-            logger.debug(f"Bottling Plan for order_id {order_id}: {bottling_plan}")
-
-            # Verify that delivered potions match bottling plan
             delivered_potions_dict = {}
+            ml_used = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
             for potion in potions_delivered:
+                # Normalize potion type
                 potion_type_normalized = pu.Utilities.normalize_potion_type(potion.potion_type)
                 potion_def = None
-                # Find matching potion SKU
+                potion_sku = None
+
+                # Find matching potion SKU from potion definitions
                 for sku, definition in pc.POTION_DEFINITIONS.items():
                     potion_type_def = [
                         definition.get('red_ml', 0),
@@ -69,20 +52,42 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                         potion_sku = sku
                         break
 
-                if not potion_def:
+                if not potion_def or not potion_sku:
                     logger.error(f"No matching potion found for potion_type {potion_type_normalized}")
                     raise HTTPException(status_code=400, detail=f"No matching potion found for potion_type {potion_type_normalized}")
 
-                if potion_sku not in bottling_plan:
-                    logger.error(f"Delivered potion SKU {potion_sku} not in bottling plan.")
-                    raise HTTPException(status_code=400, detail=f"Delivered potion SKU {potion_sku} not in bottling plan.")
+                # Accumulate quantities of each potion SKU delivered
+                delivered_potions_dict[potion_sku] = delivered_potions_dict.get(potion_sku, 0) + potion.quantity
 
-                expected_quantity = bottling_plan[potion_sku]
-                if potion.quantity != expected_quantity:
-                    logger.error(f"Quantity mismatch for SKU {potion_sku}: Expected {expected_quantity}, Delivered {potion.quantity}")
-                    raise HTTPException(status_code=400, detail=f"Quantity mismatch for SKU {potion_sku}")
+                # Calculate ml used per color for this potion
+                for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
+                    ml_per_potion = potion_def.get(color, 0)
+                    ml_used[color] += ml_per_potion * potion.quantity
 
-                delivered_potions_dict[potion_sku] = potion.quantity
+            # Update ml inventory
+            update_global_inventory_ml = """
+                UPDATE global_inventory
+                SET
+                    red_ml = red_ml - :red_ml_used,
+                    green_ml = green_ml - :green_ml_used,
+                    blue_ml = blue_ml - :blue_ml_used,
+                    dark_ml = dark_ml - :dark_ml_used,
+                    total_ml = total_ml - :total_ml_used,
+                    total_potions = total_potions + :total_potions
+                WHERE id = 1;
+            """
+            total_ml_used = sum(ml_used.values())
+            total_delivered_potions = sum(delivered_potions_dict.values())
+            connection.execute(sqlalchemy.text(update_global_inventory_ml), {
+                'red_ml_used': ml_used['red_ml'],
+                'green_ml_used': ml_used['green_ml'],
+                'blue_ml_used': ml_used['blue_ml'],
+                'dark_ml_used': ml_used['dark_ml'],
+                'total_ml_used': total_ml_used,
+                'total_potions': total_delivered_potions
+            })
+
+            logger.debug(f"Deducted ml used from global_inventory: {ml_used}")
 
             # Update potions inventory
             for sku, quantity in delivered_potions_dict.items():
@@ -91,28 +96,33 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     SET current_quantity = current_quantity + :quantity
                     WHERE sku = :sku;
                 """
-                connection.execute(sqlalchemy.text(update_potion_query), {'quantity': quantity, 'sku': sku})
-                logger.debug(f"Added {quantity} of {sku} to potions inventory.")
+                result = connection.execute(sqlalchemy.text(update_potion_query), {'quantity': quantity, 'sku': sku})
 
-            # Update global potion count
-            total_delivered_potions = sum(delivered_potions_dict.values())
-            update_global_inventory = """
-                UPDATE global_inventory
-                SET total_potions = total_potions + :total_potions
-                WHERE id = 1;
-            """
-            connection.execute(sqlalchemy.text(update_global_inventory), {'total_potions': total_delivered_potions})
+                if result.rowcount == 0:
+                    # If potion does not exist in potions table, insert it
+                    potion_def = pc.POTION_DEFINITIONS[sku]
+                    insert_potion_query = """
+                        INSERT INTO potions (name, sku, red_ml, green_ml, blue_ml, dark_ml, total_ml, price, current_quantity)
+                        VALUES (:name, :sku, :red_ml, :green_ml, :blue_ml, :dark_ml, :total_ml, :price, :current_quantity);
+                    """
+                    connection.execute(sqlalchemy.text(insert_potion_query), {
+                        'name': potion_def['name'],
+                        'sku': sku,
+                        'red_ml': potion_def.get('red_ml', 0),
+                        'green_ml': potion_def.get('green_ml', 0),
+                        'blue_ml': potion_def.get('blue_ml', 0),
+                        'dark_ml': potion_def.get('dark_ml', 0),
+                        'total_ml': potion_def.get('total_ml', 0),
+                        'price': potion_def.get('price', 0),
+                        'current_quantity': quantity
+                    })
+                    logger.debug(f"Inserted new potion {sku} with quantity {quantity} into potions inventory.")
+                else:
+                    logger.debug(f"Added {quantity} of {sku} to potions inventory.")
 
-            # Mark bottling order as completed
-            update_order_status = """
-                UPDATE bottling_orders
-                SET status = 'completed'
-                WHERE order_id = :order_id;
-            """
-            connection.execute(sqlalchemy.text(update_order_status), {'order_id': order_id})
-            logger.info(f"Marked bottling order_id {order_id} as completed.")
+            # No need to update total_potions again here since it's already updated above
 
-        logger.info(f"Successfully processed delivery for order_id {order_id}.")
+        logger.info(f"Successfully processed delivery of bottles.")
 
     except HTTPException as he:
         logger.error(f"HTTPException in post_deliver_bottles: {he.detail}")
