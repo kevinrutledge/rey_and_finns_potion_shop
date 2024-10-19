@@ -386,219 +386,83 @@ class PotionShopLogic:
         logger.debug(f"Wholesale catalog: {wholesale_catalog}")
 
         try:
-            # Initialize
             barrel_purchase_orders = []
-            barrel_definitions = pc.BARREL_DEFINITIONS
-            strategy_params = pc.STRATEGY_PARAMETERS[current_strategy]
-
-            # Get potion definitions
-            potion_definitions = {potion['sku']: potion for potion in pc.DEFAULT_POTIONS}
+            total_ml_capacity = ml_capacity_units * pc.ML_CAPACITY_PER_UNIT
+            available_ml_capacity = total_ml_capacity - sum(ml_inventory.values())
 
             # Calculate total ml needed per color
             ml_needed = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
-            potion_definitions = pc.POTION_DEFINITIONS
-
-            for sku, quantity in future_potion_needs.items():
-                potion_def = potion_definitions.get(sku)
-                if not potion_def:
-                    logger.error(f"Potion definition for SKU {sku} not found.")
-                    continue
-
+            for sku, qty in future_potion_needs.items():
+                potion_def = pc.POTION_DEFINITIONS[sku]
                 for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
-                    ml_needed[color] += potion_def.get(color, 0) * quantity
-
-            logger.debug(f"Total ml needed per color before scaling: {ml_needed}")
-
-            # Scale up by 1.5x for resupply
+                    ml_needed[color] += potion_def.get(color, 0) * qty
+            # Scale up by 1.5x
             for color in ml_needed:
                 ml_needed[color] = int(ml_needed[color] * 1.5)
+                ml_needed[color] -= ml_inventory.get(color, 0)
+                if ml_needed[color] < 0:
+                    ml_needed[color] = 0
 
-            logger.info(f"Total ml needed per color after scaling 1.5x: {ml_needed}")
+            logger.debug(f"ML needed per color after scaling: {ml_needed}")
 
-            # Subtract current ml_inventory
-            ml_shortfall = {}
-            for color in ml_needed:
-                ml_shortfall[color] = ml_needed[color] - ml_inventory.get(color, 0)
-                if ml_shortfall[color] < 0:
-                    ml_shortfall[color] = 0
+            # Prepare barrel information
+            barrel_info = {}
+            for barrel in wholesale_catalog:
+                color = Utilities.get_color_from_potion_type(barrel['potion_type'])
+                barrel_info.setdefault(color, []).append({
+                    'sku': barrel['sku'],
+                    'ml_per_barrel': barrel['ml_per_barrel'],
+                    'price': barrel['price'],
+                    'quantity': barrel['quantity']
+                })
 
-            logger.info(f"ML shortfall per color: {ml_shortfall}")
-
-            # Calculate total ml capacity
-            total_ml_capacity = ml_capacity_units * pc.ML_CAPACITY_PER_UNIT  # ML_CAPACITY_PER_UNIT
-
-            # Calculate current ml in inventory
-            current_total_ml_inventory = sum(ml_inventory.values())
-
-            # Calculate available ml capacity
-            available_ml_capacity = total_ml_capacity - current_total_ml_inventory
-
-            logger.info(f"Available ml capacity: {available_ml_capacity}")
-
-            # Process wholesale_catalog
-            wholesale_catalog_dict = {barrel['sku']: barrel for barrel in wholesale_catalog}
-
-            # Get strategy-specific parameters
-            allowed_barrels = strategy_params['allowed_barrels']
-            offset_amount = strategy_params['offset_amount']
-            ml_interval = strategy_params['ml_interval']
-            gold_threshold = strategy_params['gold_threshold']
-            purchase_priority = strategy_params.get('purchase_priority', [])
-            ml_capacity_unit = strategy_params['ml_capacity_units']
-
-            # Check gold threshold
-            if gold > gold_threshold:
-                logger.info(f"Gold {gold} is above threshold {gold_threshold} for strategy {current_strategy}")
-            else:
-                logger.info(f"Gold {gold} is below threshold {gold_threshold} for strategy {current_strategy}")
-
-            # Map barrel SKUs to colors and prices
-            barrel_colors = {}
-            barrel_prices = {}
-            barrel_ml = {}
-
-            for sku in allowed_barrels:
-                if sku in wholesale_catalog_dict:
-                    barrel = wholesale_catalog_dict[sku]
-                    color = Utilities.get_color_from_potion_type(barrel['potion_type'])  # returns 'red_ml', 'green_ml', 'blue_ml', 'dark_ml'
-                    barrel_colors[sku] = color
-                    barrel_prices[sku] = barrel['price']
-                    barrel_ml[sku] = barrel['ml_per_barrel']
-                else:
-                    logger.warning(f"{sku} not available in wholesale catalog.")
-
-            # Determine order of purchasing based on potion priorities
-            colors_in_order = []
-            for potion in potion_priorities:
-                potion_comp = potion['composition']  # [red, green, blue, dark]
-                color_weights = {'red_ml': potion_comp[0], 'green_ml': potion_comp[1], 'blue_ml': potion_comp[2], 'dark_ml': potion_comp[3]}
-                for color, weight in color_weights.items():
-                    if weight > 0 and color not in colors_in_order:
-                        colors_in_order.append(color)
-            logger.debug(f"Colors in order based on potion priorities: {colors_in_order}")
-
-            # Determine cheapest barrel price per color
-            cheapest_barrel_price_per_color = {}
-            for color in colors_in_order:
-                suitable_barrels = [sku for sku, c in barrel_colors.items() if c == color]
-                if not suitable_barrels:
-                    logger.error(f"No suitable barrels found for color {color}")
-                    continue
-                # Find cheapest barrel for this color
-                min_price = min(barrel_prices[sku] for sku in suitable_barrels)
-                cheapest_barrel_price_per_color[color] = min_price
-
-            # Calculate total minimum required gold
-            min_required_gold = sum(cheapest_barrel_price_per_color.values())
-            logger.debug(f"Minimum required gold to purchase one barrel per color: {min_required_gold}")
-
-            if gold >= min_required_gold:
-                # Allocate minimum required gold per color
-                allocated_gold_per_color = cheapest_barrel_price_per_color.copy()
-                remaining_gold = gold - min_required_gold
-                logger.debug(f"Allocated minimum required gold per color: {allocated_gold_per_color}")
-                logger.debug(f"Remaining gold after minimum allocation: {remaining_gold}")
-                
-                # Distribute remaining gold proportionally
-                if remaining_gold > 0:
-                    total_ml_shortfall = sum(ml_shortfall[color] for color in colors_in_order if ml_shortfall[color] > 0)
-                    for color in colors_in_order:
-                        ml_shortfall_color = ml_shortfall[color]
-                        if ml_shortfall_color <= 0:
-                            continue
-                        # Calculate additional gold allocation
-                        proportion = ml_shortfall_color / total_ml_shortfall
-                        extra_gold = int(proportion * remaining_gold)
-                        allocated_gold_per_color[color] += extra_gold
-                        remaining_gold -= extra_gold
-                        if remaining_gold <= 0:
-                            break
-                    logger.debug(f"Allocated gold per color after distributing remaining gold: {allocated_gold_per_color}")
-            else:
-                # Not enough gold to purchase one barrel per color
-                # Proceed with proportional allocation as before
-                total_ml_shortfall = sum(ml_shortfall[color] for color in colors_in_order if ml_shortfall[color] > 0)
-                allocated_gold_per_color = {}
-                remaining_gold = gold
-                for color in colors_in_order:
-                    ml_shortfall_color = ml_shortfall[color]
-                    if ml_shortfall_color <= 0:
-                        allocated_gold_per_color[color] = 0
-                        continue
-                    # Allocate gold proportionally
-                    gold_allocation = int((ml_shortfall_color / total_ml_shortfall) * gold)
-                    # Ensure we don't allocate more than remaining gold
-                    gold_allocation = min(gold_allocation, remaining_gold)
-                    allocated_gold_per_color[color] = gold_allocation
-                    remaining_gold -= gold_allocation
-                logger.debug(f"Allocated gold per color after proportional allocation: {allocated_gold_per_color}")
-
-            # Now proceed to purchase barrels per color within allocated gold
-            for color in colors_in_order:
-                ml_needed_for_color = ml_shortfall[color]
+            # Process each color
+            for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
+                ml_needed_for_color = ml_needed[color]
                 if ml_needed_for_color <= 0:
                     continue
 
-                ml_to_purchase = ((ml_needed_for_color + ml_interval - 1) // ml_interval) * ml_interval
-                ml_to_purchase = min(ml_to_purchase, available_ml_capacity)
-                if ml_to_purchase <= 0:
-                    logger.info(f"No available ml capacity for color {color}")
+                if color not in barrel_info:
+                    logger.warning(f"No barrels available for color {color}")
                     continue
 
-                # Find suitable barrel SKUs for this color
-                suitable_barrels = [sku for sku, c in barrel_colors.items() if c == color]
-                if not suitable_barrels:
-                    logger.error(f"No suitable barrels found for color {color}")
-                    continue
+                # Sort barrels by size descending
+                barrels = sorted(barrel_info[color], key=lambda x: x['ml_per_barrel'], reverse=True)
+                for barrel in barrels:
+                    if gold <= 0 or available_ml_capacity <= 0 or ml_needed_for_color <= 0:
+                        break
 
-                # Sort barrels by size (ml_per_barrel) descending
-                suitable_barrels.sort(key=lambda sku: barrel_ml[sku], reverse=True)
+                    max_barrels = min(
+                        barrel['quantity'],
+                        ml_needed_for_color // barrel['ml_per_barrel'],
+                        gold // barrel['price'],
+                        available_ml_capacity // barrel['ml_per_barrel']
+                    )
 
-                barrels_needed = {}
-                total_price = 0
-                ml_total = 0
+                    # If partial barrel is needed
+                    if ml_needed_for_color % barrel['ml_per_barrel'] > 0 and barrel['quantity'] > max_barrels:
+                        max_barrels += 1
 
-                ml_remaining = ml_to_purchase
-                gold_remaining_for_color = allocated_gold_per_color[color]
+                    if max_barrels <= 0:
+                        continue
 
-                for barrel_sku in suitable_barrels:
-                    size_ml = barrel_ml[barrel_sku]
-                    price_per_barrel = barrel_prices[barrel_sku]
+                    total_price = max_barrels * barrel['price']
+                    if total_price > gold:
+                        max_barrels = gold // barrel['price']
+                        total_price = max_barrels * barrel['price']
 
-                    max_barrels = ml_remaining // size_ml
-                    if max_barrels > 0:
-                        # Ensure we don't exceed allocated gold for this color
-                        affordable_barrels = gold_remaining_for_color // price_per_barrel
-                        max_barrels = min(max_barrels, affordable_barrels)
-                        total_cost = price_per_barrel * max_barrels
+                    if max_barrels <= 0:
+                        continue
 
-                        if max_barrels > 0:
-                            barrels_needed[barrel_sku] = max_barrels
-                            total_price += total_cost
-                            ml_acquired = size_ml * max_barrels
-                            ml_total += ml_acquired
-                            ml_remaining -= ml_acquired
-                            gold_remaining_for_color -= total_cost
+                    # Update purchase orders
+                    barrel_purchase_orders.append({'sku': barrel['sku'], 'quantity': max_barrels})
+                    logger.info(f"Added {max_barrels} of {barrel['sku']} to purchase orders for color {color}")
 
-                            logger.debug(f"Planning to purchase {max_barrels} of {barrel_sku} for color {color}, total_price={total_price}, ml_acquired={ml_acquired}, ml_remaining={ml_remaining}, gold_remaining_for_color={gold_remaining_for_color}")
-
-                            if ml_remaining <= 0 or gold_remaining_for_color < min(cheapest_barrel_price_per_color[color], price_per_barrel):
-                                break
-
-                if ml_total == 0:
-                    # Can't afford any barrels or no capacity
-                    logger.warning(f"Cannot afford any barrels for color {color} or no capacity left.")
-                    continue
-
-                # Add barrels to purchase orders
-                for sku, quantity in barrels_needed.items():
-                    barrel_purchase_orders.append({'sku': sku, 'quantity': quantity})
-                    logger.info(f"Added {quantity} of {sku} to purchase orders for color {color}")
-
-                gold -= total_price
-                available_ml_capacity -= ml_total
-
-                logger.debug(f"Updated gold after purchasing for color {color}: {gold}, available_ml_capacity: {available_ml_capacity}")
+                    # Update counters
+                    gold -= total_price
+                    available_ml_capacity -= max_barrels * barrel['ml_per_barrel']
+                    ml_needed_for_color -= max_barrels * barrel['ml_per_barrel']
+                    barrel['quantity'] -= max_barrels
 
             return barrel_purchase_orders
 
