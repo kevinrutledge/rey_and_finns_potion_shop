@@ -231,9 +231,9 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             potions = result.mappings().all()
             potion_inventory = {row['sku']: row['current_quantity'] for row in potions}
 
-        # Determine future in-game day and hour (3 ticks ahead)
-        future_day, future_hour = pu.Utilities.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=3)
-        logger.info(f"Future in-game time (3 ticks ahead): {future_day}, Hour: {future_hour}")
+        # Determine future in-game day and hour (4 ticks ahead)
+        future_day, future_hour = pu.Utilities.get_future_in_game_time(current_in_game_day, current_in_game_hour, ticks_ahead=4)
+        logger.info(f"Future in-game time (4 ticks ahead): {future_day}, Hour: {future_hour}")
 
         # Determine pricing strategy
         current_strategy = pu.PotionShopLogic.determine_pricing_strategy(

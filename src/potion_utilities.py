@@ -31,14 +31,10 @@ class Utilities:
             day_index = pc.IN_GAME_DAYS.index(current_in_game_day)
             hour_index = hours_in_day.index(current_in_game_hour)
 
-            # Calculate total ticks
+            # Calculate total ticks, current tick, and future tick number
             ticks_per_day = len(hours_in_day)
             total_ticks = len(pc.IN_GAME_DAYS) * ticks_per_day
-
-            # Calculate current tick number
             current_tick_number = day_index * ticks_per_day + hour_index
-
-            # Calculate future tick number
             future_tick_number = (current_tick_number + ticks_ahead) % total_ticks
 
             # Determine future day and hour indices
@@ -126,8 +122,10 @@ class PotionShopLogic:
         """
         logger.info(f"Determining pricing strategy with gold={gold}, ml_capacity_units={ml_capacity_units}, potion_capacity_units={potion_capacity_units}")
         try:
-            if ml_capacity_units == 1 and potion_capacity_units == 1:
+            if ml_capacity_units == 1 and potion_capacity_units == 1 and gold < 250:
                 strategy = 'PRICE_STRATEGY_SKIMMING'
+            elif ml_capacity_units == 1 and potion_capacity_units == 1:
+                strategy = 'PRICE_STRATEGY_BALANCED'
             elif ml_capacity_units <= 2 and potion_capacity_units <= 1:
                 strategy = 'PRICE_STRATEGY_PENETRATION'
             elif ml_capacity_units <= 3 and potion_capacity_units <= 2:
@@ -479,14 +477,14 @@ class PotionShopLogic:
                         colors_in_order.append(color)
             logger.debug(f"Colors in order based on potion priorities: {colors_in_order}")
 
-            # Determine the cheapest barrel price per color
+            # Determine cheapest barrel price per color
             cheapest_barrel_price_per_color = {}
             for color in colors_in_order:
                 suitable_barrels = [sku for sku, c in barrel_colors.items() if c == color]
                 if not suitable_barrels:
                     logger.error(f"No suitable barrels found for color {color}")
                     continue
-                # Find the cheapest barrel for this color
+                # Find cheapest barrel for this color
                 min_price = min(barrel_prices[sku] for sku in suitable_barrels)
                 cheapest_barrel_price_per_color[color] = min_price
 
@@ -627,28 +625,24 @@ class PotionShopLogic:
                      f"ML Inventory: {ml_inventory}, ML Capacity Units: {ml_capacity_units}, "
                      f"Potion Capacity Units: {potion_capacity_units}")
 
-        # Initialize the return dict
+        # Initialize return dict
         capacity_to_purchase = {'ml_capacity': 0, 'potion_capacity': 0}
 
         try:
-            # Get the purchase parameters for the current strategy
+            # Get purchase parameters for current strategy
             purchase_params = pc.CAPACITY_PURCHASE_PARAMETERS[current_strategy]
             purchase_conditions = purchase_params.get('purchase_conditions', [])
             logger.debug(f"Purchase conditions for strategy {current_strategy}: {purchase_conditions}")
 
-            # Total potions in inventory
+            # Total potions and ml in inventory
             total_potions_in_inventory = sum(potion_inventory.values())
             logger.debug(f"Total potions in inventory: {total_potions_in_inventory}")
-
-            # Total ml in inventory
             total_ml_in_inventory = sum(ml_inventory.values())
             logger.debug(f"Total ml in inventory: {total_ml_in_inventory}")
 
-            # Calculate potion capacity limit
+            # Calculate potion and ml capacity limit
             potion_capacity_limit = potion_capacity_units * pc.POTION_CAPACITY_PER_UNIT
             logger.debug(f"Potion capacity limit: {potion_capacity_limit}")
-
-            # Calculate ml capacity limit
             ml_capacity_limit = ml_capacity_units * pc.ML_CAPACITY_PER_UNIT
             logger.debug(f"ML capacity limit: {ml_capacity_limit}")
 
@@ -702,7 +696,7 @@ class PotionShopLogic:
                     capacity_to_purchase['ml_capacity'] += condition.get('ml_units_to_purchase', 0)
                     capacity_to_purchase['potion_capacity'] += condition.get('potion_units_to_purchase', 0)
                     logger.info(f"Condition met: {condition}. Deciding to purchase capacity units: {capacity_to_purchase}")
-                    # Since the conditions are ordered, break after the first condition met
+                    # Since conditions are ordered, break after first condition met
                     break
                 else:
                     logger.debug(f"Condition not met: {condition}")
