@@ -628,7 +628,7 @@ class PotionShopLogic:
                      f"Potion Capacity Units: {potion_capacity_units}")
 
         # Initialize the return dict
-        capacity_to_purchase = {'ml_capacity_units': 0, 'potion_capacity_units': 0}
+        capacity_to_purchase = {'ml_capacity': 0, 'potion_capacity': 0}
 
         try:
             # Get the purchase parameters for the current strategy
@@ -699,8 +699,8 @@ class PotionShopLogic:
 
                 if condition_met:
                     # Decide on capacity units to purchase
-                    capacity_to_purchase['ml_capacity_units'] += condition.get('ml_units_to_purchase', 0)
-                    capacity_to_purchase['potion_capacity_units'] += condition.get('potion_units_to_purchase', 0)
+                    capacity_to_purchase['ml_capacity'] += condition.get('ml_units_to_purchase', 0)
+                    capacity_to_purchase['potion_capacity'] += condition.get('potion_units_to_purchase', 0)
                     logger.info(f"Condition met: {condition}. Deciding to purchase capacity units: {capacity_to_purchase}")
                     # Since the conditions are ordered, break after the first condition met
                     break
