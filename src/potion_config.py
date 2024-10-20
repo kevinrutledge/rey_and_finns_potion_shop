@@ -254,22 +254,22 @@ BOTTLING_PARAMETERS = {
     'PRICE_STRATEGY_SKIMMING': {
         'ml_capacity_unit': 1,
         'potion_capacity_unit': 1,
-        'max_potions_per_sku': 15,
-        'bottling_ceiling': 15,
+        'max_potions_per_sku': 20,
+        'bottling_ceiling': 20,
         'bottling_base': 5,
     },
         'PRICE_STRATEGY_BALANCED': {
         'ml_capacity_unit': 1,
         'potion_capacity_unit': 1,
-        'max_potions_per_sku': 15,
-        'bottling_ceiling': 15,
+        'max_potions_per_sku': 20,
+        'bottling_ceiling': 20,
         'bottling_base': 5,
     },
     'PRICE_STRATEGY_PENETRATION': {
         'ml_capacity_unit': 2,
         'potion_capacity_unit': 1,
-        'max_potions_per_sku': 15,
-        'bottling_ceiling': 15,
+        'max_potions_per_sku': 20,
+        'bottling_ceiling': 20,
         'bottling_base': 5,
     },
     'PRICE_STRATEGY_TIERED': {
