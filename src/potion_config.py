@@ -14,7 +14,7 @@ IN_GAME_DAYS = [
     "Soulday",
     "Edgeday",
     "Bloomday",
-    "Aracanaday"
+    "Arcanaday"
 ]
 
 # Define in-game hours for each day (ticks every 2 hours)
