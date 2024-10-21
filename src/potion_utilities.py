@@ -439,9 +439,9 @@ class PotionShopLogic:
                         available_ml_capacity // barrel['ml_per_barrel']
                     )
 
-                    # If partial barrel is needed
-                    if ml_needed_for_color % barrel['ml_per_barrel'] > 0 and barrel['quantity'] > max_barrels:
-                        max_barrels += 1
+                    # Remove the partial barrel purchasing logic
+                    # if ml_needed_for_color % barrel['ml_per_barrel'] > 0 and barrel['quantity'] > max_barrels:
+                    #     max_barrels += 1
 
                     if max_barrels <= 0:
                         continue
