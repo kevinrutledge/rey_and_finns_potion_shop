@@ -283,7 +283,7 @@ class PotionShopLogic:
                 sku = potion['sku']
                 adjusted_quantity = potion['adjusted_quantity']
                 potion_def = pc.POTION_DEFINITIONS[sku]
-                for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
+                for color in ['dark_ml', 'red_ml', 'green_ml', 'blue_ml']:
                     ml_needed[color] += adjusted_quantity * potion_def.get(color, 0)
 
             logger.debug(f"Total ml needed per color before adjustments: {ml_needed}")
@@ -394,7 +394,7 @@ class PotionShopLogic:
             ml_needed = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
             for sku, qty in future_potion_needs.items():
                 potion_def = pc.POTION_DEFINITIONS[sku]
-                for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
+                for color in ['dark_ml', 'red_ml', 'green_ml', 'blue_ml']:
                     ml_needed[color] += potion_def.get(color, 0) * qty
             # Scale up by 1.5x
             for color in ml_needed:
@@ -417,7 +417,7 @@ class PotionShopLogic:
                 })
 
             # Process each color
-            for color in ['red_ml', 'green_ml', 'blue_ml', 'dark_ml']:
+            for color in ['dark_ml', 'red_ml', 'green_ml', 'blue_ml']:
                 ml_needed_for_color = ml_needed[color]
                 if ml_needed_for_color <= 0:
                     continue
