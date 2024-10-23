@@ -397,9 +397,9 @@ class PotionShopLogic:
                 potion_def = pc.POTION_DEFINITIONS[sku]
                 for color in ['dark_ml', 'red_ml', 'green_ml', 'blue_ml']:
                     ml_needed[color] += potion_def.get(color, 0) * qty
-            # Scale up by 2.5x
+            # Scale up by 3.0x
             for color in ml_needed:
-                ml_needed[color] = int(ml_needed[color] * 2.5)
+                ml_needed[color] = int(ml_needed[color] * 3.0)
                 ml_needed[color] -= ml_inventory.get(color, 0)
                 if ml_needed[color] < 0:
                     ml_needed[color] = 0
