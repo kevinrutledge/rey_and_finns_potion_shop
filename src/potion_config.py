@@ -719,13 +719,13 @@ POTION_PRIORITIES = {
             {"sku": "DARK_RED_POTION", "composition": [50, 0, 0, 50], "price": 40, "sales_mix": 0.12},
             {"sku": "DARK_BROWN_POTION", "composition": [25, 25, 25, 25], "price": 40, "sales_mix": 0.12},
 
-            """ FIXME Uncomment this section in two ticks from now.
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
-            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.25},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 40, "sales_mix": 0.25},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.05},
-            {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price": 40, "sales_mix": 0.03},
-            {"sku": "DARK_BROWN_POTION", "composition": [25, 25, 25, 25], "price": 40, "sales_mix": 0.02}, """
+        # FIXME Uncomment this section in two ticks from now.
+        #    {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
+        #    {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.25},
+        #    {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 40, "sales_mix": 0.25},
+        #    {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.05},
+        #    {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price": 40, "sales_mix": 0.03},
+        #   {"sku": "DARK_BROWN_POTION", "composition": [25, 25, 25, 25], "price": 40, "sales_mix": 0.02},
         ]
     },
     "Soulday": {
