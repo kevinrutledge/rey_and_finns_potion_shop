@@ -447,7 +447,7 @@ DEFAULT_POTIONS = [
         'blue_ml': 0,
         'dark_ml': 0,
         'total_ml': 100,
-        'price': 45,
+        'price': 40,
         'current_quantity': 0
     },
     {
@@ -712,20 +712,12 @@ POTION_PRIORITIES = {
             {"sku": "DARK_BROWN_POTION", "composition": [25, 25, 25, 25], "price": 40, "sales_mix": 0.02},
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
-            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price": 100, "sales_mix": 0.40},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.12},
-            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.12},
-            {"sku": "DARK_GREEN_POTION", "composition": [0, 50, 0, 50], "price": 40, "sales_mix": 0.12},
-            {"sku": "DARK_RED_POTION", "composition": [50, 0, 0, 50], "price": 40, "sales_mix": 0.12},
-            {"sku": "DARK_BROWN_POTION", "composition": [25, 25, 25, 25], "price": 40, "sales_mix": 0.12},
-
-        # FIXME Uncomment this section in two ticks from now.
-        #    {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
-        #    {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.25},
-        #    {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 40, "sales_mix": 0.25},
-        #    {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.05},
-        #    {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price": 40, "sales_mix": 0.03},
-        #   {"sku": "DARK_BROWN_POTION", "composition": [25, 25, 25, 25], "price": 40, "sales_mix": 0.02},
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.25},
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 40, "sales_mix": 0.25},
+            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.05},
+            {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price": 40, "sales_mix": 0.03},
+           {"sku": "DARK_BROWN_POTION", "composition": [25, 25, 25, 25], "price": 40, "sales_mix": 0.02},
         ]
     },
     "Soulday": {
