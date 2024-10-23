@@ -635,7 +635,6 @@ class PotionShopLogic:
                                 default_potion['blue_ml'],
                                 default_potion['dark_ml']
                             ],
-                            'price': default_potion['price'],
                             'sales_mix': 0,
                             'quantity': quantity
                         })
