@@ -771,11 +771,11 @@ POTION_PRIORITIES = {
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
             {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
-            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 20, "sales_mix": 0.20},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 35, "sales_mix": 0.20},
             {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.20},
-            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price" : 50, "sales_mix": 0.10},
-            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price": 15, "sales_mix": 0.05},
-            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price": 15, "sales_mix": 0.05},
+            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price" : 40, "sales_mix": 0.10},
+            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price": 20, "sales_mix": 0.05},
+            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price": 20, "sales_mix": 0.05},
         ]
     },
     "Edgeday": {
