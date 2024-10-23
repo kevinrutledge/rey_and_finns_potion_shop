@@ -336,8 +336,7 @@ CAPACITY_PURCHASE_PARAMETERS = {
         'ml_capacity_unit': 4,
         'potion_capacity_unit': 3,
         'purchase_conditions': [
-            # TODO Revert purchase capacity quanities back to {'gold_threshold': 4350, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1}
-            {'gold_threshold': 7350, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 3},
+            {'gold_threshold': 4350, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1},
             {'gold_threshold': 2100, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_threshold': 7500},
         ],
     },
@@ -345,9 +344,13 @@ CAPACITY_PURCHASE_PARAMETERS = {
         'ml_capacity_unit': 5,
         'potion_capacity_unit': 4,
         'purchase_conditions': [
-            {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 75, 'potions_inventory_percentage': 75},
-            {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 75},
-            {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 75},
+            # TODO Revert back to the following state after testing period.
+            # {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 75, 'potions_inventory_percentage': 75},
+            # {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 75},
+            # {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 75},
+            {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 3, 'ml_inventory_percentage': 40, 'potions_inventory_percentage': 40},
+            {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 40},
+            {'gold_threshold': 7500, 'ml_units_to_purchase': 3, 'ml_inventory_percentage': 40},
         ],
     },
 }
