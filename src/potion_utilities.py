@@ -1,4 +1,5 @@
 import logging
+import math
 from src import potion_config as pc
 from typing import Tuple
 from typing import List, Dict
@@ -432,16 +433,14 @@ class PotionShopLogic:
                     if gold <= 0 or available_ml_capacity <= 0 or ml_needed_for_color <= 0:
                         break
 
+                    needed_barrels = math.ceil(ml_needed_for_color / barrel['ml_per_barrel'])
+
                     max_barrels = min(
                         barrel['quantity'],
-                        ml_needed_for_color // barrel['ml_per_barrel'],
+                        needed_barrels,
                         gold // barrel['price'],
                         available_ml_capacity // barrel['ml_per_barrel']
                     )
-
-                    # Remove the partial barrel purchasing logic
-                    # if ml_needed_for_color % barrel['ml_per_barrel'] > 0 and barrel['quantity'] > max_barrels:
-                    #     max_barrels += 1
 
                     if max_barrels <= 0:
                         continue
