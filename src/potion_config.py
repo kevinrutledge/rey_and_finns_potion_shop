@@ -469,7 +469,7 @@ DEFAULT_POTIONS = [
         'blue_ml': 50,
         'dark_ml': 0,
         'total_ml': 100,
-        'price': 50,
+        'price': 45,
         'current_quantity': 0
     },
     {
