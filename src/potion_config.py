@@ -582,6 +582,17 @@ DEFAULT_POTIONS = [
         'price': 40,
         'current_quantity': 0
     },
+    {
+        'sku': 'BROWN_POTION',
+        'name': 'Brown Potion',
+        'red_ml': 35,
+        'green_ml': 35,
+        'blue_ml': 30,
+        'dark_ml': 0,
+        'total_ml': 100,
+        'price': 15,
+        'current_quantity': 0
+    },
 ]
 
 
