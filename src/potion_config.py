@@ -348,7 +348,7 @@ CAPACITY_PURCHASE_PARAMETERS = {
             # {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 75, 'potions_inventory_percentage': 75},
             # {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 75},
             # {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 75},
-            {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 3, 'ml_inventory_percentage': 40, 'potions_inventory_percentage': 40},
+            {'gold_threshold': 8500, 'ml_units_to_purchase': 3, 'potion_units_to_purchase': 4, 'ml_inventory_percentage': 40, 'potions_inventory_percentage': 40},
             {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 40},
             {'gold_threshold': 7500, 'ml_units_to_purchase': 3, 'ml_inventory_percentage': 40},
         ],
@@ -806,12 +806,12 @@ POTION_PRIORITIES = {
             {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.15}
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price" : 25, "sales_mix": 0.15},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 25, "sales_mix": 0.15},
-            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price" : 35, "sales_mix": 0.15},
-            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price" : 35, "sales_mix": 0.15},
-            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price" : 35, "sales_mix": 0.15},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.15}
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.10},
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 45, "sales_mix": 0.10},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 35, "sales_mix": 0.10},
+            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price": 35, "sales_mix": 0.05},
+            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price": 35, "sales_mix": 0.05},
+            {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price" : 30, "sales_mix": 0.05},
         ]
     },
     "Bloomday": {
