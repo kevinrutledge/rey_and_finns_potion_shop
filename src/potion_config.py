@@ -349,8 +349,8 @@ CAPACITY_PURCHASE_PARAMETERS = {
             # {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 75},
             # {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 75},
             {'gold_threshold': 8500, 'ml_units_to_purchase': 3, 'potion_units_to_purchase': 4, 'ml_inventory_percentage': 40, 'potions_inventory_percentage': 40},
-            {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 40},
-            {'gold_threshold': 7500, 'ml_units_to_purchase': 3, 'ml_inventory_percentage': 40},
+            {'gold_threshold': 7500, 'potion_units_to_purchase': 4, 'potions_inventory_percentage': 40},
+            {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 40},
         ],
     },
 }
