@@ -639,7 +639,7 @@ DEFAULT_POTIONS = [
         'total_ml': 100,
         'price': 50,
         'current_quantity': 0
-    },
+    }
 ]
 
 
