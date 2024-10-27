@@ -892,8 +892,8 @@ POTION_PRIORITIES = {
     },
     "Arcanaday": {
         "PRICE_STRATEGY_SKIMMING": [
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 45, "sales_mix": 0.60},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 45, "sales_mix": 0.40},
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 50, "sales_mix": 0.60},
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 50, "sales_mix": 0.40},
         ],
         "PRICE_STRATEGY_BALANCED": [
             {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 45, "sales_mix": 0.60},
