@@ -717,7 +717,7 @@ POTION_PRIORITIES = {
         ],
         "PRICE_STRATEGY_TIERED": [
             {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.30},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 45, "sales_mix": 0.20},
             {"sku": "STEEL_BLUE_POTION", "composition": [25, 25, 50, 0], "price": 40, "sales_mix": 0.10},
             {"sku": "RUSSET_POTION", "composition": [50, 25, 25, 0], "price": 40, "sales_mix": 0.20},
             {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price": 40, "sales_mix": 0.05},
