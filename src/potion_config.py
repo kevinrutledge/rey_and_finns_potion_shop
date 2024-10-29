@@ -754,17 +754,17 @@ POTION_PRIORITIES = {
             {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.25},
             {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
             {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
-            {"sku": "BLUE_POTION", "composition": [50, 25, 25, 0], "price": 40, "sales_mix": 0.15},
-            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 50], "price": 40, "sales_mix": 0.10},
-            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10},
+            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price": 40, "sales_mix": 0.10}
         ],
         "PRICE_STRATEGY_TIERED": [
             {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.25},
             {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
             {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
-            {"sku": "BLUE_POTION", "composition": [50, 25, 25, 0], "price": 40, "sales_mix": 0.15},
-            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 50], "price": 40, "sales_mix": 0.10},
-            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10},
+            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price": 40, "sales_mix": 0.10}
         ],
         "PRICE_STRATEGY_DYNAMIC": [
             {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
