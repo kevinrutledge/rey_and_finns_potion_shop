@@ -844,20 +844,20 @@ POTION_PRIORITIES = {
             {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price" : 20, "sales_mix": 0.05},
         ],
         "PRICE_STRATEGY_DYNAMIC": [
-            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.40},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.25},
-            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price" : 55, "sales_mix": 0.15},
-            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price": 25, "sales_mix": 0.10},
-            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price": 20, "sales_mix": 0.05},
-            {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price" : 20, "sales_mix": 0.05},
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.25},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "DARK_PURPLE", "composition": [25, 0, 25, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "RUSSET_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10}
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
-            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 20, "sales_mix": 0.20},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.20},
-            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price" : 80, "sales_mix": 0.10},
-            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price": 15, "sales_mix": 0.05},
-            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price": 15, "sales_mix": 0.05},
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.25},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "DARK_PURPLE", "composition": [25, 0, 25, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "RUSSET_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10}
         ]
     },
     "Edgeday": {
