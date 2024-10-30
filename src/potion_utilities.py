@@ -127,13 +127,13 @@ class PotionShopLogic:
                 strategy = 'PRICE_STRATEGY_SKIMMING'
             elif ml_capacity_units == 1 and potion_capacity_units == 1:
                 strategy = 'PRICE_STRATEGY_BALANCED'
-            elif ml_capacity_units <= 2 and potion_capacity_units <= 1:
+            elif ml_capacity_units <= 2 and potion_capacity_units <= 2:
                 strategy = 'PRICE_STRATEGY_PENETRATION'
-            elif ml_capacity_units <= 3 and potion_capacity_units <= 2:
+            elif ml_capacity_units <= 3 and potion_capacity_units <= 3:
                 strategy = 'PRICE_STRATEGY_TIERED'
-            elif ml_capacity_units <= 4 and potion_capacity_units <= 3:
+            elif ml_capacity_units <= 4 and potion_capacity_units <= 4:
                 strategy = 'PRICE_STRATEGY_DYNAMIC'
-            elif ml_capacity_units >= 5 and potion_capacity_units >= 4:
+            elif ml_capacity_units >= 5 and potion_capacity_units >= 5:
                 strategy = 'PRICE_STRATEGY_MAXIMIZING'
             else:
                 logger.error(f"Invalid capacity units: ml_capacity_units={ml_capacity_units}, potion_capacity_units={potion_capacity_units}")
