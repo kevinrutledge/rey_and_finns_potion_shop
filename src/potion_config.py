@@ -316,16 +316,16 @@ CAPACITY_PURCHASE_PARAMETERS = {
     },
     'PRICE_STRATEGY_PENETRATION': {
         'ml_capacity_unit': 2,
-        'potion_capacity_unit': 1,
+        'potion_capacity_unit': 2,
         'purchase_conditions': [
-            {'gold_threshold': 2900, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1},
+            {'gold_threshold': 2900, 'ml_units_to_purchase': 2, 'potion_units_to_purchase': 2},
             {'gold_threshold': 2100, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_threshold': 7500},
             {'gold_threshold': 2100, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'potions_in_inventory': 20},
         ],
     },
     'PRICE_STRATEGY_TIERED': {
         'ml_capacity_unit': 3,
-        'potion_capacity_unit': 2,
+        'potion_capacity_unit': 3,
         'purchase_conditions': [
             {'gold_threshold': 3600, 'ml_units_to_purchase': 2, 'potion_units_to_purchase': 2},
             {'gold_threshold': 2100, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_threshold': 7500},
@@ -334,9 +334,9 @@ CAPACITY_PURCHASE_PARAMETERS = {
     },
     'PRICE_STRATEGY_DYNAMIC': {
         'ml_capacity_unit': 4,
-        'potion_capacity_unit': 3,
+        'potion_capacity_unit': 4,
         'purchase_conditions': [
-            {'gold_threshold': 4350, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1},
+            {'gold_threshold': 4350, 'ml_units_to_purchase': 2, 'potion_units_to_purchase': 2},
             {'gold_threshold': 2100, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_threshold': 7500},
         ],
     },
@@ -348,9 +348,9 @@ CAPACITY_PURCHASE_PARAMETERS = {
             # {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 75, 'potions_inventory_percentage': 75},
             # {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 75},
             # {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 75},
-            {'gold_threshold': 8500, 'ml_units_to_purchase': 0, 'potion_units_to_purchase': 4, 'ml_inventory_percentage': 35, 'potions_inventory_percentage': 40},
-            {'gold_threshold': 7500, 'potion_units_to_purchase': 4, 'potions_inventory_percentage': 35},
-            {'gold_threshold': 7500, 'ml_units_to_purchase': 0, 'ml_inventory_percentage': 35},
+            {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 50, 'potions_inventory_percentage': 40},
+            {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 50},
+            {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 50},
         ],
     },
 }
@@ -672,6 +672,17 @@ DEFAULT_POTIONS = [
         'total_ml': 100,
         'price': 40,
         'current_quantity': 0
+    },
+    {
+        'sku': 'DARK_TEAL',
+        'name': 'Dark Teal',
+        'red_ml': 0,
+        'green_ml': 25,
+        'blue_ml': 25,
+        'dark_ml': 50,
+        'total_ml': 100,
+        'price': 40,
+        'current_quantity': 0
     }
 ]
 
@@ -808,12 +819,12 @@ POTION_PRIORITIES = {
             {"sku": "RUSSET_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10}
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.40},
-            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 20, "sales_mix": 0.20},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.20},
-            {"sku": "DARK_BLUE_POTION", "composition": [0, 0, 50, 50], "price" : 80, "sales_mix": 0.10},
-            {"sku": "DARK_RED_POTION", "composition": [50, 0, 0, 50], "price": 15, "sales_mix": 0.05},
-            {"sku": "DARK_GREEN_POTION", "composition": [0, 50, 0, 50], "price": 15, "sales_mix": 0.05},
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.25},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
+            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "DARK_PURPLE", "composition": [25, 0, 25, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "RUSSET_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10}
         ]
     },
     "Soulday": {
@@ -848,7 +859,7 @@ POTION_PRIORITIES = {
             {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
             {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
             {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.15},
-            {"sku": "DARK_PURPLE", "composition": [25, 0, 25, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "DARK_TEAL", "composition": [0, 25, 25, 50], "price": 40, "sales_mix": 0.10},
             {"sku": "RUSSET_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10}
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
@@ -856,7 +867,7 @@ POTION_PRIORITIES = {
             {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
             {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price": 40, "sales_mix": 0.20},
             {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price": 40, "sales_mix": 0.15},
-            {"sku": "DARK_PURPLE", "composition": [25, 0, 25, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "DARK_TEAL", "composition": [0, 25, 25, 50], "price": 40, "sales_mix": 0.10},
             {"sku": "RUSSET_POTION", "composition": [35, 35, 30, 0], "price": 40, "sales_mix": 0.10}
         ]
     },
