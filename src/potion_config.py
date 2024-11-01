@@ -509,17 +509,6 @@ DEFAULT_POTIONS = [
         'current_quantity': 0
     },
     {
-        'sku': 'SPRING_GREEN_POTION',
-        'name': 'Spring Green Potion',
-        'red_ml': 0,
-        'green_ml': 75,
-        'blue_ml': 25,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 45,
-        'current_quantity': 0
-    },
-    {
         'sku': 'SKY_BLUE_POTION',
         'name': 'Sky Blue Potion',
         'red_ml': 0,
