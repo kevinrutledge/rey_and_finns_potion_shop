@@ -66,7 +66,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
             # Update ml inventory
             update_global_inventory_ml = """
-                UPDATE global_inventory
+                UPDATE temp_global_inventory
                 SET
                     red_ml = red_ml - :red_ml_used,
                     green_ml = green_ml - :green_ml_used,
@@ -92,7 +92,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
             # Update potions inventory
             for sku, quantity in delivered_potions_dict.items():
                 update_potion_query = """
-                    UPDATE potions
+                    UPDATE temp_potions
                     SET current_quantity = current_quantity + :quantity
                     WHERE sku = :sku;
                 """
@@ -102,7 +102,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     # If potion does not exist in potions table, insert it
                     potion_def = pc.POTION_DEFINITIONS[sku]
                     insert_potion_query = """
-                        INSERT INTO potions (name, sku, red_ml, green_ml, blue_ml, dark_ml, total_ml, price, current_quantity)
+                        INSERT INTO temp_potions (name, sku, red_ml, green_ml, blue_ml, dark_ml, total_ml, price, current_quantity)
                         VALUES (:name, :sku, :red_ml, :green_ml, :blue_ml, :dark_ml, :total_ml, :price, :current_quantity);
                     """
                     connection.execute(sqlalchemy.text(insert_potion_query), {
@@ -149,7 +149,7 @@ def get_bottle_plan():
             # Get current in-game day and hour
             query_game_time = """
                 SELECT in_game_day, in_game_hour
-                FROM in_game_time
+                FROM temp_in_game_time
                 ORDER BY created_at DESC
                 LIMIT 1;
             """
@@ -165,7 +165,7 @@ def get_bottle_plan():
             # Fetch current inventory and capacities
             query = """
                 SELECT gold, potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml
-                FROM global_inventory
+                FROM temp_global_inventory
                 WHERE id = 1;
             """
             result = connection.execute(sqlalchemy.text(query))
@@ -189,7 +189,7 @@ def get_bottle_plan():
             # Fetch current potion inventory
             query_potions = """
                 SELECT sku, current_quantity
-                FROM potions;
+                FROM temp_potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()

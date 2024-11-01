@@ -31,7 +31,7 @@ def get_inventory():
             # Fetch total_potions, total_ml, and gold from global_inventory
             query = """
                 SELECT total_potions, total_ml, gold
-                FROM global_inventory
+                FROM temp_global_inventory
                 WHERE id = 1;
             """
             result = connection.execute(sqlalchemy.text(query))
@@ -82,7 +82,7 @@ def get_capacity_plan():
                     green_ml,
                     blue_ml,
                     dark_ml
-                FROM global_inventory
+                FROM temp_global_inventory
                 WHERE id = 1;
             """
             result = connection.execute(sqlalchemy.text(query))
@@ -107,7 +107,7 @@ def get_capacity_plan():
             # Fetch current potion inventory
             query_potions = """
                 SELECT sku, current_quantity
-                FROM potions;
+                FROM temp_potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
@@ -154,7 +154,7 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
             # Fetch current gold and capacities
             query = """
                 SELECT gold, potion_capacity_units, ml_capacity_units
-                FROM global_inventory
+                FROM temp_global_inventory
                 WHERE id = 1;
             """
             result = connection.execute(sqlalchemy.text(query))
@@ -181,7 +181,7 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
 
             # Update capacities and deduct gold
             update_inventory_query = """
-                UPDATE global_inventory
+                UPDATE temp_global_inventory
                 SET potion_capacity_units = potion_capacity_units + :potion_capacity,
                     ml_capacity_units = ml_capacity_units + :ml_capacity,
                     gold = gold - :total_cost

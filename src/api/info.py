@@ -30,7 +30,7 @@ def post_time(timestamp: Timestamp):
         with db.engine.begin() as connection:
             # Prepare SQL query to insert in-game time
             insert_query = """
-                INSERT INTO in_game_time (in_game_day, in_game_hour)
+                INSERT INTO temp_in_game_time (in_game_day, in_game_hour)
                 VALUES (:in_game_day, :in_game_hour)
                 RETURNING time_id;
             """

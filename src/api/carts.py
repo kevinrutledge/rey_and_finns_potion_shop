@@ -94,7 +94,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
             # Get current in-game day and hour
             query_game_time = """
                 SELECT in_game_day, in_game_hour
-                FROM in_game_time
+                FROM temp_in_game_time
                 ORDER BY created_at DESC
                 LIMIT 1;
             """
@@ -112,7 +112,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
             # Prepare the SQL query with bind parameters
             insert_customer_visit_query = sqlalchemy.text("""
-                INSERT INTO customer_visits (visit_id, customers, in_game_day, in_game_hour, visit_time)
+                INSERT INTO temp_customer_visits (visit_id, customers, in_game_day, in_game_hour, visit_time)
                 VALUES (:visit_id, :customers, :in_game_day, :in_game_hour, NOW())
             """).bindparams(bindparam('customers', type_=JSON))
 
@@ -130,7 +130,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
             # Insert each customer into customers table
             insert_customer_query = """
-                INSERT INTO customers (visit_id, customer_name, character_class, level, in_game_day, in_game_hour)
+                INSERT INTO temp_customers (visit_id, customer_name, character_class, level, in_game_day, in_game_hour)
                 VALUES (:visit_id, :customer_name, :character_class, :level, :in_game_day, :in_game_hour)
             """
             for customer in customers:
@@ -170,7 +170,7 @@ def create_cart(new_cart: Customer):
             # Get current in-game day and hour
             query_game_time = """
                 SELECT in_game_day, in_game_hour
-                FROM in_game_time
+                FROM temp_in_game_time
                 ORDER BY created_at DESC
                 LIMIT 1;
             """
@@ -185,7 +185,7 @@ def create_cart(new_cart: Customer):
 
             # Find existing customer
             find_customer_query = """
-                SELECT customer_id FROM customers
+                SELECT customer_id FROM temp_customers
                 WHERE customer_name = :customer_name
                   AND character_class = :character_class
                   AND level = :level
@@ -209,7 +209,7 @@ def create_cart(new_cart: Customer):
                 raise HTTPException(status_code=404, detail="Customer not found.")
 
             insert_cart_query = """
-                INSERT INTO carts (customer_id, in_game_day, in_game_hour, created_at)
+                INSERT INTO temp_carts (customer_id, in_game_day, in_game_hour, created_at)
                 VALUES (:customer_id, :in_game_day, :in_game_hour, NOW())
                 RETURNING cart_id;
             """
@@ -247,7 +247,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
         with db.engine.begin() as connection:
             # Check if cart exists and is not checked out
             check_cart_query = """
-                SELECT checked_out FROM carts WHERE cart_id = :cart_id;
+                SELECT checked_out FROM temp_carts WHERE cart_id = :cart_id;
             """
             result = connection.execute(
                 sqlalchemy.text(check_cart_query),
@@ -264,7 +264,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
             # Fetch potion_id from potions table using SKU
             fetch_potion_query = """
                 SELECT potion_id, price, current_quantity
-                FROM potions
+                FROM temp_potions
                 WHERE sku = :sku
                 LIMIT 1;
             """
@@ -285,7 +285,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
 
             # Check if potion is already in cart
             check_cart_item_query = """
-                SELECT cart_item_id, quantity FROM cart_items
+                SELECT cart_item_id, quantity FROM temp_cart_items
                 WHERE cart_id = :cart_id AND potion_id = :potion_id;
             """
             result = connection.execute(
@@ -303,7 +303,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
             if existing_item:
                 # Update existing cart item
                 update_cart_item_query = """
-                    UPDATE cart_items
+                    UPDATE temp_cart_items
                     SET quantity = :quantity, line_item_total = :line_item_total, timestamp = NOW()
                     WHERE cart_item_id = :cart_item_id;
                 """
@@ -319,7 +319,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
             else:
                 # Insert new cart item
                 insert_cart_item_query = """
-                    INSERT INTO cart_items (cart_id, potion_id, quantity, price, line_item_total, timestamp)
+                    INSERT INTO temp_cart_items (cart_id, potion_id, quantity, price, line_item_total, timestamp)
                     VALUES (:cart_id, :potion_id, :quantity, :price, :line_item_total, NOW())
                     RETURNING cart_item_id;
                 """
@@ -359,7 +359,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             # Get current in-game day and hour
             query_game_time = """
                 SELECT in_game_day, in_game_hour
-                FROM in_game_time
+                FROM temp_in_game_time
                 ORDER BY created_at DESC
                 LIMIT 1;
             """
@@ -375,7 +375,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             # Fetch cart details
             fetch_cart_query = """
                 SELECT ca.checked_out
-                FROM carts ca
+                FROM temp_carts ca
                 WHERE ca.cart_id = :cart_id
                 LIMIT 1;
             """
@@ -392,8 +392,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             # Fetch cart items
             fetch_cart_items_query = """
                 SELECT ci.cart_item_id, ci.potion_id, ci.quantity, p.price 
-                FROM cart_items ci
-                JOIN potions p ON ci.potion_id = p.potion_id
+                FROM temp_cart_items ci
+                JOIN temp_potions p ON ci.potion_id = p.potion_id
                 WHERE ci.cart_id = :cart_id;
             """
             result = connection.execute(sqlalchemy.text(fetch_cart_items_query), {"cart_id": cart_id})
@@ -416,7 +416,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
                 # Update cart_items with price, line_item_total, in_game_day, in_game_hour
                 update_cart_item_query = """
-                    UPDATE cart_items
+                    UPDATE temp_cart_items
                     SET price = :price,
                         line_item_total = :line_item_total,
                         in_game_day = :in_game_day,
@@ -439,7 +439,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
                 # Deduct potions from inventory
                 update_potion_query = """
-                    UPDATE potions
+                    UPDATE temp_potions
                     SET current_quantity = current_quantity - :quantity
                     WHERE potion_id = :potion_id;
                 """
@@ -454,7 +454,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
             # Update cart as checked out
             update_cart_query = """
-                UPDATE carts
+                UPDATE temp_carts
                 SET checked_out = TRUE,
                     checked_out_at = NOW(),
                     total_potions_bought = :total_potions_bought,
@@ -474,7 +474,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
             # Update global inventory
             update_global_inventory_query = """
-                UPDATE global_inventory
+                UPDATE temp_global_inventory
                 SET gold = gold + :total_gold_paid,
                     total_potions = total_potions - :total_potions_bought
                 WHERE id = 1;
@@ -491,7 +491,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 
             # Fetch and log updated gold. TODO Delete this check once ledgers is implemented.
             global_inventory_gold = connection.execute(
-                sqlalchemy.text("SELECT gold FROM global_inventory WHERE id = 1;")
+                sqlalchemy.text("SELECT gold FROM temp_global_inventory WHERE id = 1;")
             )
             updated_gold = global_inventory_gold.scalar()
             logger.info(f"Updated global_inventory.gold to {updated_gold} after checkout.")

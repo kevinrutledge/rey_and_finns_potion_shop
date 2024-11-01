@@ -31,7 +31,7 @@ def get_catalog():
             # Fetch current in-game time
             query_game_time = """
                 SELECT in_game_day, in_game_hour
-                FROM in_game_time
+                FROM temp_in_game_time
                 ORDER BY created_at DESC
                 LIMIT 1;
             """
@@ -47,7 +47,7 @@ def get_catalog():
             # Fetch global inventory
             query = """
                 SELECT gold, potion_capacity_units, ml_capacity_units, total_potions, red_ml, green_ml, blue_ml, dark_ml
-                FROM global_inventory
+                FROM temp_global_inventory
                 WHERE id = 1;
             """
             result = connection.execute(sqlalchemy.text(query))
@@ -73,7 +73,7 @@ def get_catalog():
             # Fetch current potion inventory
             query_potions = """
                 SELECT sku, current_quantity
-                FROM potions;
+                FROM temp_potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
@@ -96,7 +96,7 @@ def get_catalog():
 
             # Update potion prices in database based on priorities
             update_potion_price_query = """
-                UPDATE potions
+                UPDATE temp_potions
                 SET price = :price
                 WHERE sku = :sku;
             """
@@ -124,7 +124,7 @@ def get_catalog():
             # Fetch updated potion details from database
             query_potion_details = """
                 SELECT sku, name, red_ml, green_ml, blue_ml, dark_ml, price
-                FROM potions
+                FROM temp_potions
                 WHERE sku IN :skus;
             """
             # Handle single SKU case by ensuring it's a tuple

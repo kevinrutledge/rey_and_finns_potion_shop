@@ -26,7 +26,7 @@ def reset():
         with db.engine.begin() as connection:
             # Reset global_inventory to initial values
             reset_global_inventory_query = """
-                UPDATE global_inventory
+                UPDATE temp_global_inventory
                 SET gold = 100,
                     total_potions = 0,
                     total_ml = 0,
@@ -42,23 +42,23 @@ def reset():
 
             # Set current_quantity of all potions to 0
             reset_potions_query = """
-                UPDATE potions
+                UPDATE temp_potions
                 SET current_quantity = 0;
             """
             connection.execute(sqlalchemy.text(reset_potions_query))
             logger.info("All potions quantities reset to 0.")
 
             # Delete all cart_items and carts
-            delete_cart_items_query = "DELETE FROM cart_items;"
+            delete_cart_items_query = "DELETE FROM temp_cart_items;"
             connection.execute(sqlalchemy.text(delete_cart_items_query))
             logger.info("All cart_items deleted.")
 
-            delete_carts_query = "DELETE FROM carts;"
+            delete_carts_query = "DELETE FROM temp_carts;"
             connection.execute(sqlalchemy.text(delete_carts_query))
             logger.info("All carts deleted.")
 
             # Reset ledger entries
-            delete_ledger_entries_query = "DELETE FROM ledger_entries;"
+            delete_ledger_entries_query = "DELETE FROM temp_ledger_entries;"
             connection.execute(sqlalchemy.text(delete_ledger_entries_query))
             logger.info("All ledger_entries deleted.")
 

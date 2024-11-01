@@ -50,7 +50,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
              # Fetch current gold and ML capacity from global_inventory
             query_inventory = """
                 SELECT gold, total_ml, ml_capacity_units
-                FROM global_inventory
+                FROM temp_global_inventory
                 WHERE id = 1;
             """
             result = connection.execute(sqlalchemy.text(query_inventory))
@@ -96,7 +96,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
             # Update global_inventory
             update_inventory_query = """
-                UPDATE global_inventory
+                UPDATE temp_global_inventory
                 SET red_ml = red_ml + :red_ml,
                     green_ml = green_ml + :green_ml,
                     blue_ml = blue_ml + :blue_ml,
@@ -140,7 +140,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             # Get current in-game day and hour
             query_game_time = """
                 SELECT in_game_day, in_game_hour
-                FROM in_game_time
+                FROM temp_in_game_time
                 ORDER BY created_at DESC
                 LIMIT 1;
             """
@@ -160,7 +160,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
             # Prepare and execute insert into barrel_visits
             insert_barrel_visit_query = sqlalchemy.text("""
-                INSERT INTO barrel_visits (wholesale_catalog, in_game_day, in_game_hour, visit_time)
+                INSERT INTO temp_barrel_visits (wholesale_catalog, in_game_day, in_game_hour, visit_time)
                 VALUES (:wholesale_catalog, :in_game_day, :in_game_hour, NOW())
                 RETURNING barrel_visit_id;
             """).bindparams(bindparam('wholesale_catalog', type_=JSON))
@@ -178,7 +178,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
             # Prepare insert into barrels
             insert_barrel_query = sqlalchemy.text("""
-                INSERT INTO barrels (barrel_visit_id, sku, ml_per_barrel, potion_type, price, quantity, in_game_day, in_game_hour)
+                INSERT INTO temp_barrels (barrel_visit_id, sku, ml_per_barrel, potion_type, price, quantity, in_game_day, in_game_hour)
                 VALUES (:barrel_visit_id, :sku, :ml_per_barrel, :potion_type, :price, :quantity, :in_game_day, :in_game_hour)
             """).bindparams(bindparam('potion_type', type_=JSON))
 
@@ -202,7 +202,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             # Fetch current inventory and capacities
             query_inventory = """
                 SELECT gold, potion_capacity_units, ml_capacity_units, red_ml, green_ml, blue_ml, dark_ml
-                FROM global_inventory
+                FROM temp_global_inventory
                 WHERE id = 1;
             """
             result = connection.execute(sqlalchemy.text(query_inventory))
@@ -225,7 +225,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             # Fetch current potion inventory
             query_potions = """
                 SELECT sku, current_quantity
-                FROM potions;
+                FROM temp_potions;
             """
             result = connection.execute(sqlalchemy.text(query_potions))
             potions = result.mappings().all()
