@@ -348,9 +348,9 @@ CAPACITY_PURCHASE_PARAMETERS = {
             # {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 75, 'potions_inventory_percentage': 75},
             # {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 75},
             # {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 75},
-            {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 50, 'potions_inventory_percentage': 40},
-            {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 50},
-            {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 50},
+            {'gold_threshold': 8500, 'ml_units_to_purchase': 1, 'potion_units_to_purchase': 1, 'ml_inventory_percentage': 40, 'potions_inventory_percentage': 40},
+            {'gold_threshold': 7500, 'potion_units_to_purchase': 1, 'potions_inventory_percentage': 40},
+            {'gold_threshold': 7500, 'ml_units_to_purchase': 1, 'ml_inventory_percentage': 40},
         ],
     },
 }
@@ -476,25 +476,14 @@ DEFAULT_POTIONS = [
         'current_quantity': 0
     },
     {
-        'sku': 'ORANGE_POTION',
-        'name': 'Orange Potion',
+        'sku': 'ORANGE',
+        'name': 'Orange',
         'red_ml': 75,
-        'green_ml': 0,
-        'blue_ml': 25,
+        'green_ml': 25,
+        'blue_ml': 0,
         'dark_ml': 0,
         'total_ml': 100,
-        'price': 45,
-        'current_quantity': 0
-    },
-        {
-        'sku': 'MAGENTA_POTION',
-        'name': 'Magenta Potion',
-        'red_ml': 75,
-        'green_ml': 0,
-        'blue_ml': 25,
-        'dark_ml': 0,
-        'total_ml': 100,
-        'price': 45,
+        'price': 40,
         'current_quantity': 0
     },
     {
@@ -621,12 +610,12 @@ DEFAULT_POTIONS = [
     {
         'sku': 'VIOLET_POTION',
         'name': 'Violet Blue Potion',
-        'red_ml': 35,
+        'red_ml': 75,
         'green_ml': 0,
-        'blue_ml': 65,
+        'blue_ml': 25,
         'dark_ml': 0,
         'total_ml': 100,
-        'price': 50,
+        'price': 40,
         'current_quantity': 0
     },
     {
@@ -680,6 +669,50 @@ DEFAULT_POTIONS = [
         'green_ml': 75,
         'blue_ml': 25,
         'dark_ml': 0,
+        'total_ml': 100,
+        'price': 40,
+        'current_quantity': 0
+    },
+    {
+        'sku': 'YELLOW_GREEN',
+        'name': 'Yellow Green',
+        'red_ml': 25,
+        'green_ml': 75,
+        'blue_ml': 0,
+        'dark_ml': 0,
+        'total_ml': 100,
+        'price': 40,
+        'current_quantity': 0
+    },
+    {
+        'sku': 'LIGHT_DARK_GREEN',
+        'name': 'Yellow Green',
+        'red_ml': 0,
+        'green_ml': 75,
+        'blue_ml': 0,
+        'dark_ml': 25,
+        'total_ml': 100,
+        'price': 40,
+        'current_quantity': 0
+    },
+    {
+        'sku': 'LIGHT_DARK_RED',
+        'name': 'Light Dark Red',
+        'red_ml': 75,
+        'green_ml': 0,
+        'blue_ml': 0,
+        'dark_ml': 25,
+        'total_ml': 100,
+        'price': 40,
+        'current_quantity': 0
+    },
+    {
+        'sku': 'LIGHT_DARK_BLUE',
+        'name': 'Light Dark Blue',
+        'red_ml': 0,
+        'green_ml': 0,
+        'blue_ml': 75,
+        'dark_ml': 25,
         'total_ml': 100,
         'price': 40,
         'current_quantity': 0
@@ -984,12 +1017,12 @@ POTION_PRIORITIES = {
             {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.15}
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
-            {"sku": "DARK_RED_POTION", "composition": [50, 0, 0, 50], "price" : 40, "sales_mix": 0.05},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 40, "sales_mix": 0.05},
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price" : 40, "sales_mix": 0.05},
-            {"sku": "BROWN_POTION", "composition": [35, 35, 30, 0], "price" : 40, "sales_mix": 0.05},
-            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price" : 40, "sales_mix": 0.05},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.05}
+            {"sku": "ORANGE", "composition": [75, 25, 0, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "VIOLET_POTION", "composition": [75, 0, 25, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "LIGHT_DARK_RED", "composition": [75, 0, 0, 25], "price" : 40, "sales_mix": 0.10},
+            {"sku": "YELLOW_GREEN", "composition": [25, 75, 0, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "SEA_GREEN", "composition": [0, 75, 25, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "LIGHT_DARK_GREEN", "composition": [0, 75, 0, 25], "price" : 40, "sales_mix": 0.10}
         ]
     }
 }
