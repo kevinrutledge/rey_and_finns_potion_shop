@@ -942,12 +942,12 @@ POTION_PRIORITIES = {
             {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.15}
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price" : 40, "sales_mix": 0.20},
-            {"sku": "RUSSET_POTION", "composition": [50, 25, 25, 0], "price": 40, "sales_mix": 0.05},
-            {"sku": "OLIVE_POTION", "composition": [25, 50, 25, 0], "price": 40, "sales_mix": 0.05},
-            {"sku": "STEEL_BLUE_POTION", "composition": [25, 25, 50, 0], "price": 40, "sales_mix": 0.05},
-            {"sku": "DARK_RED_POTION", "composition": [50, 0, 0, 50], "price" : 40, "sales_mix": 0.05},
-            {"sku": "DARK_GREEN_POTION", "composition": [0, 50, 0, 50], "price" : 40, "sales_mix": 0.05}
+            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price": 40, "sales_mix": 0.25},
+            {"sku": "YELLOW_POTION", "composition": [50, 50, 0, 0], "price": 40, "sales_mix": 0.15},
+            {"sku": "OLIVE_POTION", "composition": [25, 50, 25, 0], "price": 40, "sales_mix": 0.20},
+            {"sku": "LIME_POTION", "composition": [25, 75, 0, 0], "price": 40, "sales_mix": 0.10},
+            {"sku": "DARK_PURPLE", "composition": [25, 0, 25, 50], "price": 40, "sales_mix": 0.10},
+            {"sku": "RUSSET_POTION", "composition": [50, 25, 25, 0], "price": 40, "sales_mix": 0.10}
         ]
     },
     "Arcanaday": {
