@@ -1009,12 +1009,12 @@ POTION_PRIORITIES = {
             {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 40, "sales_mix": 0.15}
         ],
         "PRICE_STRATEGY_DYNAMIC": [
-            {"sku": "BLUE_POTION", "composition": [0, 0, 100, 0], "price" : 35, "sales_mix": 0.15},
-            {"sku": "GREEN_POTION", "composition": [0, 100, 0, 0], "price" : 25, "sales_mix": 0.15},
-            {"sku": "RED_POTION", "composition": [100, 0, 0, 0], "price" : 25, "sales_mix": 0.15},
-            {"sku": "TEAL_POTION", "composition": [0, 50, 50, 0], "price" : 35, "sales_mix": 0.15},
-            {"sku": "PURPLE_POTION", "composition": [50, 0, 50, 0], "price" : 35, "sales_mix": 0.15},
-            {"sku": "DARK_POTION", "composition": [0, 0, 0, 100], "price" : 35, "sales_mix": 0.15}
+            {"sku": "ORANGE", "composition": [75, 25, 0, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "VIOLET_POTION", "composition": [75, 0, 25, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "LIGHT_DARK_RED", "composition": [75, 0, 0, 25], "price" : 40, "sales_mix": 0.10},
+            {"sku": "YELLOW_GREEN", "composition": [25, 75, 0, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "SEA_GREEN", "composition": [0, 75, 25, 0], "price" : 40, "sales_mix": 0.10},
+            {"sku": "LIGHT_DARK_GREEN", "composition": [0, 75, 0, 25], "price" : 40, "sales_mix": 0.10}
         ],
         "PRICE_STRATEGY_MAXIMIZING": [
             {"sku": "ORANGE", "composition": [75, 25, 0, 0], "price" : 40, "sales_mix": 0.10},
