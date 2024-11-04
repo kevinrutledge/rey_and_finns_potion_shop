@@ -45,7 +45,7 @@ def get_capacity_plan():
     """Get capacity purchase plan."""
     try:
         with db.engine.begin() as conn:
-            # Return empty plan since we're not using strategy-based upgrades
+            # FIXME strategy_transitions table
             return {
                 "potion_capacity": 0,
                 "ml_capacity": 0

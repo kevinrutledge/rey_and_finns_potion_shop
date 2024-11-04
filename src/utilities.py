@@ -1,5 +1,6 @@
 import sqlalchemy
 import logging
+import json
 from fastapi import HTTPException
 from typing import Dict, List, Optional, Tuple
 
@@ -166,74 +167,6 @@ class StateValidator:
             
         except Exception as e:
             logger.error(f"Failed to verify resources: {e}")
-            raise
-
-class StrategyManager:
-    """Handles strategy transitions and validations."""
-    
-    @staticmethod
-    def check_strategy_transition(conn, current_state: Dict) -> Optional[int]:
-        """
-        Checks if conditions are met for strategy transition.
-        Returns new strategy_id if transition should occur, None otherwise.
-        """
-        try:
-            possible_transition = conn.execute(
-                sqlalchemy.text("""
-                    SELECT 
-                        to_strategy_id,
-                        requires_both_thresholds
-                    FROM strategy_transitions st
-                    WHERE from_strategy_id = :current_strategy
-                    AND gold_threshold <= :gold
-                    AND (
-                        NOT requires_both_thresholds
-                        OR (
-                            ml_threshold <= :total_ml
-                            AND potion_threshold <= :total_potions
-                        )
-                    )
-                    ORDER BY to_strategy_id DESC
-                    LIMIT 1
-                """),
-                {
-                    "current_strategy": current_state['strategy_id'],
-                    "gold": current_state['gold'],
-                    "total_ml": current_state['total_ml'],
-                    "total_potions": current_state['total_potions']
-                }
-            ).mappings().first()
-            
-            return possible_transition['to_strategy_id'] if possible_transition else None
-            
-        except Exception as e:
-            logger.error(f"Failed to check strategy transition: {e}")
-            raise
-
-    @staticmethod
-    def apply_strategy_change(
-        conn,
-        old_strategy: int,
-        new_strategy: int,
-        time_id: int
-    ) -> None:
-        """
-        Applies strategy change and creates appropriate ledger entry.
-        """
-        try:
-            LedgerManager.create_ledger_entry(
-                conn=conn,
-                time_id=time_id,
-                entry_type='STRATEGY_CHANGE',
-                gold_change=0  # Strategy change doesn't affect gold
-            )
-            
-            logger.info(
-                f"Strategy changed from {old_strategy} to {new_strategy}"
-            )
-            
-        except Exception as e:
-            logger.error(f"Failed to apply strategy change: {e}")
             raise
 
 class TimeManager:
@@ -511,7 +444,11 @@ class BarrelManager:
                 """),
                 {
                     "visit_id": visit_id,
-                    **barrel
+                    "sku": barrel["sku"],
+                    "ml_per_barrel": barrel["ml_per_barrel"],
+                    "potion_type": json.dumps(barrel["potion_type"]),
+                    "price": barrel["price"],
+                    "quantity": barrel["quantity"]
                 }
             ).scalar_one()
             
@@ -746,9 +683,10 @@ class CartManager:
     def record_customer_visit(conn, visit_id: int, customers: list, time_id: int) -> None:
         """Record customer visit and individual customers."""
         try:
-            conn.execute(
+            # First record the visit and get visit_record_id
+            visit_record_id = conn.execute(
                 sqlalchemy.text("""
-                    INSERT INTO customer_visits (
+                    INSERT INTO public.customer_visits (
                         visit_id,
                         time_id,
                         customers
@@ -757,26 +695,27 @@ class CartManager:
                         :time_id,
                         :customers
                     )
+                    RETURNING visit_record_id
                 """),
                 {
                     "visit_id": visit_id,
                     "time_id": time_id,
-                    "customers": [c.dict() for c in customers]
+                    "customers": json.dumps([dict(c) for c in customers])
                 }
-            )
+            ).scalar_one()
             
-            # Record individual customers
+            # Now record individual customers with visit_record_id
             for customer in customers:
                 conn.execute(
                     sqlalchemy.text("""
-                        INSERT INTO customers (
-                            visit_id,
+                        INSERT INTO public.customers (
+                            visit_record_id,
                             time_id,
                             customer_name,
                             character_class,
                             level
                         ) VALUES (
-                            :visit_id,
+                            :visit_record_id,
                             :time_id,
                             :name,
                             :class,
@@ -784,13 +723,15 @@ class CartManager:
                         )
                     """),
                     {
-                        "visit_id": visit_id,
+                        "visit_record_id": visit_record_id,
                         "time_id": time_id,
                         "name": customer.customer_name,
                         "class": customer.character_class,
                         "level": customer.level
                     }
                 )
+            
+            logger.debug(f"Recorded visit {visit_id} with {len(customers)} customers")
             
         except Exception as e:
             logger.error(f"Failed to record customer visit: {e}")
@@ -800,14 +741,15 @@ class CartManager:
     def create_cart(conn, customer: dict, time_id: int) -> int:
         """Create new cart for customer and return cart_id."""
         try:
-            customer_id = conn.execute(
+            # Get the latest customer record for this customer
+            result = conn.execute(
                 sqlalchemy.text("""
                     SELECT customer_id
-                    FROM customers
+                    FROM public.customers
                     WHERE customer_name = :name 
                     AND character_class = :class
                     AND level = :level
-                    ORDER BY customer_id DESC
+                    ORDER BY created_at DESC
                     LIMIT 1
                 """),
                 {
@@ -819,7 +761,7 @@ class CartManager:
             
             cart_id = conn.execute(
                 sqlalchemy.text("""
-                    INSERT INTO carts (
+                    INSERT INTO public.carts (
                         customer_id,
                         time_id,
                         checked_out,
@@ -835,13 +777,17 @@ class CartManager:
                     RETURNING cart_id
                 """),
                 {
-                    "customer_id": customer_id,
+                    "customer_id": result,
                     "time_id": time_id
                 }
             ).scalar_one()
             
+            logger.debug(f"Created cart {cart_id} for customer {customer['customer_name']}")
             return cart_id
             
+        except sqlalchemy.exc.NoResultFound:
+            logger.error(f"No customer found for cart creation: {customer}")
+            raise HTTPException(status_code=404, detail="Customer not found")
         except Exception as e:
             logger.error(f"Failed to create cart: {e}")
             raise
@@ -859,8 +805,8 @@ class CartManager:
                         cust.customer_name,
                         cust.character_class,
                         cust.level
-                    FROM carts c
-                    JOIN customers cust ON c.customer_id = cust.customer_id
+                    FROM public.carts c
+                    JOIN public.customers cust ON c.customer_id = cust.customer_id
                     WHERE c.cart_id = :cart_id
                 """),
                 {"cart_id": cart_id}
@@ -872,22 +818,13 @@ class CartManager:
                     detail="Cart is already checked out"
                 )
                 
-            return result
+            return dict(result)
             
         except sqlalchemy.exc.NoResultFound:
-            raise HTTPException(
-                status_code=404,
-                detail="Cart not found"
-            )
-            
+            raise HTTPException(status_code=404, detail="Cart not found")
+
     @staticmethod
-    def update_cart_item(
-        conn,
-        cart_id: int,
-        item_sku: str,
-        quantity: int,
-        time_id: int
-    ) -> None:
+    def update_cart_item(conn, cart_id: int, item_sku: str, quantity: int, time_id: int) -> None:
         """Add or update item in cart."""
         try:
             # Get potion details
@@ -897,7 +834,7 @@ class CartManager:
                         potion_id,
                         current_quantity,
                         base_price
-                    FROM potions
+                    FROM public.potions
                     WHERE sku = :sku
                 """),
                 {"sku": item_sku}
@@ -913,7 +850,7 @@ class CartManager:
             line_total = potion['base_price'] * quantity
             conn.execute(
                 sqlalchemy.text("""
-                    INSERT INTO cart_items (
+                    INSERT INTO public.cart_items (
                         cart_id,
                         potion_id,
                         time_id,
@@ -943,6 +880,10 @@ class CartManager:
                     "price": potion['base_price'],
                     "line_total": line_total
                 }
+            )
+            
+            logger.debug(
+                f"Updated cart {cart_id} item {item_sku} to quantity {quantity}"
             )
             
         except sqlalchemy.exc.NoResultFound:
@@ -1057,17 +998,18 @@ class InventoryManager:
                 sqlalchemy.text("""
                     WITH ledger_totals AS (
                         SELECT
-                            COALESCE(SUM(gold_change), 100) as gold,
-                            COALESCE(SUM(ml_change), 0) as total_ml,
-                            COALESCE(SUM(potion_change), 0) as total_potions,
+                            COALESCE(SUM(l.gold_change), 100) as gold,
+                            COALESCE(SUM(l.ml_change), 0) as total_ml,
+                            COALESCE(SUM(l.potion_change), 0) as total_potions,
                             COUNT(*) FILTER (
-                                WHERE entry_type = 'CAPACITY_UPGRADE' 
-                                AND potion_change IS NOT NULL
+                                WHERE l.entry_type = 'CAPACITY_UPGRADE' 
+                                AND l.potion_change IS NOT NULL
                             ) as potion_upgrades,
                             COUNT(*) FILTER (
-                                WHERE entry_type = 'CAPACITY_UPGRADE' 
-                                AND ml_change IS NOT NULL
+                                WHERE l.entry_type = 'CAPACITY_UPGRADE' 
+                                AND l.ml_change IS NOT NULL
                             ) as ml_upgrades
+                        FROM public.ledger_entries l
                     )
                     SELECT
                         gold,
@@ -1078,7 +1020,7 @@ class InventoryManager:
                     FROM ledger_totals
                 """)
             ).mappings().one()
-            
+                
         except Exception as e:
             logger.error(f"Failed to get inventory state: {e}")
             raise

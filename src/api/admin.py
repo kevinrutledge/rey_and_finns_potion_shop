@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from src.api import auth
 from src import database as db
+from src.utilities import LedgerManager
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,8 @@ def reset():
             # Clear core game state tables
             conn.execute(
                 sqlalchemy.text("""
-                    TRUNCATE TABLE game_time CASCADE;
-                    TRUNCATE TABLE barrel_purchases CASCADE;
+                    TRUNCATE TABLE active_strategy CASCADE;
+                    TRUNCATE TABLE current_game_time CASCADE;
                     TRUNCATE TABLE ledger_entries CASCADE;
                 """)
             )
@@ -36,7 +37,42 @@ def reset():
                     SET current_quantity = 0
                 """)
             )
-            
+
+            # Insert initial gold ledger entry
+            time_id = conn.execute(
+                sqlalchemy.text("""
+                    SELECT time_id
+                    FROM game_time
+                    ORDER BY time_id ASC
+                    LIMIT 1
+                """)
+            ).scalar_one()
+
+            LedgerManager.create_ledger_entry(
+                conn=conn,
+                time_id=time_id,
+                entry_type='ADMIN_CHANGE',
+                gold_change=100  # Starting gold
+            )
+
+            # Insert initial active_strategy as PREMIUM
+            premium_strategy_id = conn.execute(
+                sqlalchemy.text("""
+                    SELECT strategy_id FROM strategies WHERE name = 'PREMIUM'
+                """)
+            ).scalar_one()
+
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO active_strategy (strategy_id, game_time_id)
+                    VALUES (:strategy_id, :game_time_id)
+                """),
+                {
+                    "strategy_id": premium_strategy_id,
+                    "game_time_id": time_id
+                }
+            )
+
             logger.info("Successfully reset game state to initial values")
             return {"success": True}
             

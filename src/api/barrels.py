@@ -1,5 +1,6 @@
 import sqlalchemy
 import logging
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -30,13 +31,13 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     try:
         with db.engine.begin() as conn:
             # Get future needs and current state
-            needs = BarrelManager.get_ml_needs(conn)
+            needs = [dict(need) for need in BarrelManager.get_ml_needs(conn)]
             state = StateValidator.get_current_state(conn)
             
             # Plan purchases
             purchases = BarrelManager.plan_purchases(
                 needs,
-                [b.dict() for b in wholesale_catalog],
+                [dict(b) for b in wholesale_catalog],
                 state
             )
             
@@ -75,7 +76,8 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 """)
             ).scalar_one()
             
-            # Record visit
+            delivered = [dict(b) for b in barrels_delivered]
+            
             visit_id = conn.execute(
                 sqlalchemy.text("""
                     INSERT INTO barrel_visits (
@@ -87,7 +89,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 """),
                 {
                     "time_id": time_id,
-                    "catalog": [b.dict() for b in barrels_delivered]
+                    "catalog": json.dumps(delivered)
                 }
             ).scalar_one()
             
@@ -95,7 +97,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             for barrel in barrels_delivered:
                 BarrelManager.process_barrel_delivery(
                     conn,
-                    barrel.dict(),
+                    dict(barrel),
                     time_id,
                     visit_id
                 )
