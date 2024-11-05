@@ -19,6 +19,16 @@ def reset():
     try:
         with db.engine.begin() as conn:
             logger.debug("Starting game state reset")
+
+            current_time = conn.execute(
+                sqlalchemy.text("""
+                    SELECT gt.time_id, gt.in_game_day, gt.in_game_hour
+                    FROM current_game_time cgt
+                    JOIN game_time gt ON cgt.game_time_id = gt.time_id
+                    ORDER BY cgt.created_at DESC
+                    LIMIT 1
+                """)
+            ).mappings().first()
             
             initial_state = StateValidator.get_current_state(conn)
             logger.debug(
@@ -39,18 +49,22 @@ def reset():
                 sqlalchemy.text("UPDATE potions SET current_quantity = 0")
             )
 
-            time_id = conn.execute(
+            conn.execute(
                 sqlalchemy.text("""
-                    SELECT time_id
-                    FROM game_time
-                    ORDER BY time_id ASC
-                    LIMIT 1
-                """)
-            ).scalar_one()
+                    INSERT INTO current_game_time 
+                        (game_time_id, current_day, current_hour)
+                    VALUES (:time_id, :day, :hour)
+                """),
+                {
+                    "time_id": current_time['time_id'],
+                    "day": current_time['in_game_day'],
+                    "hour": current_time['in_game_hour']
+                }
+            )
 
             LedgerManager.create_ledger_entry(
                 conn=conn,
-                time_id=time_id,
+                time_id=current_time['time_id'],
                 entry_type='ADMIN_CHANGE',
                 gold_change=100
             )
@@ -66,7 +80,7 @@ def reset():
                 """),
                 {
                     "strategy_id": premium_strategy_id,
-                    "game_time_id": time_id
+                    "game_time_id": current_time['time_id']
                 }
             )
 

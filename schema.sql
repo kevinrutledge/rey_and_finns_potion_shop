@@ -202,7 +202,7 @@ CREATE TABLE barrel_purchases (
 -- Customer system
 CREATE TABLE customer_visits (
     visit_record_id BIGSERIAL PRIMARY KEY,
-    visit_id BIGINT NOT NULL,
+    visit_id BIGINT NOT NULL,            -- This is the order_id
     time_id BIGINT REFERENCES game_time(time_id),
     customers JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -211,6 +211,7 @@ CREATE TABLE customer_visits (
 CREATE TABLE customers (
     customer_id BIGSERIAL PRIMARY KEY,
     visit_record_id BIGINT REFERENCES customer_visits(visit_record_id),
+    visit_id BIGINT NOT NULL,
     time_id BIGINT REFERENCES game_time(time_id),
     customer_name TEXT NOT NULL,
     character_class TEXT NOT NULL,
@@ -221,6 +222,7 @@ CREATE TABLE customers (
 -- Cart system
 CREATE TABLE carts (
     cart_id BIGSERIAL PRIMARY KEY,
+    visit_id BIGINT NOT NULL,
     customer_id BIGINT REFERENCES customers(customer_id),
     time_id BIGINT REFERENCES game_time(time_id),
     checked_out BOOLEAN NOT NULL DEFAULT FALSE,
@@ -239,6 +241,7 @@ CREATE TABLE carts (
 CREATE TABLE cart_items (
     item_id BIGSERIAL PRIMARY KEY,
     cart_id BIGINT REFERENCES carts(cart_id),
+    visit_id BIGINT NOT NULL,
     potion_id BIGINT REFERENCES potions(potion_id),
     time_id BIGINT REFERENCES game_time(time_id),
     quantity INT NOT NULL CHECK (quantity > 0),
@@ -339,9 +342,9 @@ CREATE INDEX idx_barrel_purchases_time ON barrel_purchases(time_id);
 CREATE INDEX idx_barrel_purchases_success ON barrel_purchases(purchase_success);
 CREATE INDEX idx_cart_items_potion ON cart_items(potion_id);
 CREATE INDEX idx_customer_visits_visit_id ON customer_visits(visit_id);
-CREATE INDEX idx_customers_visit_record_id ON customers(visit_record_id);
-CREATE INDEX idx_customers_created_at ON customers(created_at);
-CREATE INDEX idx_customer_visits_created_at ON customer_visits(created_at);
+CREATE INDEX idx_customers_visit_id ON customers(visit_id);
+CREATE INDEX idx_carts_visit_id ON carts(visit_id);
+CREATE INDEX idx_cart_items_visit_id ON cart_items(visit_id);
 CREATE INDEX idx_ledger_entries_entry_type ON ledger_entries (entry_type);
 CREATE INDEX idx_ledger_entries_gold_change ON ledger_entries (gold_change) WHERE gold_change IS NOT NULL;
 CREATE INDEX idx_strategy_time_blocks_lookup ON strategy_time_blocks(strategy_id, time_block_id, day_name);

@@ -707,7 +707,7 @@ class CartManager:
     """Handles cart operations and customer interactions."""
     
     @staticmethod
-    def record_customer_visit(conn, visit_id: int, customers: list, time_id: int) -> None:
+    def record_customer_visit(conn, visit_id: int, customers: list, time_id: int) -> int:
         """Records customer visit and individual customers in the database."""
         visit_record_id = conn.execute(
             sqlalchemy.text("""
@@ -734,12 +734,14 @@ class CartManager:
                 sqlalchemy.text("""
                     INSERT INTO customers (
                         visit_record_id,
+                        visit_id,
                         time_id,
                         customer_name,
                         character_class,
                         level
                     ) VALUES (
                         :visit_record_id,
+                        :visit_id,
                         :time_id,
                         :name,
                         :class,
@@ -748,43 +750,51 @@ class CartManager:
                 """),
                 {
                     "visit_record_id": visit_record_id,
+                    "visit_id": visit_id,
                     "time_id": time_id,
                     "name": customer['customer_name'],
                     "class": customer['character_class'],
                     "level": customer['level']
                 }
             )
+        
+        return visit_record_id
 
     @staticmethod
-    def create_cart(conn, customer: dict, time_id: int) -> int:
+    def create_cart(conn, customer: dict, time_id: int, visit_id: int) -> int:
         """Creates new cart for customer."""
-        result = conn.execute(
+        customer_id = conn.execute(
             sqlalchemy.text("""
-                SELECT customer_id
-                FROM customers
-                WHERE customer_name = :name 
-                AND character_class = :class
-                AND level = :level
-                ORDER BY created_at DESC
+                SELECT c.customer_id
+                FROM customers c
+                JOIN customer_visits cv ON c.visit_record_id = cv.visit_record_id
+                WHERE c.customer_name = :name 
+                AND c.character_class = :class
+                AND c.level = :level
+                AND cv.visit_id = :visit_id  -- Check against current visit_id
+                ORDER BY cv.created_at DESC
                 LIMIT 1
             """),
             {
                 "name": customer['customer_name'],
                 "class": customer['character_class'],
-                "level": customer['level']
+                "level": customer['level'],
+                "visit_id": visit_id
             }
-        ).scalar_one()
+        ).scalar()
         
         cart_id = conn.execute(
             sqlalchemy.text("""
                 INSERT INTO carts (
                     customer_id,
+                    visit_id,
                     time_id,
                     checked_out,
                     total_potions,
                     total_gold
                 ) VALUES (
                     :customer_id,
+                    :visit_id,
                     :time_id,
                     false,
                     0,
@@ -793,7 +803,8 @@ class CartManager:
                 RETURNING cart_id
             """),
             {
-                "customer_id": result,
+                "customer_id": customer_id,
+                "visit_id": visit_id,
                 "time_id": time_id
             }
         ).scalar_one()
@@ -807,6 +818,7 @@ class CartManager:
             sqlalchemy.text("""
                 SELECT 
                     c.cart_id,
+                    c.visit_id,
                     c.checked_out,
                     c.customer_id,
                     cust.customer_name,
@@ -817,18 +829,18 @@ class CartManager:
                 WHERE c.cart_id = :cart_id
             """),
             {"cart_id": cart_id}
-        ).mappings().one()
+        ).mappings().first()
         
+        if not result:
+            raise HTTPException(status_code=404, detail="Cart not found")
+            
         if result['checked_out']:
-            raise HTTPException(
-                status_code=400,
-                detail="Cart is already checked out"
-            )
+            raise HTTPException(status_code=400, detail="Cart is already checked out")
             
         return dict(result)
 
     @staticmethod
-    def update_cart_item(conn, cart_id: int, item_sku: str, quantity: int, time_id: int) -> None:
+    def update_cart_item(conn, cart_id: int, item_sku: str, quantity: int, time_id: int, visit_id: int) -> None:
         """Adds or updates item in cart."""
         potion = conn.execute(
             sqlalchemy.text("""
@@ -843,16 +855,15 @@ class CartManager:
         ).mappings().one()
         
         if potion['current_quantity'] < quantity:
-            raise HTTPException(
-                status_code=400,
-                detail="Insufficient quantity in inventory"
-            )
+            raise HTTPException(status_code=400, detail="Insufficient quantity in inventory")
         
         line_total = potion['base_price'] * quantity
+        
         conn.execute(
             sqlalchemy.text("""
                 INSERT INTO cart_items (
                     cart_id,
+                    visit_id,
                     potion_id,
                     time_id,
                     quantity,
@@ -860,6 +871,7 @@ class CartManager:
                     line_total
                 ) VALUES (
                     :cart_id,
+                    :visit_id,
                     :potion_id,
                     :time_id,
                     :quantity,
@@ -875,6 +887,7 @@ class CartManager:
             """),
             {
                 "cart_id": cart_id,
+                "visit_id": visit_id,
                 "potion_id": potion['potion_id'],
                 "time_id": time_id,
                 "quantity": quantity,
@@ -884,16 +897,8 @@ class CartManager:
         )
 
     @staticmethod
-    def process_checkout(
-        conn,
-        cart_id: int,
-        payment: str,
-        time_id: int
-    ) -> dict:
-        """
-        Processes cart checkout with ledger entries and inventory updates.
-        Returns checkout summary with totals.
-        """
+    def process_checkout(conn, cart_id: int, payment: str, time_id: int) -> dict:
+        """Process cart checkout."""
         items = conn.execute(
             sqlalchemy.text("""
                 SELECT 
@@ -919,7 +924,7 @@ class CartManager:
         for item in items:
             if item['current_quantity'] < item['quantity']:
                 raise HTTPException(
-                    status_code=400,
+                    status_code=400, 
                     detail=f"Insufficient quantity for {item['sku']}"
                 )
         
@@ -966,8 +971,6 @@ class CartManager:
             }
         )
         
-        logger.debug(f"Return {total_potions} bought for {total_gold} gold")
-
         return {
             "total_potions_bought": total_potions,
             "total_gold_paid": total_gold
