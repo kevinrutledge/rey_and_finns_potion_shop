@@ -1,9 +1,10 @@
 import sqlalchemy
 import logging
-from src import database as db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from src.api import auth
+from src import database as db
+from src.utilities import TimeManager
 
 logger = logging.getLogger(__name__)
 
@@ -17,40 +18,33 @@ class Timestamp(BaseModel):
     day: str
     hour: int
 
-
 @router.post("/current_time")
 def post_time(timestamp: Timestamp):
-    """
-    Share current time and record it in database.
-    """
-    logger.info("Endpoint /info/current_time called.")
-    logger.debug(f"Current day: {timestamp.day}, current hour: {timestamp.hour}")
-
+    """Record current game time and check for strategy transition."""
     try:
-        with db.engine.begin() as connection:
-            # Prepare SQL query to insert in-game time
-            insert_query = """
-                INSERT INTO temp_in_game_time (in_game_day, in_game_hour)
-                VALUES (:in_game_day, :in_game_hour)
-                RETURNING time_id;
-            """
-
-            # Execute query with provided timestamp data
-            result = connection.execute(
-                sqlalchemy.text(insert_query),
-                {
-                    "in_game_day": timestamp.day,
-                    "in_game_hour": timestamp.hour
-                }
+        logger.debug(f"Recording time - Day: {timestamp.day}, Hour: {timestamp.hour}")
+        
+        if not TimeManager.validate_game_time(timestamp.day, timestamp.hour):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid game time values"
             )
-            # Fetch generated time_id
-            time_id = result.scalar()
-            logger.info(f"Inserted in_game_time record with time_id: {time_id}")
-
+        
+        with db.engine.begin() as conn:
+            strategy_changed = TimeManager.record_time(
+                conn, 
+                timestamp.day, 
+                timestamp.hour
+            )
+            
+            logger.info(
+                f"Time recorded{' - Strategy changed' if strategy_changed else ''}"
+            )
+            
+            return {"success": True}
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"Exception occurred in post_time: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-    # Return successful response
-    logger.debug("Returning response: OK")
-    return {"success": True}
+        logger.error(f"Failed to record time: {e}")
+        raise HTTPException(status_code=500, detail="Failed to record time")
