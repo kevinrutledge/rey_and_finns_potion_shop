@@ -1,5 +1,6 @@
 -- Drop tables in reverse order of dependencies
 DROP TABLE IF EXISTS ledger_entries CASCADE;
+DROP TABLE IF EXISTS capacity_upgrade_thresholds CASCADE;
 DROP TABLE IF EXISTS strategy_thresholds CASCADE;
 DROP TABLE IF EXISTS strategy_transitions CASCADE;
 DROP TABLE IF EXISTS active_strategy CASCADE;
@@ -18,7 +19,7 @@ DROP TABLE IF EXISTS color_definitions CASCADE;
 DROP TABLE IF EXISTS strategies CASCADE;
 DROP TABLE IF EXISTS time_blocks CASCADE;
 DROP TABLE IF EXISTS potions CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS current_state CASCADE;
+DROP VIEW IF EXISTS current_state CASCADE;
 
 -- Core game time tracking
 CREATE TABLE game_time (
@@ -246,6 +247,25 @@ CREATE TABLE cart_items (
     UNIQUE(cart_id, potion_id)
 );
 
+-- Capacity upgrade threshold system
+CREATE TABLE capacity_upgrade_thresholds (
+    threshold_id BIGSERIAL PRIMARY KEY,
+    min_potion_units INT NOT NULL,          -- Minimum potion capacity units required
+    max_potion_units INT,                   -- Maximum potion capacity units required
+    min_ml_units INT NOT NULL,              -- Minimum ml capacity units required
+    max_ml_units INT,                       -- Maximum ml capacity units required
+    gold_threshold INT NOT NULL,            -- Gold required
+    secondary_gold_threshold INT,           -- Secondary gold threshold for inventory checks
+    capacity_check_threshold FLOAT,         -- Capacity check (e.g. 50%)
+    ml_capacity_purchase INT NOT NULL,      -- How many ml units to purchase
+    potion_capacity_purchase INT NOT NULL,  -- How many potion units to purchase
+    priority_order INT NOT NULL,            -- Higher number = higher priority for sorting
+    requires_inventory_check BOOLEAN NOT NULL DEFAULT false, -- Check inventory levels boolean
+    CHECK (min_potion_units <= max_potion_units),
+    CHECK (min_ml_units <= max_ml_units),
+    CHECK (capacity_check_threshold >= 0 AND capacity_check_threshold <= 1)
+);
+
 -- Ledger system
 CREATE TABLE ledger_entries (
     entry_id BIGSERIAL PRIMARY KEY,
@@ -276,8 +296,8 @@ CREATE TABLE ledger_entries (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Materialized view ledgers
-CREATE MATERIALIZED VIEW current_state AS
+-- View ledgers
+CREATE VIEW current_state AS
 WITH ledger_totals AS (
     SELECT
         COALESCE(SUM(gold_change), 100) as gold,
@@ -312,23 +332,7 @@ SELECT
      LIMIT 1) as strategy_id
 FROM ledger_totals;
 
--- Refresh function
-CREATE OR REPLACE FUNCTION refresh_current_state()
-RETURNS TRIGGER AS $$
-BEGIN
-    REFRESH MATERIALIZED VIEW current_state;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER refresh_current_state_trigger
-    AFTER INSERT OR UPDATE ON ledger_entries
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION refresh_current_state();
-
 -- Indexes for common queries
-CREATE UNIQUE INDEX current_state_pkey ON current_state (gold);
-CREATE INDEX idx_current_state_strategy ON current_state (strategy_id);
 CREATE INDEX idx_game_time_day_hour ON game_time(in_game_day, in_game_hour);
 CREATE INDEX idx_barrel_visits_time ON barrel_visits(time_id);
 CREATE INDEX idx_barrel_purchases_time ON barrel_purchases(time_id);
@@ -745,3 +749,24 @@ VALUES
 ('LIGHT_DARK_TEAL', 'Light Dark Teal', 0, 50, 25, 25, 50, (SELECT color_id FROM color_definitions WHERE color_name = 'GREEN'), 0),
 ('LIGHT_DARK_INDIGO', 'Light Dark Indigo', 25, 0, 50, 25, 50, (SELECT color_id FROM color_definitions WHERE color_name = 'BLUE'), 0),
 ('SHADOWED_TEAL', 'Shadowed Teal', 0, 25, 50, 25, 50, (SELECT color_id FROM color_definitions WHERE color_name = 'BLUE'), 0);
+
+-- Capacity upgrade definitions
+INSERT INTO capacity_upgrade_thresholds
+(min_potion_units, max_potion_units, min_ml_units, max_ml_units, 
+ gold_threshold, secondary_gold_threshold, capacity_check_threshold,
+ ml_capacity_purchase, potion_capacity_purchase, priority_order, requires_inventory_check)
+VALUES
+-- First tier (1-1 units)
+(1, 1, 1, 1, 2800, NULL, NULL, 1, 1, 100, false),
+(1, 1, 1, 1, 2000, NULL, 0.5, 1, 1, 90, true),
+
+-- Second tier (2-4 units)
+(2, 4, 2, 4, 5550, NULL, NULL, 2, 2, 80, false),
+(2, 4, 2, 4, 3550, NULL, 0.5, 2, 2, 70, true),
+(2, 4, 2, 4, 3550, NULL, NULL, 1, 1, 60, false),
+(2, 4, 2, 4, 2000, NULL, 0.5, 1, 1, 50, true),
+
+-- Third tier (4+ units) 
+(4, NULL, 4, NULL, 6250, NULL, 0.6, 1, 1, 40, true),
+(4, NULL, 4, NULL, 6250, NULL, 0.6, 1, 0, 30, true),
+(4, NULL, 4, NULL, 6250, NULL, 0.6, 0, 1, 20, true);

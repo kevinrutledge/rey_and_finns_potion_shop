@@ -24,8 +24,18 @@ def post_time(timestamp: Timestamp):
     try:
         logger.debug(f"Recording time - Day: {timestamp.day}, Hour: {timestamp.hour}")
         
+        if not TimeManager.validate_game_time(timestamp.day, timestamp.hour):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid game time values"
+            )
+        
         with db.engine.begin() as conn:
-            strategy_changed = TimeManager.record_time(conn, timestamp.day, timestamp.hour)
+            strategy_changed = TimeManager.record_time(
+                conn, 
+                timestamp.day, 
+                timestamp.hour
+            )
             
             logger.info(
                 f"Time recorded{' - Strategy changed' if strategy_changed else ''}"
@@ -33,6 +43,8 @@ def post_time(timestamp: Timestamp):
             
             return {"success": True}
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to record time: {e}")
         raise HTTPException(status_code=500, detail="Failed to record time")

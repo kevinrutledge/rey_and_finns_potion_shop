@@ -45,11 +45,8 @@ def get_capacity_plan():
     """Get capacity purchase plan."""
     try:
         with db.engine.begin() as conn:
-            # FIXME strategy_transitions table
-            return {
-                "potion_capacity": 0,
-                "ml_capacity": 0
-            }
+            state = InventoryManager.get_inventory_state(conn)
+            return InventoryManager.get_capacity_purchase_plan(conn, state)
             
     except Exception as e:
         logger.error(f"Failed to get capacity plan: {e}")
@@ -80,12 +77,6 @@ def deliver_capacity(capacity_purchase: CapacityPurchase, order_id: int):
                 capacity_purchase.potion_capacity,
                 capacity_purchase.ml_capacity,
                 time_id
-            )
-            
-            logger.info(
-                f"Processed capacity upgrade - "
-                f"Potion: +{capacity_purchase.potion_capacity}, "
-                f"ML: +{capacity_purchase.ml_capacity}"
             )
             
             return {"success": True}

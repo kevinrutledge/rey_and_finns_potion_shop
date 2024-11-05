@@ -24,11 +24,9 @@ def get_bottle_plan():
     """Plan potion bottling based on current resources."""
     try:
         with db.engine.begin() as conn:
-            # Get current state and priorities
             state = StateValidator.get_current_state(conn)
             priorities = BottlerManager.get_bottling_priorities(conn)
             
-            # Calculate possible potions
             available_ml = {
                 'red_ml': state['red_ml'],
                 'green_ml': state['green_ml'],
@@ -58,10 +56,8 @@ def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int
     
     try:
         with db.engine.begin() as conn:
-            # Validate resources
             state = StateValidator.get_current_state(conn)
             
-            # Calculate totals
             total_potions = sum(p.quantity for p in potions_delivered)
             ml_needs = {'red_ml': 0, 'green_ml': 0, 'blue_ml': 0, 'dark_ml': 0}
             
@@ -71,7 +67,6 @@ def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int
                 ml_needs['blue_ml'] += potion.potion_type[2] * potion.quantity
                 ml_needs['dark_ml'] += potion.potion_type[3] * potion.quantity
             
-            # Validate capacities
             if state['total_potions'] + total_potions > state['max_potions']:
                 raise HTTPException(status_code=400, detail="Insufficient potion capacity")
             
@@ -81,7 +76,6 @@ def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int
                 state['dark_ml'] < ml_needs['dark_ml']):
                 raise HTTPException(status_code=400, detail="Insufficient ML")
             
-            # Get time_id
             time_id = conn.execute(
                 sqlalchemy.text("""
                     SELECT game_time_id 
@@ -91,7 +85,6 @@ def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int
                 """)
             ).scalar_one()
             
-            # Process each potion
             for potion in potions_delivered:
                 BottlerManager.process_bottling(
                     conn,
@@ -103,7 +96,7 @@ def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int
             return {"success": True}
             
     except HTTPException as he:
-        raise he
+        raise
     except Exception as e:
         logger.error(f"Failed to process bottling: {e}")
         raise HTTPException(status_code=500, detail="Failed to process bottling")

@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from src.api import auth
 from src import database as db
-from src.utilities import LedgerManager
+from src.utilities import LedgerManager, StateValidator
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,6 @@ def reset():
     """
     try:
         with db.engine.begin() as conn:
-            # Clear core game state tables
             conn.execute(
                 sqlalchemy.text("""
                     TRUNCATE TABLE active_strategy CASCADE;
@@ -30,15 +29,10 @@ def reset():
                 """)
             )
             
-            # Reset all potion quantities to 0
             conn.execute(
-                sqlalchemy.text("""
-                    UPDATE potions
-                    SET current_quantity = 0
-                """)
+                sqlalchemy.text("UPDATE potions SET current_quantity = 0")
             )
 
-            # Insert initial gold ledger entry
             time_id = conn.execute(
                 sqlalchemy.text("""
                     SELECT time_id
@@ -52,14 +46,11 @@ def reset():
                 conn=conn,
                 time_id=time_id,
                 entry_type='ADMIN_CHANGE',
-                gold_change=100  # Starting gold
+                gold_change=100
             )
 
-            # Insert initial active_strategy as PREMIUM
             premium_strategy_id = conn.execute(
-                sqlalchemy.text("""
-                    SELECT strategy_id FROM strategies WHERE name = 'PREMIUM'
-                """)
+                sqlalchemy.text("SELECT strategy_id FROM strategies WHERE name = 'PREMIUM'")
             ).scalar_one()
 
             conn.execute(
@@ -73,9 +64,14 @@ def reset():
                 }
             )
 
+            if not StateValidator.verify_reset_state(conn):
+                raise HTTPException(status_code=500, detail="Reset failed - state validation error")
+                
             logger.info("Successfully reset game state to initial values")
             return {"success": True}
-            
+    
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to reset game state: {e}")
         raise HTTPException(status_code=500, detail="Failed to reset game state")

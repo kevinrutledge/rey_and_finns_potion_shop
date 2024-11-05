@@ -30,11 +30,9 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     
     try:
         with db.engine.begin() as conn:
-            # Get future needs and current state
             needs = [dict(need) for need in BarrelManager.get_ml_needs(conn)]
             state = StateValidator.get_current_state(conn)
             
-            # Plan purchases
             purchases = BarrelManager.plan_purchases(
                 needs,
                 [dict(b) for b in wholesale_catalog],
@@ -55,7 +53,6 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     
     try:
         with db.engine.begin() as conn:
-            # Validate resources
             state = StateValidator.get_current_state(conn)
             total_cost = sum(b.price * b.quantity for b in barrels_delivered)
             total_ml = sum(b.ml_per_barrel * b.quantity for b in barrels_delivered)
@@ -66,7 +63,6 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             if state['total_ml'] + total_ml > state['max_ml']:
                 raise HTTPException(status_code=400, detail="Insufficient ML capacity")
             
-            # Get current time
             time_id = conn.execute(
                 sqlalchemy.text("""
                     SELECT game_time_id 
@@ -93,7 +89,6 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 }
             ).scalar_one()
             
-            # Process each barrel
             for barrel in barrels_delivered:
                 BarrelManager.process_barrel_delivery(
                     conn,
@@ -105,8 +100,8 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             logger.info(f"Processed barrel delivery: {total_ml}ml for {total_cost} gold")
             return {"success": True}
             
-    except HTTPException as he:
-        raise he
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to process barrel delivery: {e}")
         raise HTTPException(status_code=500, detail="Failed to process delivery")
