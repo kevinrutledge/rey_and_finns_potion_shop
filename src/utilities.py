@@ -330,7 +330,65 @@ class CatalogManager:
 
 class BarrelManager:
     """Handles barrel purchase planning and processing."""
-    
+
+    @staticmethod
+    def record_wholesale_catalog(conn, wholesale_catalog: list, time_id: int) -> int:
+        """
+        Records the complete wholesale catalog and returns the visit_id.
+        """
+        visit_id = conn.execute(
+            sqlalchemy.text("""
+                INSERT INTO barrel_visits (
+                    time_id,
+                    wholesale_catalog
+                )
+                VALUES (:time_id, :catalog)
+                RETURNING visit_id
+            """),
+            {
+                "time_id": time_id,
+                "catalog": json.dumps(wholesale_catalog)
+            }
+        ).scalar_one()
+
+        valid_barrels = [b for b in wholesale_catalog if not b['sku'].startswith('MINI')]
+        
+        for barrel in valid_barrels:
+            color_name = barrel['sku'].split('_')[1]
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO barrel_details (
+                        visit_id,
+                        sku,
+                        ml_per_barrel,
+                        potion_type,
+                        price,
+                        quantity,
+                        color_id
+                    )
+                    VALUES (
+                        :visit_id,
+                        :sku,
+                        :ml_per_barrel,
+                        :potion_type,
+                        :price,
+                        :quantity,
+                        (SELECT color_id FROM color_definitions WHERE color_name = :color_name)
+                    )
+                """),
+                {
+                    "visit_id": visit_id,
+                    "sku": barrel["sku"],
+                    "ml_per_barrel": barrel["ml_per_barrel"],
+                    "potion_type": json.dumps(barrel["potion_type"]),
+                    "price": barrel["price"],
+                    "quantity": barrel["quantity"],
+                    "color_name": color_name
+                }
+            )
+
+        return visit_id
+
     @staticmethod
     def get_ml_needs(conn) -> list:
         """
@@ -388,7 +446,7 @@ class BarrelManager:
     @staticmethod
     def plan_purchases(needs: list, wholesale_catalog: list, current_state: dict) -> list:
         """
-        Calculates optimal barrel purchases based on needs and constraints.
+        Calculate optimal barrel purchases based on needs and constraints.
         Returns list of barrel purchases optimized for available gold and capacity.
         """
         purchases = []
@@ -411,12 +469,13 @@ class BarrelManager:
                 max_by_gold = available_gold // barrel['price']
                 max_by_capacity = available_capacity // barrel['ml_per_barrel']
                 max_by_need = (need['ml_needed'] + barrel['ml_per_barrel'] - 1) // barrel['ml_per_barrel']
+                max_by_availability = barrel['quantity']
                 
                 quantity = min(
-                    barrel['quantity'],
                     max_by_gold,
                     max_by_capacity,
-                    max_by_need
+                    max_by_need,
+                    max_by_availability
                 )
                 
                 if quantity > 0:
@@ -435,61 +494,47 @@ class BarrelManager:
         return purchases
 
     @staticmethod
-    def process_barrel_delivery(conn, barrel: dict, time_id: int, visit_id: int) -> None:
+    def process_barrel_purchase(conn, barrel: dict, barrel_id: int, time_id: int, visit_id: int) -> int:
         """
-        Processes barrel delivery with ledger entries and inventory updates.
-        Returns None, raises exception on failure.
+        Records a barrel purchase and creates ledger entry.
+        Returns the purchase_id.
         """
-        barrel_id = conn.execute(
-            sqlalchemy.text("""
-                INSERT INTO barrel_details (
-                    visit_id, sku, ml_per_barrel, potion_type,
-                    price, quantity, color_id
-                )
-                VALUES (
-                    :visit_id, :sku, :ml_per_barrel, :potion_type,
-                    :price, :quantity,
-                    (SELECT color_id FROM color_definitions 
-                     WHERE color_name = split_part(:sku, '_', 2))
-                )
-                RETURNING barrel_id
-            """),
-            {
-                "visit_id": visit_id,
-                "sku": barrel["sku"],
-                "ml_per_barrel": barrel["ml_per_barrel"],
-                "potion_type": json.dumps(barrel["potion_type"]),
-                "price": barrel["price"],
-                "quantity": barrel["quantity"]
-            }
-        ).scalar_one()
-        
+        # Record the purchase
         purchase_id = conn.execute(
             sqlalchemy.text("""
                 INSERT INTO barrel_purchases (
-                    visit_id, time_id, barrel_id, quantity,
-                    total_cost, ml_added, color_id, purchase_success
+                    visit_id,
+                    barrel_id,
+                    time_id,
+                    quantity,
+                    total_cost,
+                    ml_added,
+                    color_id,
+                    purchase_success
                 )
                 VALUES (
-                    :visit_id, :time_id, :barrel_id, :quantity,
-                    :total_cost, :ml_added,
-                    (SELECT color_id FROM color_definitions 
-                     WHERE color_name = split_part(:sku, '_', 2)),
+                    :visit_id,
+                    :barrel_id,
+                    :time_id,
+                    :quantity,
+                    :total_cost,
+                    :ml_added,
+                    (SELECT color_id FROM color_definitions WHERE color_name = :color_name),
                     true
                 )
                 RETURNING purchase_id
             """),
             {
                 "visit_id": visit_id,
-                "time_id": time_id,
                 "barrel_id": barrel_id,
+                "time_id": time_id,
                 "quantity": barrel['quantity'],
                 "total_cost": barrel['price'] * barrel['quantity'],
                 "ml_added": barrel['ml_per_barrel'] * barrel['quantity'],
-                "sku": barrel['sku']
+                "color_name": barrel['sku'].split('_')[1]
             }
         ).scalar_one()
-        
+
         LedgerManager.create_ledger_entry(
             conn=conn,
             time_id=time_id,
@@ -500,12 +545,14 @@ class BarrelManager:
                 sqlalchemy.text("""
                     SELECT color_id 
                     FROM color_definitions 
-                    WHERE color_name = split_part(:sku, '_', 2)
+                    WHERE color_name = :color_name
                 """),
-                {"sku": barrel['sku']}
+                {"color_name": barrel['sku'].split('_')[1]}
             ).scalar_one(),
             barrel_purchase_id=purchase_id
         )
+
+        return purchase_id
 
 class BottlerManager:
     """Handles potion bottling planning and processing."""
@@ -681,7 +728,7 @@ class CartManager:
         """
         visit_record_id = conn.execute(
             sqlalchemy.text("""
-                INSERT INTO public.customer_visits (
+                INSERT INTO customer_visits (
                     visit_id,
                     time_id,
                     customers
@@ -695,14 +742,14 @@ class CartManager:
             {
                 "visit_id": visit_id,
                 "time_id": time_id,
-                "customers": json.dumps([dict(c) for c in customers])
+                "customers": json.dumps(customers)
             }
         ).scalar_one()
-        
+
         for customer in customers:
             conn.execute(
                 sqlalchemy.text("""
-                    INSERT INTO public.customers (
+                    INSERT INTO customers (
                         visit_record_id,
                         time_id,
                         customer_name,
@@ -719,9 +766,9 @@ class CartManager:
                 {
                     "visit_record_id": visit_record_id,
                     "time_id": time_id,
-                    "name": customer.customer_name,
-                    "class": customer.character_class,
-                    "level": customer.level
+                    "name": customer['customer_name'],
+                    "class": customer['character_class'],
+                    "level": customer['level']
                 }
             )
 
@@ -734,7 +781,7 @@ class CartManager:
         result = conn.execute(
             sqlalchemy.text("""
                 SELECT customer_id
-                FROM public.customers
+                FROM customers
                 WHERE customer_name = :name 
                 AND character_class = :class
                 AND level = :level
@@ -750,7 +797,7 @@ class CartManager:
         
         cart_id = conn.execute(
             sqlalchemy.text("""
-                INSERT INTO public.carts (
+                INSERT INTO carts (
                     customer_id,
                     time_id,
                     checked_out,
@@ -788,8 +835,8 @@ class CartManager:
                     cust.customer_name,
                     cust.character_class,
                     cust.level
-                FROM public.carts c
-                JOIN public.customers cust ON c.customer_id = cust.customer_id
+                FROM carts c
+                JOIN customers cust ON c.customer_id = cust.customer_id
                 WHERE c.cart_id = :cart_id
             """),
             {"cart_id": cart_id}
@@ -815,7 +862,7 @@ class CartManager:
                     potion_id,
                     current_quantity,
                     base_price
-                FROM public.potions
+                FROM potions
                 WHERE sku = :sku
             """),
             {"sku": item_sku}
@@ -830,7 +877,7 @@ class CartManager:
         line_total = potion['base_price'] * quantity
         conn.execute(
             sqlalchemy.text("""
-                INSERT INTO public.cart_items (
+                INSERT INTO cart_items (
                     cart_id,
                     potion_id,
                     time_id,
@@ -945,6 +992,8 @@ class CartManager:
             }
         )
         
+        logger.debug(f"Return {total_potions} bought for {total_gold} gold")
+
         return {
             "total_potions_bought": total_potions,
             "total_gold_paid": total_gold
@@ -972,7 +1021,7 @@ class InventoryManager:
                             WHERE l.entry_type = 'CAPACITY_UPGRADE' 
                             AND l.ml_change IS NOT NULL
                         ) as ml_upgrades
-                    FROM public.ledger_entries l
+                    FROM ledger_entries l
                 )
                 SELECT
                     gold,
@@ -995,7 +1044,7 @@ class InventoryManager:
         threshold = conn.execute(
             sqlalchemy.text("""
                 SELECT *
-                FROM public.capacity_upgrade_thresholds t
+                FROM capacity_upgrade_thresholds t
                 WHERE 
                     -- Check capacity unit ranges
                     t.min_potion_units <= :current_potion_units
@@ -1054,7 +1103,7 @@ class InventoryManager:
         current_gold = conn.execute(
             sqlalchemy.text("""
                 SELECT COALESCE(SUM(l.gold_change), 100) as gold
-                FROM public.ledger_entries l
+                FROM ledger_entries l
             """)
         ).scalar_one()
         

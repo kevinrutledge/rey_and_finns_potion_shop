@@ -40,7 +40,9 @@ class search_sort_order(str, Enum):
 @router.post("/visits/{visit_id}")
 def post_visits(visit_id: int, customers: List[Customer]):
     """Record customers visiting the shop."""
+    customers_dict = [dict(customer) for customer in customers]
     logger.debug(f"Recording visit for {len(customers)} customers")
+    logger.debug(customers_dict)
     
     try:
         with db.engine.begin() as conn:
@@ -53,7 +55,7 @@ def post_visits(visit_id: int, customers: List[Customer]):
                 """)
             ).scalar_one()
             
-            CartManager.record_customer_visit(conn, visit_id, customers, time_id)
+            CartManager.record_customer_visit(conn, visit_id, customers_dict, time_id)
             
             return {"success": True}
             
@@ -64,7 +66,7 @@ def post_visits(visit_id: int, customers: List[Customer]):
 @router.post("/")
 def create_cart(customer: Customer):
     """Create new cart for customer."""
-    logger.debug(f"Creating cart for customer: {customer.customer_name}")
+    logger.debug(f"Creating cart for customer name: {customer.customer_name}, class: {customer.character_class}, level: {customer.level}")
     
     try:
         with db.engine.begin() as conn:
@@ -83,6 +85,8 @@ def create_cart(customer: Customer):
                 time_id
             )
             
+            logger.debug(f"Returning cart_id: {cart_id} for {customer.customer_name}")
+
             return {"cart_id": cart_id}
             
     except Exception as e:

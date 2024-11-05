@@ -24,8 +24,10 @@ def get_catalog():
     try:
         with db.engine.begin() as conn:
             items = CatalogManager.get_available_potions(conn)
+            items_dict = [dict(customer) for customer in items]
             
             logger.debug(f"Generated catalog with {len(items)} items")
+            logger.debug(items_dict)
             
             return [
                 CatalogItem(

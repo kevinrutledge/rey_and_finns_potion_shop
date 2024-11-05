@@ -42,7 +42,9 @@ def get_bottle_plan():
                 available_capacity
             )
             
+            bottling_plan_dict = [dict(plan) for plan in bottling_plan]
             logger.debug(f"Created bottling plan with {len(bottling_plan)} potion types")
+            logger.debug(bottling_plan_dict)
             return bottling_plan
             
     except Exception as e:
@@ -52,7 +54,9 @@ def get_bottle_plan():
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int):
     """Process potion bottling."""
+    potions_delivered_dict = [dict(potion) for potion in potions_delivered]
     logger.debug(f"Processing bottling of {len(potions_delivered)} potion types")
+    logger.debug(potions_delivered_dict)
     
     try:
         with db.engine.begin() as conn:

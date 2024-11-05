@@ -26,20 +26,39 @@ class Barrel(BaseModel):
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """Plan barrel purchases based on future needs."""
+    wholesale_catalog_dict = [dict(barrel) for barrel in wholesale_catalog]
     logger.debug(f"Processing wholesale catalog with {len(wholesale_catalog)} items")
+    logger.debug(wholesale_catalog_dict)
     
     try:
         with db.engine.begin() as conn:
+            time_id = conn.execute(
+                sqlalchemy.text("""
+                    SELECT game_time_id 
+                    FROM current_game_time
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                """)
+            ).scalar_one()
+
+            visit_id = BarrelManager.record_wholesale_catalog(
+                conn, 
+                wholesale_catalog_dict,
+                time_id
+            )
+            
             needs = [dict(need) for need in BarrelManager.get_ml_needs(conn)]
             state = StateValidator.get_current_state(conn)
             
             purchases = BarrelManager.plan_purchases(
                 needs,
-                [dict(b) for b in wholesale_catalog],
+                wholesale_catalog_dict,
                 state
             )
             
-            logger.info(f"Generated purchase plan for {len(purchases)} barrels")
+            logger.debug(f"Generated purchase plan for {len(purchases)} barrels")
+            logger.debug(purchases)
+
             return purchases
             
     except Exception as e:
@@ -49,7 +68,9 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """Process delivery of barrels."""
+    barrels_delivered_dict = [dict(barrel) for barrel in barrels_delivered]
     logger.debug(f"Processing delivery of {len(barrels_delivered)} barrels")
+    logger.debug(barrels_delivered_dict)
     
     try:
         with db.engine.begin() as conn:
@@ -72,32 +93,38 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                 """)
             ).scalar_one()
             
-            delivered = [dict(b) for b in barrels_delivered]
-            
             visit_id = conn.execute(
                 sqlalchemy.text("""
-                    INSERT INTO barrel_visits (
-                        time_id,
-                        wholesale_catalog
-                    )
-                    VALUES (:time_id, :catalog)
-                    RETURNING visit_id
-                """),
-                {
-                    "time_id": time_id,
-                    "catalog": json.dumps(delivered)
-                }
+                    SELECT visit_id 
+                    FROM barrel_visits 
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                """)
             ).scalar_one()
             
             for barrel in barrels_delivered:
-                BarrelManager.process_barrel_delivery(
+                barrel_id = conn.execute(
+                    sqlalchemy.text("""
+                        SELECT barrel_id 
+                        FROM barrel_details 
+                        WHERE visit_id = :visit_id 
+                        AND sku = :sku
+                    """),
+                    {
+                        "visit_id": visit_id,
+                        "sku": barrel.sku
+                    }
+                ).scalar_one()
+                
+                BarrelManager.process_barrel_purchase(
                     conn,
                     dict(barrel),
+                    barrel_id,
                     time_id,
                     visit_id
                 )
             
-            logger.info(f"Processed barrel delivery: {total_ml}ml for {total_cost} gold")
+            logger.info(f"Successfully processed delivery of {len(barrels_delivered)} barrels")
             return {"success": True}
             
     except HTTPException:
