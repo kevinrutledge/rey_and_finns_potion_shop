@@ -24,10 +24,10 @@ def get_inventory():
     try:
         with db.engine.begin() as conn:
             state = InventoryManager.get_inventory_state(conn)
-            
             logger.debug(
-                f"Current state - Potions: {state['total_potions']}, "
-                f"ML: {state['total_ml']}, Gold: {state['gold']}"
+                f"Current state - gold: {state['gold']}, "
+                f"potions: {state['total_potions']}/{state['max_potions']}, "
+                f"ml: {state['total_ml']}/{state['max_ml']}"
             )
             
             return {
@@ -37,7 +37,7 @@ def get_inventory():
             }
             
     except Exception as e:
-        logger.error(f"Failed to get inventory state: {e}")
+        logger.error(f"Failed to get inventory state: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get inventory state")
 
 @router.post("/plan")
@@ -46,20 +46,31 @@ def get_capacity_plan():
     try:
         with db.engine.begin() as conn:
             state = InventoryManager.get_inventory_state(conn)
-            return InventoryManager.get_capacity_purchase_plan(conn, state)
+            logger.debug(
+                f"Planning capacity - current units: potions {state['potion_capacity_units']}, "
+                f"ml {state['ml_capacity_units']}"
+            )
+            
+            plan = InventoryManager.get_capacity_purchase_plan(conn, state)
+            
+            if plan['potion_capacity'] > 0 or plan['ml_capacity'] > 0:
+                logger.debug(
+                    f"Capacity plan - potion units: {plan['potion_capacity']}, "
+                    f"ml units: {plan['ml_capacity']}"
+                )
+            else:
+                logger.debug("Capacity plan - no upgrades needed")
+                
+            return plan
             
     except Exception as e:
-        logger.error(f"Failed to get capacity plan: {e}")
+        logger.error(f"Failed to get capacity plan: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get capacity plan")
 
 @router.post("/deliver/{order_id}")
 def deliver_capacity(capacity_purchase: CapacityPurchase, order_id: int):
     """Process capacity purchase delivery."""
-    logger.debug(
-        f"Processing capacity upgrade - "
-        f"Potion: {capacity_purchase.potion_capacity}, "
-        f"ML: {capacity_purchase.ml_capacity}"
-    )
+    logger.debug(f"Processing capacity upgrade - order: {order_id}")
     
     try:
         with db.engine.begin() as conn:
@@ -72,6 +83,13 @@ def deliver_capacity(capacity_purchase: CapacityPurchase, order_id: int):
                 """)
             ).scalar_one()
             
+            state = InventoryManager.get_inventory_state(conn)
+            total_cost = (capacity_purchase.potion_capacity + capacity_purchase.ml_capacity) * 1000
+            
+            if state['gold'] < total_cost:
+                logger.debug(f"Insufficient gold - required: {total_cost}, available: {state['gold']}")
+                raise HTTPException(status_code=400, detail="Insufficient gold for capacity upgrade")
+            
             InventoryManager.process_capacity_upgrade(
                 conn,
                 capacity_purchase.potion_capacity,
@@ -79,10 +97,14 @@ def deliver_capacity(capacity_purchase: CapacityPurchase, order_id: int):
                 time_id
             )
             
+            logger.info(
+                f"Successfully upgraded capacity - potion units: {capacity_purchase.potion_capacity}, "
+                f"ml units: {capacity_purchase.ml_capacity}"
+            )
             return {"success": True}
             
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Failed to process capacity upgrade: {e}")
+        logger.error(f"Failed to process capacity upgrade: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to process capacity upgrade")

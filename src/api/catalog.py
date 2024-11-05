@@ -24,12 +24,15 @@ def get_catalog():
     try:
         with db.engine.begin() as conn:
             items = CatalogManager.get_available_potions(conn)
-            items_dict = [dict(customer) for customer in items]
             
-            logger.debug(f"Generated catalog with {len(items)} items")
-            logger.debug(items_dict)
+            if items:
+                logger.debug(
+                    f"Current catalog - available potions: {[(item['sku'], item['quantity']) for item in items]}"
+                )
+            else:
+                logger.debug("Current catalog - no potions available")
             
-            return [
+            catalog = [
                 CatalogItem(
                     sku=item['sku'],
                     name=item['name'],
@@ -40,6 +43,9 @@ def get_catalog():
                 for item in items
             ]
             
+            logger.info(f"Successfully generated catalog with {len(catalog)} items")
+            return catalog
+            
     except Exception as e:
-        logger.error(f"Failed to generate catalog: {e}")
+        logger.error(f"Failed to generate catalog: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to generate catalog")

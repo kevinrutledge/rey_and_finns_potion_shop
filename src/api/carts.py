@@ -41,8 +41,7 @@ class search_sort_order(str, Enum):
 def post_visits(visit_id: int, customers: List[Customer]):
     """Record customers visiting the shop."""
     customers_dict = [dict(customer) for customer in customers]
-    logger.debug(f"Recording visit for {len(customers)} customers")
-    logger.debug(customers_dict)
+    logger.debug(f"Recording visit - id: {visit_id}, customers: {len(customers)}")
     
     try:
         with db.engine.begin() as conn:
@@ -56,17 +55,18 @@ def post_visits(visit_id: int, customers: List[Customer]):
             ).scalar_one()
             
             CartManager.record_customer_visit(conn, visit_id, customers_dict, time_id)
+            logger.info(f"Successfully recorded visit for {len(customers)} customers")
             
             return {"success": True}
             
     except Exception as e:
-        logger.error(f"Failed to record customer visit: {e}")
+        logger.error(f"Failed to record customer visit: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to record customer visit")
 
 @router.post("/")
 def create_cart(customer: Customer):
     """Create new cart for customer."""
-    logger.debug(f"Creating cart for customer name: {customer.customer_name}, class: {customer.character_class}, level: {customer.level}")
+    logger.debug(f"Creating cart for customer: {customer.customer_name}")
     
     try:
         with db.engine.begin() as conn:
@@ -79,29 +79,24 @@ def create_cart(customer: Customer):
                 """)
             ).scalar_one()
             
-            cart_id = CartManager.create_cart(
-                conn,
-                customer.dict(),
-                time_id
-            )
+            cart_id = CartManager.create_cart(conn, customer.dict(), time_id)
+            logger.info(f"Created cart for customer name: {customer.customer_name}, "
+                        f"class: {customer.character_class}, level: {customer.level}")
             
-            logger.debug(f"Returning cart_id: {cart_id} for {customer.customer_name}")
-
             return {"cart_id": cart_id}
             
     except Exception as e:
-        logger.error(f"Failed to create cart: {e}")
+        logger.error(f"Failed to create cart: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to create cart")
 
 @router.put("/carts/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """Add or update item quantity in cart."""
-    logger.debug(f"Setting quantity {cart_item.quantity} of {item_sku} in cart {cart_id}")
+    logger.debug(f"Updating cart - id: {cart_id}")
     
     try:
         with db.engine.begin() as conn:
-            # Validate cart status
-            CartManager.validate_cart_status(conn, cart_id)
+            cart = CartManager.validate_cart_status(conn, cart_id)
             
             time_id = conn.execute(
                 sqlalchemy.text("""
@@ -112,31 +107,25 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                 """)
             ).scalar_one()
             
-            CartManager.update_cart_item(
-                conn,
-                cart_id,
-                item_sku,
-                cart_item.quantity,
-                time_id
-            )
+            CartManager.update_cart_item(conn, cart_id, item_sku, cart_item.quantity, time_id)
+            logger.info(f"Updated cart {cart_id} - item: {item_sku}, quantity: {cart_item.quantity}")
             
             return {"success": True}
             
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Failed to update cart item: {e}")
+        logger.error(f"Failed to update cart item: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update cart item")
 
 @router.post("/carts/{cart_id}/checkout")
 def checkout_cart(cart_id: int, cart_checkout: CartCheckout):
     """Process cart checkout."""
-    logger.debug(f"Processing checkout for cart {cart_id}")
+    logger.debug(f"Processing checkout - cart: {cart_id}, payment: {cart_checkout.payment}")
     
     try:
         with db.engine.begin() as conn:
-            # Validate cart status
-            CartManager.validate_cart_status(conn, cart_id)
+            cart = CartManager.validate_cart_status(conn, cart_id)
             
             time_id = conn.execute(
                 sqlalchemy.text("""
@@ -147,11 +136,11 @@ def checkout_cart(cart_id: int, cart_checkout: CartCheckout):
                 """)
             ).scalar_one()
             
-            result = CartManager.process_checkout(
-                conn,
-                cart_id,
-                cart_checkout.payment,
-                time_id
+            result = CartManager.process_checkout(conn, cart_id, cart_checkout.payment, time_id)
+            logger.info(
+                f"Completed checkout - cart: {cart_id}, "
+                f"total potions: {result['total_potions_bought']}, "
+                f"total gold: {result['total_gold_paid']}"
             )
             
             return result
@@ -159,7 +148,7 @@ def checkout_cart(cart_id: int, cart_checkout: CartCheckout):
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Failed to process checkout: {e}")
+        logger.error(f"Failed to process checkout: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to process checkout")
 
 @router.get("/search/", tags=["search"])

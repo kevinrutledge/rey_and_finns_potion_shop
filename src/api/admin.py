@@ -15,12 +15,18 @@ router = APIRouter(
 
 @router.post("/reset")
 def reset():
-    """
-    Reset game state. Gold goes to 100, all potions are removed from
-    inventory, and all barrels are removed from inventory. Carts are all reset.
-    """
+    """Reset game state to initial values."""
     try:
         with db.engine.begin() as conn:
+            logger.debug("Starting game state reset")
+            
+            initial_state = StateValidator.get_current_state(conn)
+            logger.debug(
+                f"Pre-reset state - gold: {initial_state['gold']}, "
+                f"potions: {initial_state['total_potions']}, "
+                f"ml: {initial_state['total_ml']}"
+            )
+            
             conn.execute(
                 sqlalchemy.text("""
                     TRUNCATE TABLE active_strategy CASCADE;
@@ -65,13 +71,21 @@ def reset():
             )
 
             if not StateValidator.verify_reset_state(conn):
+                logger.error("Reset validation failed - state does not match initial values")
                 raise HTTPException(status_code=500, detail="Reset failed - state validation error")
-                
+            
+            final_state = StateValidator.get_current_state(conn)    
+            logger.debug(
+                f"Post-reset state - gold: {final_state['gold']}, "
+                f"potions: {final_state['total_potions']}, "
+                f"ml: {final_state['total_ml']}"
+            )
+            
             logger.info("Successfully reset game state to initial values")
             return {"success": True}
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to reset game state: {e}")
+        logger.error(f"Failed to reset game state: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to reset game state")
