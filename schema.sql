@@ -271,7 +271,7 @@ CREATE TABLE capacity_upgrade_thresholds (
 
 -- Ledger system
 CREATE TABLE ledger_entries (
-    entry_id BIGSERIAL PRIMARY KEY,
+    entry_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     time_id BIGINT REFERENCES game_time(time_id),
     entry_type TEXT NOT NULL CHECK (
         entry_type IN (

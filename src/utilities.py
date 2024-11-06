@@ -38,12 +38,14 @@ class LedgerManager:
         Validates entry type and ensures at least one change value is provided.
         """
         if entry_type not in LedgerManager.VALID_ENTRY_TYPES:
+            logger.error(f"Invalid ledger entry type: {entry_type}")
             raise ValueError(f"Invalid entry type: {entry_type}")
             
         if not any([gold_change, ml_change, potion_change]):
+            logger.error("No change values provided for ledger entry")
             raise ValueError("At least one change value must be provided")
             
-        entry_id = conn.execute(
+        result = conn.execute(
             sqlalchemy.text("""
                 INSERT INTO ledger_entries (
                     time_id, entry_type, gold_change, ml_change, potion_change,
@@ -66,8 +68,38 @@ class LedgerManager:
                 "potion_id": potion_id
             }
         ).scalar_one()
+        
+        logger.debug(
+            f"Created ledger entry - id: {result}, type: {entry_type}, "
+            f"gold: {gold_change}, ml: {ml_change}, potions: {potion_change}"
+        )
+        
+        return result
+
+    @staticmethod
+    def verify_ledger_state(conn) -> bool:
+        """Verifies ledger consistency and returns True if valid."""
+        try:
+            state = StateValidator.get_current_state(conn)
             
-        return entry_id
+            # Verify non-negative values
+            if state['gold'] < 0:
+                logger.error(f"Invalid negative gold balance: {state['gold']}")
+                return False
+                
+            if state['total_potions'] < 0:
+                logger.error(f"Invalid negative potion count: {state['total_potions']}")
+                return False
+                
+            if state['total_ml'] < 0:
+                logger.error(f"Invalid negative ml total: {state['total_ml']}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to verify ledger state: {str(e)}")
+            return False
 
 class StateValidator:
     """Handles state validation and verification."""
