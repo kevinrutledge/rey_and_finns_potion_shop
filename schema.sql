@@ -23,7 +23,7 @@ DROP VIEW IF EXISTS current_state CASCADE;
 
 -- Core game time tracking
 CREATE TABLE game_time (
-    time_id BIGSERIAL PRIMARY KEY,
+    time_id SERIAL PRIMARY KEY,
     in_game_day TEXT NOT NULL CHECK (in_game_day IN (
         'Hearthday', 'Crownday', 'Blesseday', 'Soulday', 
         'Edgeday', 'Bloomday', 'Arcanaday'
@@ -33,16 +33,16 @@ CREATE TABLE game_time (
         AND in_game_hour <= 22 
         AND in_game_hour % 2 = 0
     ),
-    bottling_time_id BIGINT,  -- 3 ticks ahead
-    barrel_time_id BIGINT,    -- 4 ticks ahead
+    bottling_time_id INT,  -- 3 ticks ahead
+    barrel_time_id INT,    -- 4 ticks ahead
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(in_game_day, in_game_hour)
 );
 
 -- Current game time
 CREATE TABLE current_game_time (
-    id BIGSERIAL PRIMARY KEY,
-    game_time_id BIGINT REFERENCES game_time(time_id),
+    id SERIAL PRIMARY KEY,
+    game_time_id INT REFERENCES game_time(time_id),
     current_day TEXT NOT NULL CHECK (current_day IN (
         'Hearthday', 'Crownday', 'Blesseday', 'Soulday', 
         'Edgeday', 'Bloomday', 'Arcanaday'
@@ -57,7 +57,7 @@ CREATE TABLE current_game_time (
 
 -- Color system
 CREATE TABLE color_definitions (
-    color_id BIGSERIAL PRIMARY KEY,
+    color_id SERIAL PRIMARY KEY,
     color_name TEXT NOT NULL UNIQUE CHECK (
         color_name IN ('RED', 'GREEN', 'BLUE', 'DARK')
     ),
@@ -67,7 +67,7 @@ CREATE TABLE color_definitions (
 
 -- Time blocks
 CREATE TABLE time_blocks (
-    block_id BIGSERIAL PRIMARY KEY,
+    block_id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE CHECK (
         name IN ('NIGHT', 'MORNING', 'AFTERNOON', 'EVENING')
     ),
@@ -85,7 +85,7 @@ CREATE TABLE time_blocks (
 
 -- Strategy system
 CREATE TABLE strategies (
-    strategy_id BIGSERIAL PRIMARY KEY,
+    strategy_id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE CHECK (
         name IN ('PREMIUM', 'PENETRATION', 'TIERED', 'DYNAMIC')
     ),
@@ -101,16 +101,16 @@ CREATE TABLE strategies (
 
 -- Initial insert for PREMIUM strategy
 CREATE TABLE active_strategy (
-    strategy_id BIGINT REFERENCES strategies(strategy_id),
+    strategy_id INT REFERENCES strategies(strategy_id),
     activated_at TIMESTAMPTZ DEFAULT NOW(),
-    game_time_id BIGINT REFERENCES game_time(time_id),
+    game_time_id INT REFERENCES game_time(time_id),
     PRIMARY KEY (strategy_id, game_time_id)
 );
 
 -- Strategy transitions with inventory and capacity thresholds
 CREATE TABLE strategy_transitions (
-    from_strategy_id BIGINT REFERENCES strategies(strategy_id),
-    to_strategy_id BIGINT REFERENCES strategies(strategy_id),
+    from_strategy_id INT REFERENCES strategies(strategy_id),
+    to_strategy_id INT REFERENCES strategies(strategy_id),
     gold_threshold INT,
     potion_threshold INT,
     ml_threshold INT,
@@ -121,9 +121,9 @@ CREATE TABLE strategy_transitions (
 );
 
 CREATE TABLE strategy_time_blocks (
-    block_id BIGSERIAL PRIMARY KEY,
-    strategy_id BIGINT REFERENCES strategies(strategy_id),
-    time_block_id BIGINT REFERENCES time_blocks(block_id),
+    block_id SERIAL PRIMARY KEY,
+    strategy_id INT REFERENCES strategies(strategy_id),
+    time_block_id INT REFERENCES time_blocks(block_id),
     day_name TEXT NOT NULL CHECK (day_name IN (
         'Hearthday', 'Crownday', 'Blesseday', 'Soulday', 
         'Edgeday', 'Bloomday', 'Arcanaday'
@@ -134,7 +134,7 @@ CREATE TABLE strategy_time_blocks (
 
 -- Potion system
 CREATE TABLE potions (
-    potion_id BIGSERIAL PRIMARY KEY,
+    potion_id SERIAL PRIMARY KEY,
     sku TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     red_ml INT NOT NULL DEFAULT 0 CHECK (red_ml >= 0),
@@ -143,7 +143,7 @@ CREATE TABLE potions (
     dark_ml INT NOT NULL DEFAULT 0 CHECK (dark_ml >= 0),
     base_price INT NOT NULL CHECK (base_price > 0),
     current_quantity INT NOT NULL DEFAULT 0 CHECK (current_quantity >= 0),
-    color_id BIGINT REFERENCES color_definitions(color_id),
+    color_id INT REFERENCES color_definitions(color_id),
     CONSTRAINT valid_ml_total CHECK (
         red_ml + green_ml + blue_ml + dark_ml = 100
     )
@@ -151,9 +151,9 @@ CREATE TABLE potions (
 
 -- Potion mix within each time block
 CREATE TABLE block_potion_priorities (
-    priority_id BIGSERIAL PRIMARY KEY,
-    block_id BIGINT REFERENCES strategy_time_blocks(block_id),
-    potion_id BIGINT REFERENCES potions(potion_id),
+    priority_id SERIAL PRIMARY KEY,
+    block_id INT REFERENCES strategy_time_blocks(block_id),
+    potion_id INT REFERENCES potions(potion_id),
     sales_mix FLOAT NOT NULL CHECK (sales_mix > 0 AND sales_mix <= 1.0),
     priority_order INT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -162,15 +162,15 @@ CREATE TABLE block_potion_priorities (
 
 -- Barrel system
 CREATE TABLE barrel_visits (
-    visit_id BIGSERIAL PRIMARY KEY,
-    time_id BIGINT REFERENCES game_time(time_id),
+    visit_id SERIAL PRIMARY KEY,
+    time_id INT REFERENCES game_time(time_id),
     wholesale_catalog JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE barrel_details (
-    barrel_id BIGSERIAL PRIMARY KEY,
-    visit_id BIGINT REFERENCES barrel_visits(visit_id),
+    barrel_id SERIAL PRIMARY KEY,
+    visit_id INT REFERENCES barrel_visits(visit_id),
     sku TEXT NOT NULL CHECK (
         sku ~ '^(SMALL|MEDIUM|LARGE)_(RED|GREEN|BLUE|DARK)_BARREL$'
     ),
@@ -182,37 +182,37 @@ CREATE TABLE barrel_details (
     potion_type JSONB NOT NULL,
     price INT NOT NULL CHECK (price > 0),
     quantity INT NOT NULL CHECK (quantity > 0),
-    color_id BIGINT REFERENCES color_definitions(color_id),
+    color_id INT REFERENCES color_definitions(color_id),
     UNIQUE(visit_id, sku)
 );
 
 CREATE TABLE barrel_purchases (
-    purchase_id BIGSERIAL PRIMARY KEY,
-    visit_id BIGINT REFERENCES barrel_visits(visit_id),
-    barrel_id BIGINT REFERENCES barrel_details(barrel_id),
-    time_id BIGINT REFERENCES game_time(time_id),
+    purchase_id SERIAL PRIMARY KEY,
+    visit_id INT REFERENCES barrel_visits(visit_id),
+    barrel_id INT REFERENCES barrel_details(barrel_id),
+    time_id INT REFERENCES game_time(time_id),
     quantity INT NOT NULL CHECK (quantity > 0),
     total_cost INT NOT NULL CHECK (total_cost > 0),
     ml_added INT NOT NULL CHECK (ml_added > 0),
-    color_id BIGINT REFERENCES color_definitions(color_id),
+    color_id INT REFERENCES color_definitions(color_id),
     purchase_success BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Customer system
 CREATE TABLE customer_visits (
-    visit_record_id BIGSERIAL PRIMARY KEY,
-    visit_id BIGINT NOT NULL,            -- This is the order_id
-    time_id BIGINT REFERENCES game_time(time_id),
+    visit_record_id SERIAL PRIMARY KEY,
+    visit_id INT NOT NULL,            -- This is the order_id
+    time_id INT REFERENCES game_time(time_id),
     customers JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE customers (
-    customer_id BIGSERIAL PRIMARY KEY,
-    visit_record_id BIGINT REFERENCES customer_visits(visit_record_id),
-    visit_id BIGINT NOT NULL,
-    time_id BIGINT REFERENCES game_time(time_id),
+    customer_id SERIAL PRIMARY KEY,
+    visit_record_id INT REFERENCES customer_visits(visit_record_id),
+    visit_id INT NOT NULL,
+    time_id INT REFERENCES game_time(time_id),
     customer_name TEXT NOT NULL,
     character_class TEXT NOT NULL,
     level INT NOT NULL CHECK (level >= 1 AND level <= 20),
@@ -221,10 +221,10 @@ CREATE TABLE customers (
 
 -- Cart system
 CREATE TABLE carts (
-    cart_id BIGSERIAL PRIMARY KEY,
-    visit_id BIGINT NOT NULL,
-    customer_id BIGINT REFERENCES customers(customer_id),
-    time_id BIGINT REFERENCES game_time(time_id),
+    cart_id SERIAL PRIMARY KEY,
+    visit_id INT NOT NULL,
+    customer_id INT REFERENCES customers(customer_id),
+    time_id INT REFERENCES game_time(time_id),
     checked_out BOOLEAN NOT NULL DEFAULT FALSE,
     purchase_success BOOLEAN,
     checked_out_at TIMESTAMPTZ,
@@ -239,11 +239,11 @@ CREATE TABLE carts (
 );
 
 CREATE TABLE cart_items (
-    item_id BIGSERIAL PRIMARY KEY,
-    cart_id BIGINT REFERENCES carts(cart_id),
-    visit_id BIGINT NOT NULL,
-    potion_id BIGINT REFERENCES potions(potion_id),
-    time_id BIGINT REFERENCES game_time(time_id),
+    item_id SERIAL PRIMARY KEY,
+    cart_id INT REFERENCES carts(cart_id),
+    visit_id INT NOT NULL,
+    potion_id INT REFERENCES potions(potion_id),
+    time_id INT REFERENCES game_time(time_id),
     quantity INT NOT NULL CHECK (quantity > 0),
     unit_price INT NOT NULL CHECK (unit_price > 0),
     line_total INT NOT NULL CHECK (line_total = quantity * unit_price),
@@ -252,18 +252,18 @@ CREATE TABLE cart_items (
 
 -- Capacity upgrade threshold system
 CREATE TABLE capacity_upgrade_thresholds (
-    threshold_id BIGSERIAL PRIMARY KEY,
-    min_potion_units INT NOT NULL,          -- Minimum potion capacity units required
-    max_potion_units INT,                   -- Maximum potion capacity units required
-    min_ml_units INT NOT NULL,              -- Minimum ml capacity units required
-    max_ml_units INT,                       -- Maximum ml capacity units required
-    gold_threshold INT NOT NULL,            -- Gold required
-    secondary_gold_threshold INT,           -- Secondary gold threshold for inventory checks
-    capacity_check_threshold FLOAT,         -- Capacity check (e.g. 50%)
-    ml_capacity_purchase INT NOT NULL,      -- How many ml units to purchase
-    potion_capacity_purchase INT NOT NULL,  -- How many potion units to purchase
-    priority_order INT NOT NULL,            -- Higher number = higher priority for sorting
-    requires_inventory_check BOOLEAN NOT NULL DEFAULT false, -- Check inventory levels boolean
+    threshold_id SERIAL PRIMARY KEY,
+    min_potion_units INT NOT NULL,
+    max_potion_units INT,
+    min_ml_units INT NOT NULL,
+    max_ml_units INT,
+    gold_threshold INT NOT NULL,
+    secondary_gold_threshold INT,
+    capacity_check_threshold FLOAT,
+    ml_capacity_purchase INT NOT NULL,
+    potion_capacity_purchase INT NOT NULL,
+    priority_order INT NOT NULL,
+    requires_inventory_check BOOLEAN NOT NULL DEFAULT false,
     CHECK (min_potion_units <= max_potion_units),
     CHECK (min_ml_units <= max_ml_units),
     CHECK (capacity_check_threshold >= 0 AND capacity_check_threshold <= 1)
@@ -271,8 +271,8 @@ CREATE TABLE capacity_upgrade_thresholds (
 
 -- Ledger system
 CREATE TABLE ledger_entries (
-    entry_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    time_id BIGINT REFERENCES game_time(time_id),
+    entry_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    time_id INT REFERENCES game_time(time_id),
     entry_type TEXT NOT NULL CHECK (
         entry_type IN (
             'BARREL_PURCHASE',
@@ -286,10 +286,10 @@ CREATE TABLE ledger_entries (
         )
     ),
     -- Reference fields
-    barrel_purchase_id BIGINT REFERENCES barrel_purchases(purchase_id),
-    cart_id BIGINT REFERENCES carts(cart_id),
-    potion_id BIGINT REFERENCES potions(potion_id),
-    color_id BIGINT REFERENCES color_definitions(color_id),
+    barrel_purchase_id INT REFERENCES barrel_purchases(purchase_id),
+    cart_id INT REFERENCES carts(cart_id),
+    potion_id INT REFERENCES potions(potion_id),
+    color_id INT REFERENCES color_definitions(color_id),
     
     -- Change amounts
     gold_change INT,
@@ -303,7 +303,7 @@ CREATE TABLE ledger_entries (
 CREATE VIEW current_state AS
 WITH ledger_totals AS (
     SELECT
-        COALESCE(SUM(gold_change), 100) as gold,
+        COALESCE(SUM(gold_change), 0) as gold,
         COALESCE(SUM(CASE WHEN color_id = (SELECT color_id FROM color_definitions WHERE color_name = 'RED') 
             THEN ml_change ELSE 0 END), 0) as red_ml,
         COALESCE(SUM(CASE WHEN color_id = (SELECT color_id FROM color_definitions WHERE color_name = 'GREEN') 
@@ -773,3 +773,14 @@ VALUES
 (4, NULL, 4, NULL, 6250, NULL, 0.6, 1, 1, 40, true),
 (4, NULL, 4, NULL, 6250, NULL, 0.6, 1, 0, 30, true),
 (4, NULL, 4, NULL, 6250, NULL, 0.6, 0, 1, 20, true);
+
+-- First insert to start game
+INSERT INTO ledger_entries (
+    time_id,
+    entry_type,
+    gold_change
+) VALUES (
+    (SELECT MIN(time_id) FROM game_time),
+    'ADMIN_CHANGE',
+    100
+);
