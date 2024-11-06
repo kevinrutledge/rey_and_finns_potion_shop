@@ -499,7 +499,7 @@ class BarrelManager:
                 if quantity > 0:
                     purchases.append({
                         "sku": barrel_sku,
-                        "quantity": quantity
+                        "quantity": int(quantity)
                     })
                     
                     available_gold -= quantity * barrel['price']
