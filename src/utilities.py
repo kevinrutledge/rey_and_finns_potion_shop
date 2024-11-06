@@ -387,42 +387,49 @@ class BarrelManager:
 
     @staticmethod
     def plan_purchases(needs: list, wholesale_catalog: list, current_state: dict) -> list:
-        """
-        Calculates optimal barrel purchases based on needs and constraints.
-        Returns list of barrel purchases optimized for available gold and capacity.
-        """
+        """Calculate optimal barrel purchases based on needs and constraints."""
         purchases = []
         catalog_dict = {b['sku']: b for b in wholesale_catalog}
         
         available_gold = current_state['gold']
         available_capacity = current_state['max_ml'] - current_state['total_ml']
         
+        logger.debug(f"Starting purchase planning with {available_gold} gold and {available_capacity} ml capacity")
+        
         for need in needs:
             if need['ml_needed'] <= 0:
                 continue
-                
-            for size in ['LARGE', 'MEDIUM', 'SMALL']:
+            
+            barrel_sizes = ['LARGE', 'MEDIUM', 'SMALL']
+            
+            for size in barrel_sizes:
                 barrel_sku = f"{size}_{need['color_name']}_BARREL"
                 barrel = catalog_dict.get(barrel_sku)
                 
                 if not barrel:
                     continue
                     
-                max_by_gold = available_gold // barrel['price']
-                max_by_capacity = available_capacity // barrel['ml_per_barrel']
-                max_by_need = (need['ml_needed'] + barrel['ml_per_barrel'] - 1) // barrel['ml_per_barrel']
+                if available_gold < barrel['price']:
+                    logger.debug(f"Insufficient gold for {barrel_sku} - need {barrel['price']}, have {available_gold}")
+                    continue
+                    
+                # Calculate maximum possible purchase
+                max_by_gold = int(available_gold // barrel['price'])
+                max_by_capacity = int(available_capacity // barrel['ml_per_barrel'])
+                max_by_need = int((need['ml_needed'] + barrel['ml_per_barrel'] - 1) // barrel['ml_per_barrel'])
+                max_by_availability = int(barrel['quantity'])
                 
                 quantity = min(
-                    barrel['quantity'],
                     max_by_gold,
                     max_by_capacity,
-                    max_by_need
+                    max_by_need,
+                    max_by_availability
                 )
                 
                 if quantity > 0:
                     purchases.append({
                         "sku": barrel_sku,
-                        "quantity": quantity
+                        "quantity": int(quantity)
                     })
                     
                     available_gold -= quantity * barrel['price']
@@ -431,7 +438,7 @@ class BarrelManager:
                     
                 if need['ml_needed'] <= 0:
                     break
-                    
+        
         return purchases
 
     @staticmethod
