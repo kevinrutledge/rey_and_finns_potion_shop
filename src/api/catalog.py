@@ -1,4 +1,3 @@
-import sqlalchemy
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -17,7 +16,6 @@ class CatalogItem(BaseModel):
     price: int
     potion_type: List[int]  # [red_ml, green_ml, blue_ml, dark_ml]
 
-
 @router.get("/catalog/", tags=["catalog"])
 def get_catalog():
     """Get available potions for sale, maximum 6 items."""
@@ -27,12 +25,13 @@ def get_catalog():
             
             if items:
                 logger.debug(
-                    f"Current catalog - available potions: {[(item['sku'], item['quantity']) for item in items]}"
+                    f"Current catalog - available potions: "
+                    f"{[(item['sku'], item['quantity']) for item in items]}"
                 )
             else:
                 logger.debug("Current catalog - no potions available")
             
-            catalog = [
+            return [
                 CatalogItem(
                     sku=item['sku'],
                     name=item['name'],
@@ -42,9 +41,6 @@ def get_catalog():
                 )
                 for item in items
             ]
-            
-            logger.info(f"Successfully generated catalog with {len(catalog)} items")
-            return catalog
             
     except Exception as e:
         logger.error(f"Failed to generate catalog: {str(e)}")

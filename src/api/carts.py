@@ -6,7 +6,7 @@ from typing import List
 from enum import Enum
 from src.api import auth
 from src import database as db
-from src.utilities import CartManager
+from src.utilities import CartManager, TimeManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,70 +38,53 @@ class search_sort_order(str, Enum):
     desc = "desc"
 
 @router.post("/visits/{visit_id}")
-def post_visits(visit_id: int, customers: list[Customer]):
+def post_visits(visit_id: int, customers: List[Customer]):
     """Record customers visiting the shop."""
-    customers_dict = [dict(customer) for customer in customers]
-    logger.debug(f"Recording visit - id: {visit_id}, customers: {len(customers)}")
-    
     try:
         with db.engine.begin() as conn:
-            time_id = conn.execute(
-                sqlalchemy.text("""
-                    SELECT game_time_id 
-                    FROM current_game_time 
-                    ORDER BY created_at DESC 
-                    LIMIT 1
-                """)
-            ).scalar_one()
+            current_time = TimeManager.get_current_time(conn)
+            time_id = current_time['time_id']
             
-            visit_record_id = CartManager.record_customer_visit(
+            CartManager.record_customer_visit(
                 conn, 
                 visit_id, 
-                customers_dict, 
+                [customer.dict() for customer in customers], 
                 time_id
             )
             
-            logger.info(f"Successfully recorded visit for {len(customers)} customers")
+            logger.info(f"Recorded visit for {len(customers)} customers")
             return {"success": True}
             
     except Exception as e:
         logger.error(f"Failed to record customer visit: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to record customer visit")
+        raise HTTPException(status_code=500, detail="Failed to record visit")
 
 @router.post("/")
 def create_cart(new_cart: Customer):
     """Create new cart for customer."""
-    logger.debug(f"Creating cart for customer: {new_cart.customer_name}")
-    
     try:
         with db.engine.begin() as conn:
-            time_id, visit_id = conn.execute(
+            current_time = TimeManager.get_current_time(conn)
+            time_id = current_time['time_id']
+            
+            visit_id = conn.execute(
                 sqlalchemy.text("""
-                    WITH latest_game_time AS (
-                        SELECT game_time_id 
-                        FROM current_game_time 
-                        ORDER BY created_at DESC 
-                        LIMIT 1
-                    )
-                    SELECT 
-                        lgt.game_time_id,
-                        cv.visit_id
-                    FROM latest_game_time lgt
-                    CROSS JOIN (
-                        SELECT visit_id 
-                        FROM customer_visits 
-                        ORDER BY created_at DESC 
-                        LIMIT 1
-                    ) cv
-                """)
-            ).first()
+                    SELECT visit_id 
+                    FROM customer_visits 
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                    """
+                )
+            ).scalar_one()
             
-            cart_id = CartManager.create_cart(conn, new_cart.dict(), time_id, visit_id)
-            
-            logger.info(
-                f"Created cart for customer name: {new_cart.customer_name}, "
-                f"class: {new_cart.character_class}, level: {new_cart.level}"
+            cart_id = CartManager.create_cart(
+                conn, 
+                new_cart.dict(), 
+                time_id,
+                visit_id
             )
+            
+            logger.info(f"Created cart {cart_id} for customer {new_cart.customer_name}")
             return {"cart_id": cart_id}
             
     except Exception as e:
@@ -111,78 +94,61 @@ def create_cart(new_cart: Customer):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """Add or update item quantity in cart."""
-    logger.debug(f"Updating cart - id: {cart_id}, sku: {item_sku}, quantity: {cart_item.quantity}")
-    
     try:
         with db.engine.begin() as conn:
             cart = CartManager.validate_cart_status(conn, cart_id)
-            
-
-            time_id = conn.execute(
-                sqlalchemy.text("""
-                    SELECT game_time_id 
-                    FROM current_game_time 
-                    ORDER BY created_at DESC 
-                    LIMIT 1
-                """)
-            ).scalar_one()
+            current_time = TimeManager.get_current_time(conn)
+            time_id = current_time['time_id']
             
             CartManager.update_cart_item(
                 conn, 
                 cart_id, 
                 item_sku, 
-                cart_item.quantity, 
+                cart_item.quantity,
                 time_id,
                 cart['visit_id']
             )
             
-            logger.info(f"Updated cart {cart_id} - item: {item_sku}, quantity: {cart_item.quantity}")
+            logger.info(
+                f"Updated cart {cart_id} - item: {item_sku}, "
+                f"quantity: {cart_item.quantity}"
+            )
             return {"success": True}
             
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to update cart item: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to update cart item")
+        raise HTTPException(status_code=500, detail="Failed to update item")
 
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """Process cart checkout."""
-    logger.debug(f"Processing checkout - cart: {cart_id}")
-    
     try:
         with db.engine.begin() as conn:
             cart = CartManager.validate_cart_status(conn, cart_id)
-            
-            time_id = conn.execute(
-                sqlalchemy.text("""
-                    SELECT game_time_id 
-                    FROM current_game_time 
-                    ORDER BY created_at DESC 
-                    LIMIT 1
-                """)
-            ).scalar_one()
+            current_time = TimeManager.get_current_time(conn)
+            time_id = current_time['time_id']
             
             result = CartManager.process_checkout(
-                conn, 
+                conn,
                 cart_id,
-                cart_checkout.payment, 
+                cart_checkout.payment,
                 time_id
             )
             
             logger.info(
                 f"Completed checkout - cart: {cart_id}, "
-                f"total potions: {result['total_potions_bought']}, "
-                f"total gold: {result['total_gold_paid']}"
+                f"total: {result['total_gold_paid']}"
             )
-            
+
             return result
             
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to process checkout: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to process checkout")
+        raise HTTPException(status_code=500, detail="Failed to checkout")
 
 @router.get("/search/", tags=["search"])
 def search_orders(
@@ -217,16 +183,23 @@ def search_orders(
     time is 5 total line items.
     """
 
-    return {
-        "previous": "",
-        "next": "",
-        "results": [
-            {
-                "line_item_id": 1,
-                "item_sku": "1 oblivion potion",
-                "customer_name": "Scaramouche",
-                "line_item_total": 50,
-                "timestamp": "2021-01-01T00:00:00Z",
-            }
-        ],
-    }
+    try:
+        with db.engine.begin() as conn:
+            results = CartManager.search_orders(
+                conn,
+                customer_name,
+                potion_sku,
+                search_page,
+                sort_col,
+                sort_order
+            )
+            
+            logger.debug(
+                f"Search results - customer: {customer_name}, "
+                f"sku: {potion_sku}, found: {len(results['results'])}"
+            )
+            return results
+            
+    except Exception as e:
+        logger.error(f"Failed to search orders: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to search orders")

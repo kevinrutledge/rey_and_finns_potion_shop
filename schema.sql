@@ -129,6 +129,7 @@ CREATE TABLE strategy_time_blocks (
         'Edgeday', 'Bloomday', 'Arcanaday'
     )),
     buffer_multiplier FLOAT NOT NULL DEFAULT 1.0,
+    dark_buffer_multiplier FLOAT NOT NULL DEFAULT 1.0,
     UNIQUE(strategy_id, time_block_id, day_name)
 );
 
@@ -258,7 +259,6 @@ CREATE TABLE capacity_upgrade_thresholds (
     min_ml_units INT NOT NULL,
     max_ml_units INT,
     gold_threshold INT NOT NULL,
-    secondary_gold_threshold INT,
     capacity_check_threshold FLOAT,
     ml_capacity_purchase INT NOT NULL,
     potion_capacity_purchase INT NOT NULL,
@@ -278,7 +278,8 @@ CREATE TABLE ledger_entries (
             'BARREL_PURCHASE',
             'POTION_BOTTLED',
             'POTION_SOLD',
-            'CAPACITY_UPGRADE',
+            'ML_CAPACITY_UPGRADE',
+            'POTION_CAPACITY_UPGRADE',
             'GOLD_CHANGE',
             'ML_ADJUSTMENT',
             'STRATEGY_CHANGE',
@@ -295,6 +296,8 @@ CREATE TABLE ledger_entries (
     gold_change INT,
     ml_change INT,
     potion_change INT,
+    ml_capacity_change INT,
+    potion_capacity_change INT,
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -313,8 +316,8 @@ WITH ledger_totals AS (
         COALESCE(SUM(CASE WHEN color_id = (SELECT color_id FROM color_definitions WHERE color_name = 'DARK') 
             THEN ml_change ELSE 0 END), 0) as dark_ml,
         COALESCE(SUM(potion_change), 0) as total_potions,
-        1 + COUNT(*) FILTER (WHERE entry_type = 'CAPACITY_UPGRADE' AND potion_change IS NOT NULL) as potion_capacity_units,
-        1 + COUNT(*) FILTER (WHERE entry_type = 'CAPACITY_UPGRADE' AND ml_change IS NOT NULL) as ml_capacity_units
+        COALESCE(SUM(potion_capacity_change), 0) as potion_capacity_units,
+        COALESCE(SUM(ml_capacity_change), 0) as ml_capacity_units
     FROM ledger_entries
 )
 SELECT 
@@ -456,10 +459,10 @@ VALUES
 INSERT INTO color_definitions 
 (color_name, color_index, priority_order) 
 VALUES
-('DARK', 3, 1),    -- Highest priority, rare resource
-('BLUE', 2, 2),    -- Second priority, premium color
-('RED', 0, 3),     -- Third priority, common color
-('GREEN', 1, 4);   -- Fourth priority, common color
+('DARK', 1),
+('RED', 2),
+('GREEN', 3),
+('BLUE', 4);
 
 -- Time Blocks - Game day divisions
 INSERT INTO time_blocks 
@@ -509,182 +512,182 @@ VALUES
 
 -- Insert strategy_time_blocks
 INSERT INTO strategy_time_blocks 
-    (strategy_id, time_block_id, day_name, buffer_multiplier)
+    (strategy_id, time_block_id, day_name, buffer_multiplier, dark_buffer_multiplier)
 VALUES
     -- HEARTHDAY
     -- PREMIUM
-    (1, 1, 'Hearthday', 1.0),  -- NIGHT
-    (1, 2, 'Hearthday', 1.0),  -- MORNING
-    (1, 3, 'Hearthday', 1.0),  -- AFTERNOON
-    (1, 4, 'Hearthday', 1.0),  -- EVENING
+    (1, 1, 'Hearthday', 1.0, 1.0),
+    (1, 2, 'Hearthday', 1.0, 1.0),
+    (1, 3, 'Hearthday', 1.0, 1.0),
+    (1, 4, 'Hearthday', 1.0, 2.0),
 
     -- PENETRATION
-    (2, 1, 'Hearthday', 1.0), 
-    (2, 2, 'Hearthday', 1.0),
-    (2, 3, 'Hearthday', 1.0),
-    (2, 4, 'Hearthday', 1.0),
+    (2, 1, 'Hearthday', 1.0, 1.0), 
+    (2, 2, 'Hearthday', 1.0, 1.0),
+    (2, 3, 'Hearthday', 1.0, 1.0),
+    (2, 4, 'Hearthday', 1.0, 2.0),
 
     -- TIERED
-    (3, 1, 'Hearthday', 1.0),
-    (3, 2, 'Hearthday', 1.0),
-    (3, 3, 'Hearthday', 1.0),
-    (3, 4, 'Hearthday', 1.0),
+    (3, 1, 'Hearthday', 1.0, 1.0),
+    (3, 2, 'Hearthday', 1.0, 1.0),
+    (3, 3, 'Hearthday', 1.0, 1.0),
+    (3, 4, 'Hearthday', 1.0, 2.0),
     
     -- DYNAMIC
-    (4, 1, 'Hearthday', 1.0),
-    (4, 2, 'Hearthday', 1.0),
-    (4, 3, 'Hearthday', 1.0),
-    (4, 4, 'Hearthday', 1.0),
+    (4, 1, 'Hearthday', 1.0, 1.0),
+    (4, 2, 'Hearthday', 1.0, 1.0),
+    (4, 3, 'Hearthday', 1.0, 1.0),
+    (4, 4, 'Hearthday', 1.0, 2.0),
 
     -- CROWNDAY
     -- PREMIUM
-    (1, 1, 'Crownday', 1.0),
-    (1, 2, 'Crownday', 1.0),
-    (1, 3, 'Crownday', 1.0),
-    (1, 4, 'Crownday', 1.0),
+    (1, 1, 'Crownday', 1.0, 1.0),
+    (1, 2, 'Crownday', 1.0, 1.0),
+    (1, 3, 'Crownday', 1.0, 1.0),
+    (1, 4, 'Crownday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Crownday', 1.0), 
-    (2, 2, 'Crownday', 1.0),
-    (2, 3, 'Crownday', 1.0),
-    (2, 4, 'Crownday', 1.0),
+    (2, 1, 'Crownday', 1.0, 1.0), 
+    (2, 2, 'Crownday', 1.0, 1.0),
+    (2, 3, 'Crownday', 1.0, 1.0),
+    (2, 4, 'Crownday', 1.0, 1.0),
 
     -- TIERED
-    (3, 1, 'Crownday', 1.0),
-    (3, 2, 'Crownday', 1.0),
-    (3, 3, 'Crownday', 1.0),
-    (3, 4, 'Crownday', 1.0),
+    (3, 1, 'Crownday', 1.0, 1.0),
+    (3, 2, 'Crownday', 1.0, 1.0),
+    (3, 3, 'Crownday', 1.0, 1.0),
+    (3, 4, 'Crownday', 1.0, 1.0),
     
     -- DYNAMIC
-    (4, 1, 'Crownday', 1.0),
-    (4, 2, 'Crownday', 1.0),
-    (4, 3, 'Crownday', 1.0),
-    (4, 4, 'Crownday', 1.0),
+    (4, 1, 'Crownday', 1.0, 1.0),
+    (4, 2, 'Crownday', 1.0, 1.0),
+    (4, 3, 'Crownday', 1.0, 1.0),
+    (4, 4, 'Crownday', 1.0, 1.0),
 
     -- BLESSEDAY
     -- PREMIUM
-    (1, 1, 'Blesseday', 1.0),
-    (1, 2, 'Blesseday', 1.0),
-    (1, 3, 'Blesseday', 1.0),
-    (1, 4, 'Blesseday', 1.0),
+    (1, 1, 'Blesseday', 1.0, 1.0),
+    (1, 2, 'Blesseday', 1.0, 1.0),
+    (1, 3, 'Blesseday', 1.0, 1.0),
+    (1, 4, 'Blesseday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Blesseday', 1.0), 
-    (2, 2, 'Blesseday', 1.0),
-    (2, 3, 'Blesseday', 1.0),
-    (2, 4, 'Blesseday', 1.0),
+    (2, 1, 'Blesseday', 1.0, 1.0), 
+    (2, 2, 'Blesseday', 1.0, 1.0),
+    (2, 3, 'Blesseday', 1.0, 1.0),
+    (2, 4, 'Blesseday', 1.0, 1.0),
 
     -- TIERED
-    (3, 1, 'Blesseday', 1.0),
-    (3, 2, 'Blesseday', 1.0),
-    (3, 3, 'Blesseday', 1.0),
-    (3, 4, 'Blesseday', 1.0),
+    (3, 1, 'Blesseday', 1.0, 1.0),
+    (3, 2, 'Blesseday', 1.0, 1.0),
+    (3, 3, 'Blesseday', 1.0, 1.0),
+    (3, 4, 'Blesseday', 1.0, 3.0),
     
     -- DYNAMIC
-    (4, 1, 'Blesseday', 1.0),
-    (4, 2, 'Blesseday', 1.0),
-    (4, 3, 'Blesseday', 1.0),
-    (4, 4, 'Blesseday', 1.0),
+    (4, 1, 'Blesseday', 1.0, 1.0),
+    (4, 2, 'Blesseday', 1.0, 1.0),
+    (4, 3, 'Blesseday', 1.0, 1.0),
+    (4, 4, 'Blesseday', 1.0, 3.0),
 
     -- SOULDAY
     -- PREMIUM
-    (1, 1, 'Soulday', 1.0),
-    (1, 2, 'Soulday', 1.0),
-    (1, 3, 'Soulday', 1.0),
-    (1, 4, 'Soulday', 1.0),
+    (1, 1, 'Soulday', 1.0, 1.0),
+    (1, 2, 'Soulday', 1.0, 1.0),
+    (1, 3, 'Soulday', 1.0, 1.0),
+    (1, 4, 'Soulday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Soulday', 1.0), 
-    (2, 2, 'Soulday', 1.0),
-    (2, 3, 'Soulday', 1.0),
-    (2, 4, 'Soulday', 1.0),
+    (2, 1, 'Soulday', 1.0, 1.0), 
+    (2, 2, 'Soulday', 1.0, 1.0),
+    (2, 3, 'Soulday', 1.0, 1.0),
+    (2, 4, 'Soulday', 1.0, 1.0),
 
     -- TIERED
-    (3, 1, 'Soulday', 1.0),
-    (3, 2, 'Soulday', 1.0),
-    (3, 3, 'Soulday', 1.0),
-    (3, 4, 'Soulday', 1.0),
+    (3, 1, 'Soulday', 1.0, 1.0),
+    (3, 2, 'Soulday', 1.0, 1.0),
+    (3, 3, 'Soulday', 1.0, 1.0),
+    (3, 4, 'Soulday', 1.0, 1.0),
     
     -- DYNAMIC
-    (4, 1, 'Soulday', 1.0),
-    (4, 2, 'Soulday', 1.0),
-    (4, 3, 'Soulday', 1.0),
-    (4, 4, 'Soulday', 1.0),
+    (4, 1, 'Soulday', 1.0, 1.0),
+    (4, 2, 'Soulday', 1.0, 1.0),
+    (4, 3, 'Soulday', 1.0, 1.0),
+    (4, 4, 'Soulday', 1.0, 1.0),
 
     -- EDGEDAY
     -- PREMIUM
-    (1, 1, 'Edgeday', 1.0),
-    (1, 2, 'Edgeday', 1.0),
-    (1, 3, 'Edgeday', 1.0),
-    (1, 4, 'Edgeday', 1.0),
+    (1, 1, 'Edgeday', 1.0, 1.0),
+    (1, 2, 'Edgeday', 1.0, 1.0),
+    (1, 3, 'Edgeday', 1.0, 1.0),
+    (1, 4, 'Edgeday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Edgeday', 1.0), 
-    (2, 2, 'Edgeday', 1.0),
-    (2, 3, 'Edgeday', 1.0),
-    (2, 4, 'Edgeday', 1.0),
+    (2, 1, 'Edgeday', 1.0, 1.0), 
+    (2, 2, 'Edgeday', 1.0, 1.0),
+    (2, 3, 'Edgeday', 1.0, 1.0),
+    (2, 4, 'Edgeday', 1.0, 1.0),
 
     -- TIERED
-    (3, 1, 'Edgeday', 1.0),
-    (3, 2, 'Edgeday', 1.0),
-    (3, 3, 'Edgeday', 1.0),
-    (3, 4, 'Edgeday', 1.0),
+    (3, 1, 'Edgeday', 1.0, 1.0),
+    (3, 2, 'Edgeday', 1.0, 1.0),
+    (3, 3, 'Edgeday', 1.0, 1.0),
+    (3, 4, 'Edgeday', 1.0, 1.0),
     
     -- DYNAMIC
-    (4, 1, 'Edgeday', 1.0),
-    (4, 2, 'Edgeday', 1.0),
-    (4, 3, 'Edgeday', 1.0),
-    (4, 4, 'Edgeday', 1.0),
+    (4, 1, 'Edgeday', 1.0, 1.0),
+    (4, 2, 'Edgeday', 1.0, 1.0),
+    (4, 3, 'Edgeday', 1.0, 1.0),
+    (4, 4, 'Edgeday', 1.0, 1.0),
 
     -- BLOOMDAY
     -- PREMIUM
-    (1, 1, 'Bloomday', 1.0),
-    (1, 2, 'Bloomday', 1.0),
-    (1, 3, 'Bloomday', 1.0),
-    (1, 4, 'Bloomday', 1.0),
+    (1, 1, 'Bloomday', 1.0, 1.0),
+    (1, 2, 'Bloomday', 1.0, 1.0),
+    (1, 3, 'Bloomday', 1.0, 1.0),
+    (1, 4, 'Bloomday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Bloomday', 1.0), 
-    (2, 2, 'Bloomday', 1.0),
-    (2, 3, 'Bloomday', 1.0),
-    (2, 4, 'Bloomday', 1.0),
+    (2, 1, 'Bloomday', 1.0, 1.0), 
+    (2, 2, 'Bloomday', 1.0, 1.0),
+    (2, 3, 'Bloomday', 1.0, 1.0),
+    (2, 4, 'Bloomday', 1.0, 1.0),
 
     -- TIERED
-    (3, 1, 'Bloomday', 1.0),
-    (3, 2, 'Bloomday', 1.0),
-    (3, 3, 'Bloomday', 1.0),
-    (3, 4, 'Bloomday', 1.0),
+    (3, 1, 'Bloomday', 1.0, 1.0),
+    (3, 2, 'Bloomday', 1.0, 1.0),
+    (3, 3, 'Bloomday', 1.0, 1.0),
+    (3, 4, 'Bloomday', 1.0, 2.0),
     
     -- DYNAMIC
-    (4, 1, 'Bloomday', 1.0),
-    (4, 2, 'Bloomday', 1.0),
-    (4, 3, 'Bloomday', 1.0),
-    (4, 4, 'Bloomday', 1.0),
+    (4, 1, 'Bloomday', 1.0, 1.0),
+    (4, 2, 'Bloomday', 1.0, 1.0),
+    (4, 3, 'Bloomday', 1.0, 1.0),
+    (4, 4, 'Bloomday', 1.0, 2.0);
 
     -- ARCANADAY
     -- PREMIUM
-    (1, 1, 'Arcanaday', 1.0),
-    (1, 2, 'Arcanaday', 1.0),
-    (1, 3, 'Arcanaday', 1.0),
-    (1, 4, 'Arcanaday', 1.0),
+    (1, 1, 'Arcanaday', 1.0, 1.0),
+    (1, 2, 'Arcanaday', 1.0, 1.0),
+    (1, 3, 'Arcanaday', 1.0, 1.0),
+    (1, 4, 'Arcanaday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Arcanaday', 1.0), 
-    (2, 2, 'Arcanaday', 1.0),
-    (2, 3, 'Arcanaday', 1.0),
-    (2, 4, 'Arcanaday', 1.0),
+    (2, 1, 'Arcanaday', 1.0, 1.0), 
+    (2, 2, 'Arcanaday', 1.0, 1.0),
+    (2, 3, 'Arcanaday', 1.0, 1.0),
+    (2, 4, 'Arcanaday', 1.0, 1.0),
 
     -- TIERED
-    (3, 1, 'Arcanaday', 1.0),
-    (3, 2, 'Arcanaday', 1.0),
-    (3, 3, 'Arcanaday', 1.0),
-    (3, 4, 'Arcanaday', 1.0),
+    (3, 1, 'Arcanaday', 1.0, 1.0),
+    (3, 2, 'Arcanaday', 1.0, 1.0),
+    (3, 3, 'Arcanaday', 1.0, 1.0),
+    (3, 4, 'Arcanaday', 1.0, 1.0),
     
     -- DYNAMIC
-    (4, 1, 'Arcanaday', 1.0),
-    (4, 2, 'Arcanaday', 1.0),
-    (4, 3, 'Arcanaday', 1.0),
-    (4, 4, 'Arcanaday', 1.0);
+    (4, 1, 'Arcanaday', 1.0, 1.0),
+    (4, 2, 'Arcanaday', 1.0, 1.0),
+    (4, 3, 'Arcanaday', 1.0, 1.0),
+    (4, 4, 'Arcanaday', 1.0, 1.0);
 
 -- Potion definitions with color mappings
 INSERT INTO potions
@@ -756,31 +759,31 @@ VALUES
 -- Capacity upgrade definitions
 INSERT INTO capacity_upgrade_thresholds
 (min_potion_units, max_potion_units, min_ml_units, max_ml_units, 
- gold_threshold, secondary_gold_threshold, capacity_check_threshold,
- ml_capacity_purchase, potion_capacity_purchase, priority_order, requires_inventory_check)
+ gold_threshold, capacity_check_threshold, ml_capacity_purchase, 
+ potion_capacity_purchase, priority_order, requires_inventory_check)
 VALUES
 -- First tier (1-1 units)
-(1, 1, 1, 1, 2800, NULL, NULL, 1, 1, 100, false),
-(1, 1, 1, 1, 2000, NULL, 0.5, 1, 1, 90, true),
+(1, 1, 1, 1, 2800, NULL, 1, 1, 100, false),
+(1, 1, 1, 1, 2000, 0.5, 1, 1, 90, true),
 
 -- Second tier (2-4 units)
-(2, 4, 2, 4, 5550, NULL, NULL, 2, 2, 80, false),
-(2, 4, 2, 4, 3550, NULL, 0.5, 2, 2, 70, true),
-(2, 4, 2, 4, 3550, NULL, NULL, 1, 1, 60, false),
-(2, 4, 2, 4, 2000, NULL, 0.5, 1, 1, 50, true),
+(2, 4, 2, 4, 5550, NULL, 2, 2, 80, false),
+(2, 4, 2, 4, 3550, 0.5, 2, 2, 70, true),
+(2, 4, 2, 4, 3550, NULL, 1, 1, 60, false),
+(2, 4, 2, 4, 2000, 0.5, 1, 1, 50, true),
 
 -- Third tier (4+ units) 
-(4, NULL, 4, NULL, 6250, NULL, 0.6, 1, 1, 40, true),
-(4, NULL, 4, NULL, 6250, NULL, 0.6, 1, 0, 30, true),
-(4, NULL, 4, NULL, 6250, NULL, 0.6, 0, 1, 20, true);
+(4, NULL, 4, 6250, NULL, 0.6, 1, 1, 40, true),
+(4, NULL, 4, 6250, NULL, 0.6, 1, 0, 30, true),
+(4, NULL, 4, 6250, NULL, 0.6, 0, 1, 20, true);
 
 -- First insert to start game
 INSERT INTO ledger_entries (
     time_id,
     entry_type,
-    gold_change
-) VALUES (
-    (SELECT MIN(time_id) FROM game_time),
-    'ADMIN_CHANGE',
-    100
-);
+    gold_change,
+    ml_capacity_change,
+    potion_capacity_change
+)
+VALUES 
+(1, 'ADMIN_CHANGE', 100, 1, 1);

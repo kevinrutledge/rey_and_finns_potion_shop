@@ -21,8 +21,6 @@ class Timestamp(BaseModel):
 def post_time(timestamp: Timestamp):
     """Record current game time and check for strategy transition."""
     try:
-        logger.debug(f"Processing current time - day: {timestamp.day}, hour: {timestamp.hour}")
-        
         if not TimeManager.validate_game_time(timestamp.day, timestamp.hour):
             logger.error(
                 f"Invalid game time values - day: {timestamp.day}, hour: {timestamp.hour}"
@@ -33,17 +31,12 @@ def post_time(timestamp: Timestamp):
             )
         
         with db.engine.begin() as conn:
-            strategy_changed = TimeManager.record_time(
-                conn, 
-                timestamp.day, 
-                timestamp.hour
-            )
-            
+            TimeManager.record_time(conn, timestamp.day, timestamp.hour)
             logger.info(f"Successfully recorded time - day: {timestamp.day}, hour: {timestamp.hour}")
             return {"success": True}
             
-    except HTTPException as he:
-        raise he
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to record time: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to record time")

@@ -1,12 +1,11 @@
 import sqlalchemy
 import logging
-import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
 from src.api import auth
 from src import database as db
-from src.utilities import BarrelManager, StateValidator
+from src.utilities import BarrelManager, TimeManager
 
 logger = logging.getLogger(__name__)
 
@@ -23,99 +22,126 @@ class Barrel(BaseModel):
     price: int
     quantity: int
 
+class BarrelPurchase(BaseModel):
+    sku: str
+    quantity: int
+
 @router.post("/plan")
-def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
+def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
     """Plan barrel purchases based on future needs."""
-    wholesale_catalog_dict = [dict(barrel) for barrel in wholesale_catalog]
-    logger.debug(f"Processing wholesale catalog - available barrels: {len(wholesale_catalog)}")
-    
     try:
         with db.engine.begin() as conn:
-            time_id = conn.execute(
-                sqlalchemy.text("""
-                    SELECT game_time_id 
-                    FROM current_game_time
-                    ORDER BY created_at DESC 
-                    LIMIT 1
-                """)
-            ).scalar_one()
+            logger.debug(f"Planning purchases from {len(wholesale_catalog)} available barrels")
+            
+            # Get current time and state
+            current_time = TimeManager.get_current_time(conn)
+            time_id = current_time['time_id']
+            state = conn.execute(sqlalchemy.text(
+                "SELECT * FROM current_state"
+            )).mappings().one()
 
-            visit_id = BarrelManager.record_wholesale_catalog(
+            # Convert Pydantic models to dicts
+            catalog_dicts = [barrel.dict() for barrel in wholesale_catalog]
+            
+            # Record catalog
+            visit_id = BarrelManager.record_catalog(
                 conn, 
-                wholesale_catalog_dict,
+                catalog_dicts,
                 time_id
             )
             
-            needs = [dict(need) for need in BarrelManager.get_ml_needs(conn)]
-            state = StateValidator.get_current_state(conn)
+            # Get barrel time block
+            block = conn.execute(sqlalchemy.text("""
+                SELECT tb.block_id, tb.name as block_name
+                FROM game_time gt
+                JOIN time_blocks tb 
+                    ON gt.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
+                WHERE gt.time_id = (
+                    SELECT barrel_time_id
+                    FROM game_time
+                    WHERE time_id = :time_id
+                )
+            """), {"time_id": time_id}).mappings().one()
             
-            logger.debug(f"Planning constraints - available gold: {state['gold']}, "
-                        f"available capacity: {state['max_ml'] - state['total_ml']}")
+            # Calculate needs with buffers
+            color_needs = BarrelManager.get_color_needs(conn, block)
             
-            purchases = BarrelManager.plan_purchases(
-                needs,
-                wholesale_catalog_dict,
-                state
+            # Plan and validate purchases
+            purchases = BarrelManager.plan_barrel_purchases(
+                conn,
+                catalog_dicts,
+                color_needs,
+                state['gold'],
+                state['max_ml'] - state['total_ml']
             )
             
             if purchases:
-                logger.debug(f"Purchase plan - barrels: {[(p['sku'], p['quantity']) for p in purchases]}")
+                logger.debug(f"Planned {len(purchases)} barrel purchases")
             else:
-                logger.debug("Purchase plan - no barrels needed")
-
-            return purchases
+                logger.debug("No barrel purchases needed")
+            
+            return [
+                BarrelPurchase(sku=p['sku'], quantity=p['quantity']) 
+                for p in purchases
+            ]
             
     except Exception as e:
-        logger.error(f"Failed to plan purchases: {e}")
+        logger.error(f"Failed to plan purchases: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to plan purchases")
 
 @router.post("/deliver/{order_id}")
-def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
+def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
     """Process delivery of barrels."""
-    barrels_delivered_dict = [dict(barrel) for barrel in barrels_delivered]
-    logger.debug(f"Processing barrel delivery - order: {order_id}, count: {len(barrels_delivered)}")
-    
     try:
         with db.engine.begin() as conn:
-            state = StateValidator.get_current_state(conn)
+            logger.debug(f"Processing barrel delivery - order: {order_id}")
+            
+            # Get current time and state
+            current_time = TimeManager.get_current_time(conn)
+            time_id = current_time['time_id']
+            state = conn.execute(sqlalchemy.text(
+                "SELECT * FROM current_state"
+            )).mappings().one()
+
+            # Convert Pydantic models to dicts
+            barrel_dicts = [barrel.dict() for barrel in barrels_delivered]
+            
+            # Validate total costs and capacity
             total_cost = sum(b.price * b.quantity for b in barrels_delivered)
             total_ml = sum(b.ml_per_barrel * b.quantity for b in barrels_delivered)
             
-            logger.debug(f"Delivery requirements - cost: {total_cost}, ml: {total_ml}")
-            
             if state['gold'] < total_cost:
-                logger.debug(f"Insufficient gold - required: {total_cost}, available: {state['gold']}")
                 raise HTTPException(status_code=400, detail="Insufficient gold")
                 
-            if state['total_ml'] + total_ml > state['max_ml']:
-                logger.debug(
-                    f"Insufficient ml capacity - current: {state['total_ml']}, "
-                    f"required: {total_ml}, max: {state['max_ml']}"
-                )
-                raise HTTPException(status_code=400, detail="Insufficient ml capacity")
+            available_capacity = state['max_ml'] - state['total_ml']
+            BarrelManager.validate_purchase_constraints(
+                conn, 
+                barrel_dicts,
+                available_capacity
+            )
             
-            time_id = conn.execute(
-                sqlalchemy.text("SELECT time_id FROM game_time ORDER BY created_at DESC LIMIT 1")
-            ).scalar_one()
+            # Get latest visit
+            visit_id = conn.execute(sqlalchemy.text("""
+                SELECT visit_id 
+                FROM barrel_visits 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            """)).scalar_one()
             
-            visit_id = conn.execute(
-                sqlalchemy.text("SELECT visit_id FROM barrel_visits ORDER BY created_at DESC LIMIT 1")
-            ).scalar_one()
-            
+            # Process each barrel
             for barrel in barrels_delivered:
-                barrel_id = conn.execute(
-                    sqlalchemy.text("""
-                        SELECT barrel_id 
-                        FROM barrel_details 
-                        WHERE visit_id = :visit_id 
-                        AND sku = :sku
-                    """),
-                    {"visit_id": visit_id, "sku": barrel.sku}
-                ).scalar_one()
+                barrel_id = conn.execute(sqlalchemy.text("""
+                    SELECT barrel_id 
+                    FROM barrel_details 
+                    WHERE visit_id = :visit_id AND sku = :sku
+                """), {
+                    "visit_id": visit_id,
+                    "sku": barrel.sku
+                }).scalar_one()
                 
                 BarrelManager.process_barrel_purchase(
                     conn,
-                    dict(barrel),
+                    barrel.dict(),
                     barrel_id,
                     time_id,
                     visit_id
@@ -124,8 +150,8 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             logger.info(f"Successfully processed barrel delivery for order {order_id}")
             return {"success": True}
             
-    except HTTPException as he:
-        raise he
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to process barrel delivery: {e}")
+        logger.error(f"Failed to process barrel delivery: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to process delivery")

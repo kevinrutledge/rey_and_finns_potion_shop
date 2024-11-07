@@ -1,212 +1,83 @@
+import base64
+import json
 import sqlalchemy
 import logging
-import json
 from fastapi import HTTPException
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 class LedgerManager:
-    """Handles ledger operations and state management."""
-    
-    VALID_ENTRY_TYPES = {
-        'BARREL_PURCHASE',
-        'POTION_BOTTLED',
-        'POTION_SOLD',
-        'CAPACITY_UPGRADE',
-        'GOLD_CHANGE',
-        'ML_ADJUSTMENT',
-        'STRATEGY_CHANGE',
-        'ADMIN_CHANGE'
-    }
+    """Handles ledger operations."""
     
     @staticmethod
-    def create_ledger_entry(
-        conn,
-        time_id: int,
-        entry_type: str,
-        gold_change: Optional[int] = None,
-        ml_change: Optional[int] = None,
-        potion_change: Optional[int] = None,
-        color_id: Optional[int] = None,
-        barrel_purchase_id: Optional[int] = None,
-        cart_id: Optional[int] = None,
-        potion_id: Optional[int] = None
-    ) -> int:
-        """
-        Creates a ledger entry and returns its ID.
-        Validates entry type and ensures at least one change value is provided.
-        """
-        if entry_type not in LedgerManager.VALID_ENTRY_TYPES:
-            logger.error(f"Invalid ledger entry type: {entry_type}")
-            raise ValueError(f"Invalid entry type: {entry_type}")
-            
-        if not any([gold_change, ml_change, potion_change]):
-            logger.error("No change values provided for ledger entry")
-            raise ValueError("At least one change value must be provided")
-            
-        result = conn.execute(
+    def create_admin_entry(conn, time_id: int) -> None:
+        """Creates admin reset ledger entry with 100 gold."""
+        conn.execute(
             sqlalchemy.text("""
                 INSERT INTO ledger_entries (
-                    time_id, entry_type, gold_change, ml_change, potion_change,
-                    color_id, barrel_purchase_id, cart_id, potion_id
+                    time_id,
+                    entry_type,
+                    gold_change,
+                    ml_capacity_change,
+                    potion_capacity_change
                 ) VALUES (
-                    :time_id, :entry_type, :gold_change, :ml_change, :potion_change,
-                    :color_id, :barrel_purchase_id, :cart_id, :potion_id
+                    :time_id,
+                    'ADMIN_CHANGE',
+                    100,
+                    1,
+                    1
                 )
-                RETURNING entry_id
             """),
-            {
-                "time_id": time_id,
-                "entry_type": entry_type,
-                "gold_change": gold_change,
-                "ml_change": ml_change,
-                "potion_change": potion_change,
-                "color_id": color_id,
-                "barrel_purchase_id": barrel_purchase_id,
-                "cart_id": cart_id,
-                "potion_id": potion_id
-            }
-        ).scalar_one()
-        
-        logger.debug(
-            f"Created ledger entry - id: {result}, type: {entry_type}, "
-            f"gold: {gold_change}, ml: {ml_change}, potions: {potion_change}"
+            {"time_id": time_id}
         )
-        
-        return result
-
-    @staticmethod
-    def verify_ledger_state(conn) -> bool:
-        """Verifies ledger consistency and returns True if valid."""
-        try:
-            state = StateValidator.get_current_state(conn)
-            
-            # Verify non-negative values
-            if state['gold'] < 0:
-                logger.error(f"Invalid negative gold balance: {state['gold']}")
-                return False
-                
-            if state['total_potions'] < 0:
-                logger.error(f"Invalid negative potion count: {state['total_potions']}")
-                return False
-                
-            if state['total_ml'] < 0:
-                logger.error(f"Invalid negative ml total: {state['total_ml']}")
-                return False
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to verify ledger state: {str(e)}")
-            return False
-
-class StateValidator:
-    """Handles state validation and verification."""
-    
-    @staticmethod
-    def get_current_state(conn) -> dict:
-        """Gets current state from current_state view."""
-        return conn.execute(
-            sqlalchemy.text("SELECT * FROM current_state")
-        ).mappings().one()
-
-    @staticmethod
-    def verify_reset_state(conn) -> bool:
-        """Verifies game state matches initial conditions after reset."""
-        state = StateValidator.get_current_state(conn)
-        
-        if state['gold'] != 100:
-            return False
-            
-        if state['total_potions'] != 0:
-            return False
-            
-        if state['total_ml'] != 0:
-            return False
-            
-        strategy_id = conn.execute(
-            sqlalchemy.text("""
-                SELECT strategy_id 
-                FROM active_strategy
-                ORDER BY activated_at DESC 
-                LIMIT 1
-            """)
-        ).scalar_one()
-        
-        premium_id = conn.execute(
-            sqlalchemy.text("""
-                SELECT strategy_id 
-                FROM strategies 
-                WHERE name = 'PREMIUM'
-            """)
-        ).scalar_one()
-            
-        if strategy_id != premium_id:
-            return False
-            
-        return True
-
-    @staticmethod
-    def verify_resources(
-        conn,
-        needed_gold: Optional[int] = None,
-        needed_ml: Optional[Dict[str, int]] = None,
-        needed_potions: Optional[int] = None
-    ) -> bool:
-        """
-        Validates available resources against requested amounts.
-        Returns True if sufficient resources exist, False otherwise.
-        """
-        if needed_gold:
-            gold = conn.execute(
-                sqlalchemy.text("""
-                    SELECT COALESCE(SUM(gold_change), 100) as gold
-                    FROM ledger_entries
-                """)
-            ).scalar_one()
-            
-            if gold < needed_gold:
-                return False
-        
-        if needed_ml:
-            ml_totals = conn.execute(
-                sqlalchemy.text("""
-                    SELECT 
-                        cd.color_name,
-                        COALESCE(SUM(le.ml_change), 0) as total_ml
-                    FROM color_definitions cd
-                    LEFT JOIN ledger_entries le ON cd.color_id = le.color_id
-                    GROUP BY cd.color_name
-                """)
-            ).mappings().all()
-            
-            ml_dict = {row['color_name'].lower() + '_ml': row['total_ml'] 
-                        for row in ml_totals}
-            
-            for color, needed in needed_ml.items():
-                if ml_dict.get(color, 0) < needed:
-                    return False
-        
-        if needed_potions is not None:
-            total_potions = conn.execute(
-                sqlalchemy.text("""
-                    SELECT COALESCE(SUM(potion_change), 0) as total
-                    FROM ledger_entries
-                """)
-            ).scalar_one()
-            
-            if total_potions + needed_potions > 0:  # Consider capacity
-                return False
-        
-        return True
 
 class TimeManager:
     """Handles game time and strategy transitions."""
     
+    VALID_DAYS = {
+        'Hearthday', 'Crownday', 'Blesseday', 'Soulday',
+        'Edgeday', 'Bloomday', 'Arcanaday'
+    }
+
+    @staticmethod
+    def get_current_time(conn) -> dict:
+        """Gets latest time_id, day, and hour."""
+        result = conn.execute(
+            sqlalchemy.text("""
+                SELECT 
+                    gt.time_id,
+                    gt.in_game_day as day,
+                    gt.in_game_hour as hour
+                FROM current_game_time cgt
+                JOIN game_time gt ON cgt.game_time_id = gt.time_id
+                ORDER BY cgt.created_at DESC
+                LIMIT 1
+            """)
+        ).mappings().first()
+        
+        if not result:
+            raise HTTPException(status_code=500, detail="No current time found")
+        
+        return dict(result)
+    
+    @staticmethod
+    def validate_game_time(day: str, hour: int) -> bool:
+        """Validates if provided day and hour are valid game time values."""
+        if day not in TimeManager.VALID_DAYS:
+            return False
+            
+        if not isinstance(hour, int) or hour < 0 or hour > 22 or hour % 2 != 0:
+            return False
+        
+        return True
+
     @staticmethod
     def record_time(conn, day: str, hour: int) -> bool:
-        """Records current game time and checks for strategy transitions based on state."""
+        """
+        Records current game time and checks for strategy transitions.
+        Returns True if strategy transition occurred.
+        """
+        # Get time_id for new time
         time_id = conn.execute(
             sqlalchemy.text("""
                 SELECT time_id
@@ -216,6 +87,7 @@ class TimeManager:
             {"day": day, "hour": hour}
         ).scalar_one()
         
+        # Record new time
         conn.execute(
             sqlalchemy.text("""
                 INSERT INTO current_game_time (
@@ -238,38 +110,46 @@ class TimeManager:
         # Check state for strategy transition
         state = conn.execute(
             sqlalchemy.text("""
-                WITH current_totals AS (
-                    SELECT 
-                        COALESCE(SUM(gold_change), 100) as gold,
-                        COALESCE(SUM(potion_change), 0) as total_potions,
-                        COALESCE(SUM(ml_change), 0) as total_ml
-                    FROM ledger_entries
-                ),
-                current_strat AS (
+                WITH current_strat AS (
                     SELECT st.*
                     FROM active_strategy ast
                     JOIN strategy_transitions st ON ast.strategy_id = st.from_strategy_id
                     ORDER BY ast.activated_at DESC
                     LIMIT 1
+                ),
+                state_check AS (
+                    SELECT 
+                        cs.*,
+                        c.gold,
+                        c.total_potions,
+                        c.total_ml,
+                        c.ml_capacity_units,
+                        c.potion_capacity_units
+                    FROM current_strat cs
+                    CROSS JOIN current_state c
                 )
                 SELECT 
-                    cs.to_strategy_id,
-                    ct.gold,
-                    ct.total_potions,
-                    ct.total_ml,
-                    ct.gold >= cs.gold_threshold OR
-                    ct.total_potions >= cs.potion_threshold OR
-                    ct.total_ml >= cs.ml_threshold as should_transition
-                FROM current_strat cs
-                CROSS JOIN current_totals ct
-                WHERE cs.to_strategy_id IS NOT NULL
+                    to_strategy_id,
+                    CASE
+                        WHEN require_all_thresholds THEN
+                            (gold >= gold_threshold OR gold_threshold IS NULL) AND
+                            (total_potions >= potion_threshold OR potion_threshold IS NULL) AND
+                            (total_ml >= ml_threshold OR ml_threshold IS NULL) AND
+                            ml_capacity_units >= ml_capacity_threshold AND
+                            potion_capacity_units >= potion_capacity_threshold
+                        ELSE
+                            gold >= gold_threshold OR
+                            total_potions >= potion_threshold OR
+                            total_ml >= ml_threshold
+                    END as should_transition
+                FROM state_check
+                WHERE to_strategy_id IS NOT NULL
             """)
         ).mappings().first()
-        
+    
         if state and state['should_transition']:
-            logger.debug(
-                f"Strategy transition triggered - gold: {state['gold']}, "
-                f"potions: {state['total_potions']}, ml: {state['total_ml']}"
+            logger.info(
+                f"Strategy transition triggered to strategy_id: {state['to_strategy_id']}"
             )
             
             conn.execute(
@@ -290,22 +170,6 @@ class TimeManager:
             return True
             
         return False
-
-    @staticmethod
-    def validate_game_time(day: str, hour: int) -> bool:
-        """Validates if provided day and hour are valid game time values."""
-        valid_days = {
-            'Hearthday', 'Crownday', 'Blesseday', 'Soulday',
-            'Edgeday', 'Bloomday', 'Arcanaday'
-        }
-        
-        if day not in valid_days:
-            return False
-            
-        if not isinstance(hour, int) or hour < 0 or hour > 22 or hour % 2 != 0:
-            return False
-        
-        return True
 
 class CatalogManager:
     """Handles catalog creation and potion availability."""
@@ -350,32 +214,33 @@ class CatalogManager:
                 WHERE p.current_quantity > 0
                 ORDER BY bpp.priority_order
                 LIMIT 6
-            """)
+                """
+            )
         ).mappings().all()
 
 class BarrelManager:
     """Handles barrel purchase planning and processing."""
-
+    
     @staticmethod
-    def record_wholesale_catalog(conn, wholesale_catalog: list, time_id: int) -> int:
-        """Records wholesale catalog and returns visit_id."""
+    def record_catalog(conn, wholesale_catalog: list, time_id: int) -> int:
+        """Records wholesale catalog excluding MINI barrels."""
+        # Filter out MINI barrels
+        valid_barrels = [b for b in wholesale_catalog if not b['sku'].startswith('MINI')]
+        
+        # Record visit
         visit_id = conn.execute(
             sqlalchemy.text("""
-                INSERT INTO barrel_visits (
-                    time_id,
-                    wholesale_catalog
-                )
+                INSERT INTO barrel_visits (time_id, wholesale_catalog)
                 VALUES (:time_id, :catalog)
                 RETURNING visit_id
             """),
             {
                 "time_id": time_id,
-                "catalog": json.dumps(wholesale_catalog)
+                "catalog": json.dumps([dict(b) for b in wholesale_catalog])
             }
         ).scalar_one()
 
-        valid_barrels = [b for b in wholesale_catalog if not b['sku'].startswith('MINI')]
-        
+        # Record barrel details
         for barrel in valid_barrels:
             color_name = barrel['sku'].split('_')[1]
             conn.execute(
@@ -411,82 +276,118 @@ class BarrelManager:
             )
 
         return visit_id
-
+    
     @staticmethod
-    def get_ml_needs(conn) -> list:
-        """Gets prioritized ML needs based on future time block."""
-        return conn.execute(
+    def get_color_needs(conn, time_block: dict) -> dict:
+        """Calculate color needs based on strategy and time block."""
+        # First get base needs from block priorities
+        base_needs = conn.execute(
             sqlalchemy.text("""
-                WITH future_info AS (
-                    SELECT 
-                        gt.in_game_day,
-                        gt.in_game_hour,
-                        ast.strategy_id
-                    FROM game_time gt
-                    CROSS JOIN (
-                        SELECT strategy_id
-                        FROM active_strategy
-                        ORDER BY activated_at DESC
-                        LIMIT 1
-                    ) ast
-                    WHERE gt.time_id = (
-                        SELECT barrel_time_id
-                        FROM game_time
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    )
+                WITH block_needs AS (
+                    SELECT
+                        cd.color_name,
+                        -- Get percentages first
+                        SUM(
+                            CASE
+                                WHEN cd.color_name = 'RED' THEN p.red_ml
+                                WHEN cd.color_name = 'GREEN' THEN p.green_ml
+                                WHEN cd.color_name = 'BLUE' THEN p.blue_ml
+                                WHEN cd.color_name = 'DARK' THEN p.dark_ml
+                            END * bpp.sales_mix
+                        ) as color_percentage,
+                        -- Get target number of potions based on strategy
+                        (SELECT max_potions_per_sku 
+                        FROM strategies s
+                        JOIN active_strategy ast ON s.strategy_id = ast.strategy_id
+                        ORDER BY ast.activated_at DESC
+                        LIMIT 1) as target_potions
+                    FROM block_potion_priorities bpp
+                    JOIN potions p ON bpp.potion_id = p.potion_id
+                    CROSS JOIN color_definitions cd
+                    WHERE bpp.block_id = :block_id
+                    GROUP BY cd.color_name
                 )
                 SELECT 
-                    cd.color_name,
-                    cd.priority_order,
-                    SUM(
-                        CASE 
-                            WHEN cd.color_name = 'RED' THEN p.red_ml
-                            WHEN cd.color_name = 'GREEN' THEN p.green_ml
-                            WHEN cd.color_name = 'BLUE' THEN p.blue_ml
-                            WHEN cd.color_name = 'DARK' THEN p.dark_ml
-                        END * bpp.sales_mix
-                    ) as ml_needed
-                FROM future_info fi
-                JOIN time_blocks tb 
-                    ON fi.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
-                JOIN strategy_time_blocks stb 
-                    ON tb.block_id = stb.time_block_id
-                    AND fi.strategy_id = stb.strategy_id
-                    AND fi.in_game_day = stb.day_name
-                JOIN block_potion_priorities bpp 
-                    ON stb.block_id = bpp.block_id
-                JOIN potions p ON bpp.potion_id = p.potion_id
-                CROSS JOIN color_definitions cd
-                GROUP BY cd.color_name, cd.priority_order
-                ORDER BY cd.priority_order
-            """)
+                    color_name,
+                    -- Scale up by target potions and ml per potion
+                    (color_percentage * target_potions) as ml_needed
+                FROM block_needs;
+            """),
+            {"block_id": time_block['block_id']}
         ).mappings().all()
 
+        # Then get strategy multipliers
+        multipliers = conn.execute(
+            sqlalchemy.text("""
+                SELECT
+                    buffer_multiplier,
+                    dark_buffer_multiplier
+                FROM strategy_time_blocks
+                WHERE block_id = :block_id
+            """),
+            {"block_id": time_block['block_id']}
+        ).mappings().one()
+
+        # Apply multipliers to needs
+        color_needs = {}
+        for need in base_needs:
+            multiplier = (multipliers['dark_buffer_multiplier'] 
+                        if need['color_name'] == 'DARK'
+                        else multipliers['buffer_multiplier'])
+            color_needs[need['color_name']] = need['ml_needed'] * multiplier
+
+        return color_needs
+
     @staticmethod
-    def plan_purchases(needs: list, wholesale_catalog: list, current_state: dict) -> list:
-        """Calculate optimal barrel purchases based on needs and constraints."""
+    def plan_barrel_purchases(
+        conn,
+        wholesale_catalog: list,
+        color_needs: dict,
+        available_gold: int,
+        available_capacity: int
+    ) -> list:
+        """Plan purchases based on needs and strategy constraints."""
+        # Get current strategy size preferences
+        strategy = conn.execute(sqlalchemy.text("""
+            SELECT s.name as strategy_name
+            FROM strategies s
+            JOIN active_strategy ast ON s.strategy_id = ast.strategy_id
+            ORDER BY ast.activated_at DESC
+            LIMIT 1
+        """)).mappings().one()
+        
+        if strategy['strategy_name'] == 'PREMIUM':
+            size_preferences = ['SMALL']
+        elif strategy['strategy_name'] == 'PENETRATION':
+            size_preferences = ['MEDIUM', 'SMALL']
+        else:  # TIERED or DYNAMIC
+            size_preferences = ['LARGE', 'MEDIUM']
+            
         purchases = []
+        remaining_gold = available_gold
+        remaining_capacity = available_capacity
         catalog_dict = {b['sku']: b for b in wholesale_catalog}
         
-        available_gold = current_state['gold']
-        available_capacity = current_state['max_ml'] - current_state['total_ml']
-        
-        # Plan purchases based on color priority
-        for need in needs:
-            if need['ml_needed'] <= 0:
+        # Prioritize by color needs
+        for color, needed_ml in sorted(
+            color_needs.items(),
+            key=lambda x: x[1],
+            reverse=True
+        ):
+            if needed_ml <= 0:
                 continue
                 
-            for size in ['LARGE', 'MEDIUM', 'SMALL']:
-                barrel_sku = f"{size}_{need['color_name']}_BARREL"
+            # Try each preferred size
+            for size in size_preferences:
+                barrel_sku = f"{size}_{color}_BARREL"
                 barrel = catalog_dict.get(barrel_sku)
                 
                 if not barrel:
                     continue
                     
-                max_by_gold = available_gold // barrel['price']
-                max_by_capacity = available_capacity // barrel['ml_per_barrel']
-                max_by_need = (need['ml_needed'] + barrel['ml_per_barrel'] - 1) // barrel['ml_per_barrel']
+                max_by_gold = remaining_gold // barrel['price']
+                max_by_capacity = remaining_capacity // barrel['ml_per_barrel']
+                max_by_need = (needed_ml + barrel['ml_per_barrel'] - 1) // barrel['ml_per_barrel']
                 max_by_availability = barrel['quantity']
                 
                 quantity = min(
@@ -499,25 +400,71 @@ class BarrelManager:
                 if quantity > 0:
                     purchases.append({
                         "sku": barrel_sku,
-                        "quantity": int(quantity)
+                        "quantity": quantity
                     })
                     
-                    available_gold -= quantity * barrel['price']
-                    available_capacity -= quantity * barrel['ml_per_barrel']
-                    need['ml_needed'] -= quantity * barrel['ml_per_barrel']
-                    
-                if need['ml_needed'] <= 0:
+                    remaining_gold -= quantity * barrel['price']
+                    remaining_capacity -= quantity * barrel['ml_per_barrel']
+                    needed_ml -= quantity * barrel['ml_per_barrel']
+                
+                if needed_ml <= 0:
                     break
-                    
+        
         return purchases
-
+    
     @staticmethod
-    def process_barrel_purchase(conn, barrel: dict, barrel_id: int, time_id: int, visit_id: int) -> int:
+    def validate_purchase_constraints(conn, purchases: list, available_capacity: int) -> None:
         """
-        Records a barrel purchase and creates ledger entry.
-        Returns the purchase_id.
+        Validates purchases against strategy constraints.
+        Raises HTTPException if constraints are violated.
         """
-        # Record the purchase
+        # Get current strategy limits
+        strategy = conn.execute(
+            sqlalchemy.text("""
+                SELECT 
+                    s.max_potions_per_sku,
+                    s.ml_capacity_units * 10000 as max_ml
+                FROM strategies s
+                JOIN active_strategy ast ON s.strategy_id = ast.strategy_id
+                ORDER BY ast.activated_at DESC
+                LIMIT 1
+            """)
+        ).mappings().one()
+
+        # Validate ml capacity
+        total_ml = sum(p['ml_per_barrel'] * p['quantity'] for p in purchases)
+        if total_ml > available_capacity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Purchase would exceed ml capacity: {total_ml} > {available_capacity}"
+            )
+
+        # Validate max potions per SKU
+        potions_per_barrel = strategy['max_ml'] / 100  # Each potion needs 100 ml
+        for purchase in purchases:
+            potential_potions = (purchase['ml_per_barrel'] * purchase['quantity']) / 100
+            if potential_potions > strategy['max_potions_per_sku']:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Purchase would exceed max potions per SKU: "
+                        f"{potential_potions} > {strategy['max_potions_per_sku']}"
+                    )
+                )
+
+    # Keep process_barrel_purchase but add validation
+    @staticmethod
+    def process_barrel_purchase(
+        conn,
+        barrel: dict,
+        barrel_id: int,
+        time_id: int,
+        visit_id: int
+    ) -> int:
+        """Records a barrel purchase with ledger entry."""
+        color_name = barrel['sku'].split('_')[1]
+        
+        # Record purchase
         purchase_id = conn.execute(
             sqlalchemy.text("""
                 INSERT INTO barrel_purchases (
@@ -549,25 +496,37 @@ class BarrelManager:
                 "quantity": barrel['quantity'],
                 "total_cost": barrel['price'] * barrel['quantity'],
                 "ml_added": barrel['ml_per_barrel'] * barrel['quantity'],
-                "color_name": barrel['sku'].split('_')[1]
+                "color_name": color_name
             }
         ).scalar_one()
 
-        LedgerManager.create_ledger_entry(
-            conn=conn,
-            time_id=time_id,
-            entry_type='BARREL_PURCHASE',
-            gold_change=-(barrel['price'] * barrel['quantity']),
-            ml_change=barrel['ml_per_barrel'] * barrel['quantity'],
-            color_id=conn.execute(
-                sqlalchemy.text("""
-                    SELECT color_id 
-                    FROM color_definitions 
-                    WHERE color_name = :color_name
-                """),
-                {"color_name": barrel['sku'].split('_')[1]}
-            ).scalar_one(),
-            barrel_purchase_id=purchase_id
+        # Create ledger entry
+        conn.execute(
+            sqlalchemy.text("""
+                INSERT INTO ledger_entries (
+                    time_id,
+                    entry_type,
+                    barrel_purchase_id,
+                    gold_change,
+                    ml_change,
+                    color_id
+                )
+                VALUES (
+                    :time_id,
+                    'BARREL_PURCHASE',
+                    :purchase_id,
+                    :gold_change,
+                    :ml_change,
+                    (SELECT color_id FROM color_definitions WHERE color_name = :color_name)
+                )
+            """),
+            {
+                "time_id": time_id,
+                "purchase_id": purchase_id,
+                "gold_change": -(barrel['price'] * barrel['quantity']),
+                "ml_change": barrel['ml_per_barrel'] * barrel['quantity'],
+                "color_name": color_name
+            }
         )
 
         return purchase_id
@@ -577,10 +536,7 @@ class BottlerManager:
     
     @staticmethod
     def get_bottling_priorities(conn) -> list:
-        """
-        Gets prioritized potions for bottling based on current strategy.
-        Returns list of potions with their mix ratios and priorities.
-        """
+        """Gets prioritized potions for bottling based on strategy."""
         return conn.execute(
             sqlalchemy.text("""
                 WITH future_info AS (
@@ -622,19 +578,13 @@ class BottlerManager:
                 JOIN potions p 
                     ON bpp.potion_id = p.potion_id
                 ORDER BY bpp.priority_order
-            """)
+                """
+            )
         ).mappings().all()
 
     @staticmethod
-    def calculate_possible_potions(
-        priorities: list,
-        available_ml: dict,
-        available_capacity: int
-    ) -> list:
-        """
-        Calculates maximum potions that can be made with available resources.
-        Returns list of possible potions and their quantities.
-        """
+    def calculate_possible_potions(priorities: list, available_ml: dict, available_capacity: int) -> list:
+        """Calculates maximum potions that can be made with available resources."""
         bottling_plan = []
         remaining_ml = available_ml.copy()
         remaining_capacity = available_capacity
@@ -681,37 +631,34 @@ class BottlerManager:
 
     @staticmethod
     def process_bottling(conn, potion_data: dict, time_id: int) -> None:
-        """
-        Processes potion bottling with ledger entries and inventory updates.
-        Creates one ledger entry per color used.
-        """
+        """Processes potion bottling with ledger entries."""
+        # Get potion_id for mixture
         potion_id = conn.execute(
             sqlalchemy.text("""
                 SELECT potion_id
                 FROM potions
                 WHERE ARRAY[red_ml, green_ml, blue_ml, dark_ml] = :potion_type
-            """),
-            {"potion_type": potion_data['potion_type']}
+                """,
+                {"potion_type": potion_data['potion_type']}
+            )
         ).scalar_one()
         
+        # Update potion inventory
         conn.execute(
             sqlalchemy.text("""
                 UPDATE potions
                 SET current_quantity = current_quantity + :quantity
                 WHERE potion_id = :potion_id
-            """),
-            {
-                "quantity": potion_data['quantity'],
-                "potion_id": potion_id
-            }
+                """,
+                {
+                    "quantity": potion_data['quantity'],
+                    "potion_id": potion_id
+                }
+            )
         )
         
-        color_map = {
-            0: 'RED', 
-            1: 'GREEN', 
-            2: 'BLUE', 
-            3: 'DARK'
-        }
+        # Create ledger entries for each color used
+        color_map = {0: 'RED', 1: 'GREEN', 2: 'BLUE', 3: 'DARK'}
         
         for idx, amount in enumerate(potion_data['potion_type']):
             if amount > 0:
@@ -721,44 +668,60 @@ class BottlerManager:
                         SELECT color_id 
                         FROM color_definitions 
                         WHERE color_name = :color
-                    """),
-                    {"color": color_map[idx]}
+                        """,
+                        {"color": color_map[idx]}
+                    )
                 ).scalar_one()
                 
-                LedgerManager.create_ledger_entry(
-                    conn=conn,
-                    time_id=time_id,
-                    entry_type='POTION_BOTTLED',
-                    ml_change=-ml_used,
-                    potion_change=potion_data['quantity'],
-                    color_id=color_id,
-                    potion_id=potion_id
+                conn.execute(
+                    sqlalchemy.text("""
+                        INSERT INTO ledger_entries (
+                            time_id,
+                            entry_type,
+                            ml_change,
+                            potion_change,
+                            color_id,
+                            potion_id
+                        )
+                        VALUES (
+                            :time_id,
+                            'POTION_BOTTLED',
+                            :ml_change,
+                            :potion_change,
+                            :color_id,
+                            :potion_id
+                        )
+                        """,
+                        {
+                            "time_id": time_id,
+                            "ml_change": -ml_used,
+                            "potion_change": potion_data['quantity'],
+                            "color_id": color_id,
+                            "potion_id": potion_id
+                        }
+                    )
                 )
 
 class CartManager:
     """Handles cart operations and customer interactions."""
     
+    PAGE_SIZE = 5  # Maximum results per page for search
+    
     @staticmethod
     def record_customer_visit(conn, visit_id: int, customers: list, time_id: int) -> int:
-        """Records customer visit and individual customers in the database."""
+        """Records customer visit and individual customers."""
         visit_record_id = conn.execute(
             sqlalchemy.text("""
-                INSERT INTO customer_visits (
-                    visit_id,
-                    time_id,
-                    customers
-                ) VALUES (
-                    :visit_id,
-                    :time_id,
-                    :customers
-                )
+                INSERT INTO customer_visits (visit_id, time_id, customers)
+                VALUES (:visit_id, :time_id, :customers)
                 RETURNING visit_record_id
-            """),
-            {
-                "visit_id": visit_id,
-                "time_id": time_id,
-                "customers": json.dumps(customers)
-            }
+                """,
+                {
+                    "visit_id": visit_id,
+                    "time_id": time_id,
+                    "customers": customers
+                }
+            )
         ).scalar_one()
 
         for customer in customers:
@@ -779,15 +742,16 @@ class CartManager:
                         :class,
                         :level
                     )
-                """),
-                {
-                    "visit_record_id": visit_record_id,
-                    "visit_id": visit_id,
-                    "time_id": time_id,
-                    "name": customer['customer_name'],
-                    "class": customer['character_class'],
-                    "level": customer['level']
-                }
+                    """,
+                    {
+                        "visit_record_id": visit_record_id,
+                        "visit_id": visit_id,
+                        "time_id": time_id,
+                        "name": customer['customer_name'],
+                        "class": customer['character_class'],
+                        "level": customer['level']
+                    }
+                )
             )
         
         return visit_record_id
@@ -803,19 +767,20 @@ class CartManager:
                 WHERE c.customer_name = :name 
                 AND c.character_class = :class
                 AND c.level = :level
-                AND cv.visit_id = :visit_id  -- Check against current visit_id
+                AND cv.visit_id = :visit_id
                 ORDER BY cv.created_at DESC
                 LIMIT 1
-            """),
-            {
-                "name": customer['customer_name'],
-                "class": customer['character_class'],
-                "level": customer['level'],
-                "visit_id": visit_id
-            }
+                """,
+                {
+                    "name": customer['customer_name'],
+                    "class": customer['character_class'],
+                    "level": customer['level'],
+                    "visit_id": visit_id
+                }
+            )
         ).scalar()
         
-        cart_id = conn.execute(
+        return conn.execute(
             sqlalchemy.text("""
                 INSERT INTO carts (
                     customer_id,
@@ -833,15 +798,14 @@ class CartManager:
                     0
                 )
                 RETURNING cart_id
-            """),
-            {
-                "customer_id": customer_id,
-                "visit_id": visit_id,
-                "time_id": time_id
-            }
+                """,
+                {
+                    "customer_id": customer_id,
+                    "visit_id": visit_id,
+                    "time_id": time_id
+                }
+            )
         ).scalar_one()
-        
-        return cart_id
 
     @staticmethod
     def validate_cart_status(conn, cart_id: int) -> dict:
@@ -851,29 +815,32 @@ class CartManager:
                 SELECT 
                     c.cart_id,
                     c.visit_id,
-                    c.checked_out,
-                    c.customer_id,
-                    cust.customer_name,
-                    cust.character_class,
-                    cust.level
+                    c.checked_out
                 FROM carts c
-                JOIN customers cust ON c.customer_id = cust.customer_id
                 WHERE c.cart_id = :cart_id
-            """),
-            {"cart_id": cart_id}
+                """,
+                {"cart_id": cart_id}
+            )
         ).mappings().first()
         
         if not result:
             raise HTTPException(status_code=404, detail="Cart not found")
-            
+        
         if result['checked_out']:
-            raise HTTPException(status_code=400, detail="Cart is already checked out")
-            
+            raise HTTPException(status_code=400, detail="Cart already checked out")
+        
         return dict(result)
 
     @staticmethod
-    def update_cart_item(conn, cart_id: int, item_sku: str, quantity: int, time_id: int, visit_id: int) -> None:
-        """Adds or updates item in cart."""
+    def update_cart_item(
+        conn, 
+        cart_id: int, 
+        item_sku: str, 
+        quantity: int,
+        time_id: int,
+        visit_id: int
+    ) -> None:
+        """Updates cart item quantity."""
         potion = conn.execute(
             sqlalchemy.text("""
                 SELECT 
@@ -882,12 +849,13 @@ class CartManager:
                     base_price
                 FROM potions
                 WHERE sku = :sku
-            """),
-            {"sku": item_sku}
+                """,
+                {"sku": item_sku}
+            )
         ).mappings().one()
         
         if potion['current_quantity'] < quantity:
-            raise HTTPException(status_code=400, detail="Insufficient quantity in inventory")
+            raise HTTPException(status_code=400, detail="Insufficient quantity")
         
         line_total = potion['base_price'] * quantity
         
@@ -916,16 +884,17 @@ class CartManager:
                     unit_price = :price,
                     line_total = :line_total,
                     time_id = :time_id
-            """),
-            {
-                "cart_id": cart_id,
-                "visit_id": visit_id,
-                "potion_id": potion['potion_id'],
-                "time_id": time_id,
-                "quantity": quantity,
-                "price": potion['base_price'],
-                "line_total": line_total
-            }
+                """,
+                {
+                    "cart_id": cart_id,
+                    "visit_id": visit_id,
+                    "potion_id": potion['potion_id'],
+                    "time_id": time_id,
+                    "quantity": quantity,
+                    "price": potion['base_price'],
+                    "line_total": line_total
+                }
+            )
         )
 
     @staticmethod
@@ -943,8 +912,9 @@ class CartManager:
                 FROM cart_items ci
                 JOIN potions p ON ci.potion_id = p.potion_id
                 WHERE ci.cart_id = :cart_id
-            """),
-            {"cart_id": cart_id}
+                """,
+                {"cart_id": cart_id}
+            )
         ).mappings().all()
         
         if not items:
@@ -953,6 +923,7 @@ class CartManager:
         total_potions = sum(item['quantity'] for item in items)
         total_gold = sum(item['line_total'] for item in items)
         
+        # Verify inventory
         for item in items:
             if item['current_quantity'] < item['quantity']:
                 raise HTTPException(
@@ -960,29 +931,51 @@ class CartManager:
                     detail=f"Insufficient quantity for {item['sku']}"
                 )
         
+        # Update inventory and create ledger entries
         for item in items:
             conn.execute(
                 sqlalchemy.text("""
                     UPDATE potions
                     SET current_quantity = current_quantity - :quantity
                     WHERE potion_id = :potion_id
-                """),
-                {
-                    "quantity": item['quantity'],
-                    "potion_id": item['potion_id']
-                }
+                    """,
+                    {
+                        "quantity": item['quantity'],
+                        "potion_id": item['potion_id']
+                    }
+                )
             )
             
-            LedgerManager.create_ledger_entry(
-                conn=conn,
-                time_id=time_id,
-                entry_type='POTION_SOLD',
-                cart_id=cart_id,
-                potion_id=item['potion_id'],
-                gold_change=item['line_total'],
-                potion_change=-item['quantity']
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO ledger_entries (
+                        time_id,
+                        entry_type,
+                        cart_id,
+                        potion_id,
+                        gold_change,
+                        potion_change
+                    )
+                    VALUES (
+                        :time_id,
+                        'POTION_SOLD',
+                        :cart_id,
+                        :potion_id,
+                        :gold_change,
+                        :potion_change
+                    )
+                    """,
+                    {
+                        "time_id": time_id,
+                        "cart_id": cart_id,
+                        "potion_id": item['potion_id'],
+                        "gold_change": item['line_total'],
+                        "potion_change": -item['quantity']
+                    }
+                )
             )
         
+        # Mark cart as checked out
         conn.execute(
             sqlalchemy.text("""
                 UPDATE carts
@@ -994,18 +987,135 @@ class CartManager:
                     total_gold = :total_gold,
                     purchase_success = true
                 WHERE cart_id = :cart_id
-            """),
-            {
-                "payment": payment,
-                "total_potions": total_potions,
-                "total_gold": total_gold,
-                "cart_id": cart_id
-            }
+                """,
+                {
+                    "payment": payment,
+                    "total_potions": total_potions,
+                    "total_gold": total_gold,
+                    "cart_id": cart_id
+                }
+            )
         )
         
         return {
             "total_potions_bought": total_potions,
             "total_gold_paid": total_gold
+        }
+
+    @staticmethod
+    def search_orders(
+        conn,
+        customer_name: str,
+        potion_sku: str,
+        search_page: str,
+        sort_col: str,
+        sort_order: str
+    ) -> dict:
+        """Search orders with pagination."""
+        base_query = """
+            SELECT
+                ci.item_id as line_item_id,
+                p.sku as item_sku,
+                cu.customer_name,
+                ci.line_total as line_item_total,
+                c.checked_out_at as timestamp
+            FROM cart_items ci
+            JOIN carts c ON ci.cart_id = c.cart_id
+            JOIN customers cu ON c.customer_id = cu.customer_id
+            JOIN potions p ON ci.potion_id = p.potion_id
+            WHERE c.checked_out = true
+            """
+        params = {}
+        
+        # Add filters
+        if customer_name:
+            base_query += " AND LOWER(cu.customer_name) LIKE LOWER(:customer_name)"
+            params["customer_name"] = f"%{customer_name}%"
+        
+        if potion_sku:
+            base_query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
+            params["potion_sku"] = f"%{potion_sku}%"
+        
+        # Add sorting
+        sort_mapping = {
+            "customer_name": "cu.customer_name",
+            "item_sku": "p.sku",
+            "line_item_total": "ci.line_total",
+            "timestamp": "c.checked_out_at"
+        }
+        
+        base_query += f" ORDER BY {sort_mapping[sort_col]} {sort_order}"
+        
+        # Add pagination
+        if search_page:
+            try:
+                decoded_cursor = base64.b64decode(search_page).decode('utf-8')
+                cursor_values = json.loads(decoded_cursor)
+                
+                # Add pagination condition based on sort order
+                if sort_order == "desc":
+                    base_query += f" AND {sort_mapping[sort_col]} < :cursor_value"
+                else:
+                    base_query += f" AND {sort_mapping[sort_col]} > :cursor_value"
+                
+                params["cursor_value"] = cursor_values[sort_col]
+            except (ValueError, KeyError) as e:
+                logger.error(f"Invalid search page cursor: {str(e)}")
+                raise HTTPException(status_code=400, detail="Invalid search page")
+        
+        # Get one extra result to determine if there's a next page
+        base_query += " LIMIT :limit"
+        params["limit"] = CartManager.PAGE_SIZE + 1
+        
+        results = conn.execute(
+            sqlalchemy.text(base_query),
+            params
+        ).mappings().all()
+        
+        # Handle pagination tokens
+        has_next = len(results) > CartManager.PAGE_SIZE
+        if has_next:
+            results = results[:CartManager.PAGE_SIZE]
+        
+        # Generate previous/next cursors
+        previous_cursor = ""
+        next_cursor = ""
+        
+        # Create cursor for previous page
+        if search_page:
+            previous_params = {
+                sort_col: results[0][sort_col] if results else None
+            }
+            previous_cursor = base64.b64encode(
+                json.dumps(previous_params).encode('utf-8')
+            ).decode('utf-8')
+        
+        # Create cursor for next page
+        if has_next:
+
+            next_params = {
+                sort_col: results[-1][sort_col]
+            }
+            next_cursor = base64.b64encode(
+                json.dumps(next_params).encode('utf-8')
+            ).decode('utf-8')
+        
+        # Format
+        formatted_results = [
+            {
+                "line_item_id": result["line_item_id"],
+                "item_sku": result["item_sku"],
+                "customer_name": result["customer_name"],
+                "line_item_total": result["line_item_total"],
+                "timestamp": result["timestamp"].isoformat()
+            }
+            for result in results
+        ]
+        
+        return {
+            "previous": previous_cursor,
+            "next": next_cursor,
+            "results": formatted_results
         }
 
 class InventoryManager:
@@ -1014,22 +1124,22 @@ class InventoryManager:
     @staticmethod
     def get_inventory_state(conn) -> dict:
         """Get current inventory state from ledger."""
-        return conn.execute(
+        result = conn.execute(
             sqlalchemy.text("""
                 WITH ledger_totals AS (
                     SELECT
-                        COALESCE(SUM(l.gold_change), 100) as gold,
-                        COALESCE(SUM(l.ml_change), 0) as total_ml,
-                        COALESCE(SUM(l.potion_change), 0) as total_potions,
+                        COALESCE(SUM(gold_change), 100) as gold,
+                        COALESCE(SUM(ml_change), 0) as total_ml,
+                        COALESCE(SUM(potion_change), 0) as total_potions,
                         COUNT(*) FILTER (
-                            WHERE l.entry_type = 'CAPACITY_UPGRADE' 
-                            AND l.potion_change IS NOT NULL
+                            WHERE entry_type = 'CAPACITY_UPGRADE' 
+                            AND potion_change IS NOT NULL
                         ) as potion_upgrades,
                         COUNT(*) FILTER (
-                            WHERE l.entry_type = 'CAPACITY_UPGRADE' 
-                            AND l.ml_change IS NOT NULL
+                            WHERE entry_type = 'CAPACITY_UPGRADE' 
+                            AND ml_change IS NOT NULL
                         ) as ml_upgrades
-                    FROM ledger_entries l
+                    FROM ledger_entries
                 )
                 SELECT
                     gold,
@@ -1040,42 +1150,49 @@ class InventoryManager:
                     (1 + potion_upgrades) as potion_capacity_units,
                     (1 + ml_upgrades) as ml_capacity_units
                 FROM ledger_totals
-            """)
+                """
+            )
         ).mappings().one()
+        
+        return dict(result)
     
     @staticmethod
     def get_capacity_purchase_plan(conn, state: dict) -> dict:
-        """Determine capacity purchases based on thresholds and current state."""
+        """Determine capacity purchases based on thresholds."""
+        # Calculate current usage percentages
         potion_usage = state['total_potions'] / state['max_potions']
         ml_usage = state['total_ml'] / state['max_ml']
         
         threshold = conn.execute(
             sqlalchemy.text("""
                 SELECT *
-                FROM capacity_upgrade_thresholds t
+                FROM capacity_upgrade_thresholds
                 WHERE 
-                    t.min_potion_units <= :current_potion_units
-                    AND (t.max_potion_units IS NULL OR t.max_potion_units >= :current_potion_units)
-                    AND t.min_ml_units <= :current_ml_units
-                    AND (t.max_ml_units IS NULL OR t.max_ml_units >= :current_ml_units)
-                    AND t.gold_threshold <= :current_gold
+                    min_potion_units <= :current_potion_units
+                    AND (max_potion_units IS NULL 
+                        OR max_potion_units >= :current_potion_units)
+                    AND min_ml_units <= :current_ml_units
+                    AND (max_ml_units IS NULL 
+                        OR max_ml_units >= :current_ml_units)
+                    AND gold_threshold <= :current_gold
                     AND (
-                        NOT t.requires_inventory_check
+                        NOT requires_inventory_check
                         OR (
-                            :capacity_usage >= t.capacity_check_threshold
-                            OR :ml_usage >= t.capacity_check_threshold
+                            :potion_usage >= capacity_check_threshold
+                            OR :ml_usage >= capacity_check_threshold
                         )
                     )
-                ORDER BY t.priority_order DESC
+                ORDER BY priority_order DESC
                 LIMIT 1
-            """),
-            {
-                "current_potion_units": state['potion_capacity_units'],
-                "current_ml_units": state['ml_capacity_units'],
-                "current_gold": state['gold'],
-                "capacity_usage": potion_usage,
-                "ml_usage": ml_usage
-            }
+                """,
+                {
+                    "current_potion_units": state['potion_capacity_units'],
+                    "current_ml_units": state['ml_capacity_units'],
+                    "current_gold": state['gold'],
+                    "potion_usage": potion_usage,
+                    "ml_usage": ml_usage
+                }
+            )
         ).mappings().first()
         
         if threshold:
@@ -1088,7 +1205,7 @@ class InventoryManager:
             "potion_capacity": 0,
             "ml_capacity": 0
         }
-
+    
     @staticmethod
     def process_capacity_upgrade(conn, potion_capacity: int, ml_capacity: int, time_id: int) -> None:
         """Process capacity upgrade with ledger entries."""
@@ -1096,9 +1213,10 @@ class InventoryManager:
         
         current_gold = conn.execute(
             sqlalchemy.text("""
-                SELECT COALESCE(SUM(l.gold_change), 100) as gold
-                FROM ledger_entries l
-            """)
+                SELECT COALESCE(SUM(gold_change), 100) as gold
+                FROM ledger_entries
+                """
+            )
         ).scalar_one()
         
         if current_gold < total_cost:
@@ -1108,19 +1226,45 @@ class InventoryManager:
             )
         
         if potion_capacity > 0:
-            LedgerManager.create_ledger_entry(
-                conn=conn,
-                time_id=time_id,
-                entry_type='CAPACITY_UPGRADE',
-                gold_change=-(potion_capacity * 1000),
-                potion_change=0
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO ledger_entries (
+                        time_id,
+                        entry_type,
+                        gold_change,
+                        potion_capacity_change
+                    ) VALUES (
+                        :time_id,
+                        'POTION_CAPACITY_UPGRADE',
+                        :gold_change,
+                        :potion_capacity
+                    )
+                """),
+                {
+                    "time_id": time_id,
+                    "gold_change": -(potion_capacity * 1000),
+                    "potion_capacity": potion_capacity
+                }
             )
         
         if ml_capacity > 0:
-            LedgerManager.create_ledger_entry(
-                conn=conn,
-                time_id=time_id,
-                entry_type='CAPACITY_UPGRADE',
-                gold_change=-(ml_capacity * 1000),
-                ml_change=0
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO ledger_entries (
+                        time_id,
+                        entry_type,
+                        gold_change,
+                        ml_capacity_change
+                    ) VALUES (
+                        :time_id,
+                        'ML_CAPACITY_UPGRADE',
+                        :gold_change,
+                        :ml_capacity
+                    )
+                """),
+                {
+                    "time_id": time_id,
+                    "gold_change": -(ml_capacity * 1000),
+                    "ml_capacity": ml_capacity
+                }
             )
