@@ -47,7 +47,11 @@ def get_bottle_plan():
             )
             
             logger.debug(f"Generated bottling plan for {len(bottling_plan)} potion types")
-            return bottling_plan
+
+            return [
+                PotionInventory(potion_type=b['potion_type'], quantity=b['quantity']) 
+                for b in bottling_plan
+            ]
             
     except Exception as e:
         logger.error(f"Failed to create bottling plan: {str(e)}")
@@ -58,10 +62,12 @@ def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int
     """Process potion bottling."""
     try:
         with db.engine.begin() as conn:
+            potions_delivered_dicts = [barrel.dict() for barrel in potions_delivered]
+
             state = conn.execute(sqlalchemy.text("SELECT * FROM current_state")).mappings().one()
             logger.debug(
                 f"Processing bottling order {order_id} "
-                f"with {len(potions_delivered)} potion types"
+                f"with {len(potions_delivered)} potion types: {potions_delivered_dicts}"
             )
             
             # Validate resources

@@ -274,7 +274,7 @@ class BarrelManager:
                     "color_name": color_name
                 }
             )
-
+        
         return visit_id
     
     @staticmethod
@@ -283,35 +283,34 @@ class BarrelManager:
         # First get base needs from block priorities
         base_needs = conn.execute(
             sqlalchemy.text("""
-                WITH block_needs AS (
+                WITH current_cap AS (
+                    SELECT potion_capacity_units * 50 as total_potion_capacity
+                    FROM current_state
+                ),
+                block_needs AS (
                     SELECT
                         cd.color_name,
-                        -- Get percentages first
                         SUM(
                             CASE
                                 WHEN cd.color_name = 'RED' THEN p.red_ml
                                 WHEN cd.color_name = 'GREEN' THEN p.green_ml
                                 WHEN cd.color_name = 'BLUE' THEN p.blue_ml
                                 WHEN cd.color_name = 'DARK' THEN p.dark_ml
-                            END * bpp.sales_mix
-                        ) as color_percentage,
-                        -- Get target number of potions based on strategy
-                        (SELECT max_potions_per_sku 
-                        FROM strategies s
-                        JOIN active_strategy ast ON s.strategy_id = ast.strategy_id
-                        ORDER BY ast.activated_at DESC
-                        LIMIT 1) as target_potions
+                            END * bpp.sales_mix * 
+                            (SELECT total_potion_capacity FROM current_cap)
+                        ) as ml_needed
                     FROM block_potion_priorities bpp
                     JOIN potions p ON bpp.potion_id = p.potion_id
                     CROSS JOIN color_definitions cd
-                    WHERE bpp.block_id = :block_id
+                    WHERE bpp.block_id = 1
                     GROUP BY cd.color_name
                 )
                 SELECT 
                     color_name,
-                    -- Scale up by target potions and ml per potion
-                    (color_percentage * target_potions) as ml_needed
-                FROM block_needs;
+                    ml_needed
+                FROM block_needs
+                WHERE ml_needed > 0
+                ORDER BY ml_needed DESC;
             """),
             {"block_id": time_block['block_id']}
         ).mappings().all()
@@ -344,10 +343,64 @@ class BarrelManager:
         wholesale_catalog: list,
         color_needs: dict,
         available_gold: int,
-        available_capacity: int
+        available_capacity: int,
+        block_id: int
     ) -> list:
-        """Plan purchases based on needs and strategy constraints."""
-        # Get current strategy size preferences
+        """Plan purchases based on needs, current inventory, and buffer strategy."""
+        logger.debug(
+            f"Starting purchase planning - gold: {available_gold}, "
+            f"capacity: {available_capacity}"
+        )
+        
+        # Get current inventory levels
+        current_inventory = conn.execute(
+            sqlalchemy.text("""
+                WITH current_inventory AS (
+                    SELECT 
+                        p.sku,
+                        p.current_quantity,
+                        p.red_ml,
+                        p.green_ml,
+                        p.blue_ml,
+                        p.dark_ml
+                    FROM potions p
+                    JOIN block_potion_priorities bpp ON p.potion_id = bpp.potion_id
+                    WHERE bpp.block_id = :block_id
+                    AND p.current_quantity > 0
+                )
+                SELECT
+                    'RED' as color_name,
+                    SUM(current_quantity * red_ml) as current_ml
+                FROM current_inventory
+                UNION ALL
+                SELECT 'GREEN', SUM(current_quantity * green_ml)
+                FROM current_inventory
+                UNION ALL
+                SELECT 'BLUE', SUM(current_quantity * blue_ml)
+                FROM current_inventory
+                UNION ALL
+                SELECT 'DARK', SUM(current_quantity * dark_ml)
+                FROM current_inventory
+            """),
+            {"block_id": block_id}
+        ).mappings().all()
+        
+        current_ml = {row['color_name']: row['current_ml'] for row in current_inventory}
+        logger.debug(f"Current inventory ml by color: {current_ml}")
+        
+        # Calculate actual ml needed after inventory
+        adjusted_needs = {}
+        for color, needed_ml in color_needs.items():
+            current_amount = current_ml.get(color, 0)
+            adjusted_ml = max(0, needed_ml - current_amount)
+            adjusted_needs[color] = adjusted_ml
+            logger.debug(
+                f"{color} - buffered need: {needed_ml}, "
+                f"current: {current_amount}, "
+                f"adjusted need: {adjusted_ml}"
+            )
+        
+        # Get strategy size preferences
         strategy = conn.execute(sqlalchemy.text("""
             SELECT s.name as strategy_name
             FROM strategies s
@@ -355,6 +408,8 @@ class BarrelManager:
             ORDER BY ast.activated_at DESC
             LIMIT 1
         """)).mappings().one()
+        
+        logger.debug(f"Current strategy: {strategy['strategy_name']}")
         
         if strategy['strategy_name'] == 'PREMIUM':
             size_preferences = ['SMALL']
@@ -368,14 +423,16 @@ class BarrelManager:
         remaining_capacity = available_capacity
         catalog_dict = {b['sku']: b for b in wholesale_catalog}
         
-        # Prioritize by color needs
+        # Prioritize by adjusted color needs
         for color, needed_ml in sorted(
-            color_needs.items(),
+            adjusted_needs.items(),
             key=lambda x: x[1],
             reverse=True
         ):
             if needed_ml <= 0:
                 continue
+                
+            logger.debug(f"Processing {color} adjusted need of {needed_ml}ml")
                 
             # Try each preferred size
             for size in size_preferences:
@@ -398,6 +455,12 @@ class BarrelManager:
                 )
                 
                 if quantity > 0:
+                    logger.debug(
+                        f"Adding purchase - sku: {barrel_sku}, "
+                        f"quantity: {quantity}, "
+                        f"ml: {quantity * barrel['ml_per_barrel']}"
+                    )
+                    
                     purchases.append({
                         "sku": barrel_sku,
                         "quantity": quantity
@@ -410,6 +473,15 @@ class BarrelManager:
                 if needed_ml <= 0:
                     break
         
+        if purchases:
+            logger.info(
+                f"Planned {len(purchases)} purchases - "
+                f"remaining gold: {remaining_gold}, "
+                f"remaining capacity: {remaining_capacity}"
+            )
+        else:
+            logger.debug("No purchases planned after inventory adjustment")
+        
         return purchases
     
     @staticmethod
@@ -418,12 +490,14 @@ class BarrelManager:
         Validates purchases against strategy constraints.
         Raises HTTPException if constraints are violated.
         """
+        logger.debug(f"Validating purchases against capacity: {available_capacity}")
+        
         # Get current strategy limits
         strategy = conn.execute(
             sqlalchemy.text("""
                 SELECT 
                     s.max_potions_per_sku,
-                    s.ml_capacity_units * 10000 as max_ml
+                    s.name as strategy_name
                 FROM strategies s
                 JOIN active_strategy ast ON s.strategy_id = ast.strategy_id
                 ORDER BY ast.activated_at DESC
@@ -434,16 +508,25 @@ class BarrelManager:
         # Validate ml capacity
         total_ml = sum(p['ml_per_barrel'] * p['quantity'] for p in purchases)
         if total_ml > available_capacity:
+            logger.error(
+                f"Purchase exceeds ml capacity - "
+                f"required: {total_ml}, available: {available_capacity}"
+            )
             raise HTTPException(
                 status_code=400,
                 detail=f"Purchase would exceed ml capacity: {total_ml} > {available_capacity}"
             )
 
         # Validate max potions per SKU
-        potions_per_barrel = strategy['max_ml'] / 100  # Each potion needs 100 ml
         for purchase in purchases:
             potential_potions = (purchase['ml_per_barrel'] * purchase['quantity']) / 100
             if potential_potions > strategy['max_potions_per_sku']:
+                logger.error(
+                    f"Purchase exceeds max potions per SKU - "
+                    f"sku: {purchase['sku']}, "
+                    f"potential: {potential_potions}, "
+                    f"max: {strategy['max_potions_per_sku']}"
+                )
                 raise HTTPException(
                     status_code=400,
                     detail=(
@@ -451,8 +534,9 @@ class BarrelManager:
                         f"{potential_potions} > {strategy['max_potions_per_sku']}"
                     )
                 )
-
-    # Keep process_barrel_purchase but add validation
+        
+        logger.debug("Purchase constraints validated successfully")
+    
     @staticmethod
     def process_barrel_purchase(
         conn,
@@ -463,6 +547,15 @@ class BarrelManager:
     ) -> int:
         """Records a barrel purchase with ledger entry."""
         color_name = barrel['sku'].split('_')[1]
+        total_cost = barrel['price'] * barrel['quantity']
+        total_ml = barrel['ml_per_barrel'] * barrel['quantity']
+        
+        logger.debug(
+            f"Processing barrel purchase - "
+            f"sku: {barrel['sku']}, "
+            f"quantity: {barrel['quantity']}, "
+            f"cost: {total_cost}"
+        )
         
         # Record purchase
         purchase_id = conn.execute(
@@ -494,8 +587,8 @@ class BarrelManager:
                 "barrel_id": barrel_id,
                 "time_id": time_id,
                 "quantity": barrel['quantity'],
-                "total_cost": barrel['price'] * barrel['quantity'],
-                "ml_added": barrel['ml_per_barrel'] * barrel['quantity'],
+                "total_cost": total_cost,
+                "ml_added": total_ml,
                 "color_name": color_name
             }
         ).scalar_one()
@@ -523,12 +616,16 @@ class BarrelManager:
             {
                 "time_id": time_id,
                 "purchase_id": purchase_id,
-                "gold_change": -(barrel['price'] * barrel['quantity']),
-                "ml_change": barrel['ml_per_barrel'] * barrel['quantity'],
+                "gold_change": -total_cost,
+                "ml_change": total_ml,
                 "color_name": color_name
             }
         )
 
+        logger.info(
+            f"Completed barrel purchase {purchase_id} - "
+            f"added {total_ml}ml of {color_name}"
+        )
         return purchase_id
 
 class BottlerManager:
