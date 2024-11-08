@@ -817,7 +817,7 @@ class CartManager:
             {
                 "visit_id": visit_id,
                 "time_id": time_id,
-                "customers": customers
+                "customers": json.dumps(customers)
             }
         ).scalar_one()
 
@@ -1011,6 +1011,7 @@ class CartManager:
                 WHERE ci.cart_id = :cart_id
                 """
             ),
+            {"cart_id": cart_id}
         ).mappings().all()
         
         if not items:
