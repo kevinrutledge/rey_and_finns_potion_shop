@@ -581,7 +581,8 @@ class BarrelManager:
                     true
                 )
                 RETURNING purchase_id
-            """),
+                """
+            ),
             {
                 "visit_id": visit_id,
                 "barrel_id": barrel_id,
@@ -612,7 +613,8 @@ class BarrelManager:
                     :ml_change,
                     (SELECT color_id FROM color_definitions WHERE color_name = :color_name)
                 )
-            """),
+                """
+            ),
             {
                 "time_id": time_id,
                 "purchase_id": purchase_id,
@@ -746,12 +748,12 @@ class BottlerManager:
                 UPDATE potions
                 SET current_quantity = current_quantity + :quantity
                 WHERE potion_id = :potion_id
-                """,
-                {
-                    "quantity": potion_data['quantity'],
-                    "potion_id": potion_id
-                }
-            )
+                """
+            ),
+            {
+                "quantity": potion_data['quantity'],
+                "potion_id": potion_id
+            }
         )
         
         # Create ledger entries for each color used
@@ -765,9 +767,8 @@ class BottlerManager:
                         SELECT color_id 
                         FROM color_definitions 
                         WHERE color_name = :color
-                        """,
-                        {"color": color_map[idx]}
-                    )
+                    """),
+                    {"color": color_map[idx]}
                 ).scalar_one()
                 
                 conn.execute(
@@ -788,15 +789,14 @@ class BottlerManager:
                             :color_id,
                             :potion_id
                         )
-                        """,
-                        {
-                            "time_id": time_id,
-                            "ml_change": -ml_used,
-                            "potion_change": potion_data['quantity'],
-                            "color_id": color_id,
-                            "potion_id": potion_id
-                        }
-                    )
+                    """),
+                    {
+                        "time_id": time_id,
+                        "ml_change": -ml_used,
+                        "potion_change": potion_data['quantity'],
+                        "color_id": color_id,
+                        "potion_id": potion_id
+                    }
                 )
 
 class CartManager:
@@ -839,16 +839,16 @@ class CartManager:
                         :class,
                         :level
                     )
-                    """,
-                    {
-                        "visit_record_id": visit_record_id,
-                        "visit_id": visit_id,
-                        "time_id": time_id,
-                        "name": customer['customer_name'],
-                        "class": customer['character_class'],
-                        "level": customer['level']
-                    }
-                )
+                    """
+                ),
+                {
+                    "visit_record_id": visit_record_id,
+                    "visit_id": visit_id,
+                    "time_id": time_id,
+                    "name": customer['customer_name'],
+                    "class": customer['character_class'],
+                    "level": customer['level']
+                }
             )
         
         return visit_record_id
@@ -895,13 +895,13 @@ class CartManager:
                     0
                 )
                 RETURNING cart_id
-                """,
-                {
-                    "customer_id": customer_id,
-                    "visit_id": visit_id,
-                    "time_id": time_id
-                }
-            )
+                """
+            ),
+            {
+                "customer_id": customer_id,
+                "visit_id": visit_id,
+                "time_id": time_id
+            }
         ).scalar_one()
 
     @staticmethod
@@ -915,9 +915,9 @@ class CartManager:
                     c.checked_out
                 FROM carts c
                 WHERE c.cart_id = :cart_id
-                """,
-                {"cart_id": cart_id}
-            )
+                """
+            ),
+            {"cart_id": cart_id}
         ).mappings().first()
         
         if not result:
@@ -946,9 +946,9 @@ class CartManager:
                     base_price
                 FROM potions
                 WHERE sku = :sku
-                """,
-                {"sku": item_sku}
-            )
+                """
+            ),
+            {"sku": item_sku}
         ).mappings().one()
         
         if potion['current_quantity'] < quantity:
@@ -981,17 +981,17 @@ class CartManager:
                     unit_price = :price,
                     line_total = :line_total,
                     time_id = :time_id
-                """,
-                {
-                    "cart_id": cart_id,
-                    "visit_id": visit_id,
-                    "potion_id": potion['potion_id'],
-                    "time_id": time_id,
-                    "quantity": quantity,
-                    "price": potion['base_price'],
-                    "line_total": line_total
-                }
-            )
+                """
+            ),
+            {
+                "cart_id": cart_id,
+                "visit_id": visit_id,
+                "potion_id": potion['potion_id'],
+                "time_id": time_id,
+                "quantity": quantity,
+                "price": potion['base_price'],
+                "line_total": line_total
+            }
         )
 
     @staticmethod
@@ -1009,9 +1009,8 @@ class CartManager:
                 FROM cart_items ci
                 JOIN potions p ON ci.potion_id = p.potion_id
                 WHERE ci.cart_id = :cart_id
-                """,
-                {"cart_id": cart_id}
-            )
+                """
+            ),
         ).mappings().all()
         
         if not items:
@@ -1035,12 +1034,12 @@ class CartManager:
                     UPDATE potions
                     SET current_quantity = current_quantity - :quantity
                     WHERE potion_id = :potion_id
-                    """,
-                    {
-                        "quantity": item['quantity'],
-                        "potion_id": item['potion_id']
-                    }
-                )
+                    """
+                ),
+                {
+                    "quantity": item['quantity'],
+                    "potion_id": item['potion_id']
+                }
             )
             
             conn.execute(
@@ -1061,15 +1060,15 @@ class CartManager:
                         :gold_change,
                         :potion_change
                     )
-                    """,
-                    {
-                        "time_id": time_id,
-                        "cart_id": cart_id,
-                        "potion_id": item['potion_id'],
-                        "gold_change": item['line_total'],
-                        "potion_change": -item['quantity']
-                    }
-                )
+                    """
+                ),
+                {
+                    "time_id": time_id,
+                    "cart_id": cart_id,
+                    "potion_id": item['potion_id'],
+                    "gold_change": item['line_total'],
+                    "potion_change": -item['quantity']
+                }
             )
         
         # Mark cart as checked out
@@ -1084,14 +1083,14 @@ class CartManager:
                     total_gold = :total_gold,
                     purchase_success = true
                 WHERE cart_id = :cart_id
-                """,
-                {
-                    "payment": payment,
-                    "total_potions": total_potions,
-                    "total_gold": total_gold,
-                    "cart_id": cart_id
-                }
-            )
+                """
+            ),
+            {
+                "payment": payment,
+                "total_potions": total_potions,
+                "total_gold": total_gold,
+                "cart_id": cart_id
+            }
         )
         
         return {
