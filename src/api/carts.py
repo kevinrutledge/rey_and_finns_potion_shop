@@ -42,13 +42,15 @@ def post_visits(visit_id: int, customers: List[Customer]):
     """Record customers visiting the shop."""
     try:
         with db.engine.begin() as conn:
+            customers_dicts = [customer.dict() for customer in customers]
+
             current_time = TimeManager.get_current_time(conn)
             time_id = current_time['time_id']
             
             CartManager.record_customer_visit(
                 conn, 
                 visit_id, 
-                [customer.dict() for customer in customers], 
+                customers_dicts, 
                 time_id
             )
             

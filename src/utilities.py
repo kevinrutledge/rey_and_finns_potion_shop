@@ -735,9 +735,9 @@ class BottlerManager:
                 SELECT potion_id
                 FROM potions
                 WHERE ARRAY[red_ml, green_ml, blue_ml, dark_ml] = :potion_type
-                """,
-                {"potion_type": potion_data['potion_type']}
-            )
+                """
+            ),
+            {"potion_type": potion_data['potion_type']}
         ).scalar_one()
         
         # Update potion inventory
@@ -812,13 +812,13 @@ class CartManager:
                 INSERT INTO customer_visits (visit_id, time_id, customers)
                 VALUES (:visit_id, :time_id, :customers)
                 RETURNING visit_record_id
-                """,
-                {
-                    "visit_id": visit_id,
-                    "time_id": time_id,
-                    "customers": customers
-                }
-            )
+                """
+            ),
+            {
+                "visit_id": visit_id,
+                "time_id": time_id,
+                "customers": customers
+            }
         ).scalar_one()
 
         for customer in customers:
@@ -867,14 +867,14 @@ class CartManager:
                 AND cv.visit_id = :visit_id
                 ORDER BY cv.created_at DESC
                 LIMIT 1
-                """,
-                {
-                    "name": customer['customer_name'],
-                    "class": customer['character_class'],
-                    "level": customer['level'],
-                    "visit_id": visit_id
-                }
-            )
+                """
+            ),
+            {
+                "name": customer['customer_name'],
+                "class": customer['character_class'],
+                "level": customer['level'],
+                "visit_id": visit_id
+            }
         ).scalar()
         
         return conn.execute(
@@ -1281,15 +1281,15 @@ class InventoryManager:
                     )
                 ORDER BY priority_order DESC
                 LIMIT 1
-                """,
-                {
-                    "current_potion_units": state['potion_capacity_units'],
-                    "current_ml_units": state['ml_capacity_units'],
-                    "current_gold": state['gold'],
-                    "potion_usage": potion_usage,
-                    "ml_usage": ml_usage
-                }
-            )
+                """
+            ),
+            {
+                "current_potion_units": state['potion_capacity_units'],
+                "current_ml_units": state['ml_capacity_units'],
+                "current_gold": state['gold'],
+                "potion_usage": potion_usage,
+                "ml_usage": ml_usage
+            }
         ).mappings().first()
         
         if threshold:
