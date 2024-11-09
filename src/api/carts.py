@@ -190,11 +190,11 @@ def search_orders(
     try:
         # Determine sort column
         if sort_col is search_sort_options.customer_name:
-            order_by = "cu.customer_name"
+            order_by = "cu.customer_name, c.checked_out_at"
         elif sort_col is search_sort_options.item_sku:
-            order_by = "p.sku"
+            order_by = "p.sku, c.checked_out_at"
         elif sort_col is search_sort_options.line_item_total:
-            order_by = "ci.line_total"
+            order_by = "ci.line_total, c.checked_out_at"
         elif sort_col is search_sort_options.timestamp:
             order_by = "c.checked_out_at"
         else:
