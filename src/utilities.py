@@ -1,5 +1,6 @@
 import base64
 import json
+import datetime
 import sqlalchemy
 import logging
 from fastapi import HTTPException
@@ -851,6 +852,8 @@ class BottlerManager:
 class CartManager:
     """Handles cart operations and customer interactions."""
     
+    PAGE_SIZE = 5
+
     @staticmethod
     def record_customer_visit(conn, visit_id: int, customers: list, time_id: int) -> int:
         """Records customer visit and individual customers."""
@@ -1147,6 +1150,13 @@ class CartManager:
         }
 
     @staticmethod
+    def serialize_cursor_value(value):
+        """Helper to serialize cursor values, handling datetime objects."""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    @staticmethod
     def search_orders(
         conn,
         customer_name: str,
@@ -1188,7 +1198,7 @@ class CartManager:
             base_query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
             params["potion_sku"] = f"%{potion_sku}%"
         
-        # Add sorting
+        # Add sorting - use the mapped column and sort order value
         sort_column = sort_mapping[sort_col.value]
         base_query += f" ORDER BY {sort_column} {sort_order.value}"
         
@@ -1197,6 +1207,12 @@ class CartManager:
             try:
                 decoded_cursor = base64.b64decode(search_page).decode('utf-8')
                 cursor_values = json.loads(decoded_cursor)
+                
+                # Parse datetime for timestamp cursor
+                if sort_col.value == "timestamp" and cursor_values.get(sort_col.value):
+                    cursor_values[sort_col.value] = datetime.fromisoformat(
+                        cursor_values[sort_col.value]
+                    )
                 
                 # Add pagination condition based on sort order
                 if sort_order.value == "desc":
@@ -1215,7 +1231,7 @@ class CartManager:
         
         # Get one extra result to determine if there's a next page
         base_query += " LIMIT :limit"
-        params["limit"] = 6
+        params["limit"] = CartManager.PAGE_SIZE + 1
         
         logger.debug(
             f"Executing search query - sort: {sort_column} {sort_order.value}, "
@@ -1229,9 +1245,9 @@ class CartManager:
         ).mappings().all()
         
         # Handle pagination tokens
-        has_next = len(results) > 5
+        has_next = len(results) > CartManager.PAGE_SIZE
         if has_next:
-            results = results[:5]
+            results = results[:CartManager.PAGE_SIZE]
             
         # Generate previous/next cursors
         previous_cursor = ""
@@ -1240,7 +1256,9 @@ class CartManager:
         if search_page:
             # Create cursor for previous page
             previous_params = {
-                sort_col.value: results[0][sort_col.value] if results else None
+                sort_col.value: CartManager.serialize_cursor_value(
+                    results[0][sort_col.value] if results else None
+                )
             }
             previous_cursor = base64.b64encode(
                 json.dumps(previous_params).encode('utf-8')
@@ -1249,7 +1267,9 @@ class CartManager:
         if has_next:
             # Create cursor for next page
             next_params = {
-                sort_col.value: results[-1][sort_col.value]
+                sort_col.value: CartManager.serialize_cursor_value(
+                    results[-1][sort_col.value]
+                )
             }
             next_cursor = base64.b64encode(
                 json.dumps(next_params).encode('utf-8')
