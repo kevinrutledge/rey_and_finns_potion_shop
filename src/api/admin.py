@@ -49,7 +49,7 @@ def reset():
                 }
             )
             
-            # Create initial gold ledger entry
+            # Create initial gold and capacity ledger entry
             LedgerManager.create_admin_entry(conn, current_time['time_id'])
             
             # Reset to PREMIUM strategy

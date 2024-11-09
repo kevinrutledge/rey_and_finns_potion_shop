@@ -3,6 +3,7 @@ import json
 import sqlalchemy
 import logging
 from fastapi import HTTPException
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ class LedgerManager:
     
     @staticmethod
     def create_admin_entry(conn, time_id: int) -> None:
-        """Creates admin reset ledger entry with 100 gold."""
+        """Creates admin reset ledger entry with initial values."""
         conn.execute(
             sqlalchemy.text("""
                 INSERT INTO ledger_entries (
@@ -23,13 +24,14 @@ class LedgerManager:
                 ) VALUES (
                     :time_id,
                     'ADMIN_CHANGE',
-                    100,
-                    1,
-                    1
+                    100,  -- Initial gold
+                    1,    -- Initial ml capacity unit
+                    1     -- Initial potion capacity unit
                 )
             """),
             {"time_id": time_id}
         )
+        logger.info("Created admin reset ledger entry with initial values")
 
 class TimeManager:
     """Handles game time and strategy transitions."""
@@ -636,7 +638,7 @@ class BottlerManager:
     @staticmethod
     def get_bottling_priorities(conn) -> list:
         """Gets prioritized potions for bottling based on strategy."""
-        return conn.execute(
+        result = conn.execute(
             sqlalchemy.text("""
                 WITH future_info AS (
                     SELECT 
@@ -656,6 +658,14 @@ class BottlerManager:
                         ORDER BY created_at DESC
                         LIMIT 1
                     )
+                ),
+                time_block_info AS (
+                    SELECT 
+                        tb.name as block_name,
+                        tb.block_id
+                    FROM future_info fi
+                    JOIN time_blocks tb 
+                        ON fi.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
                 )
                 SELECT 
                     p.potion_id,
@@ -663,26 +673,56 @@ class BottlerManager:
                     p.green_ml,
                     p.blue_ml,
                     p.dark_ml,
+                    p.current_quantity as inventory,
                     bpp.priority_order,
-                    bpp.sales_mix
+                    bpp.sales_mix,
+                    s.max_potions_per_sku,
+                    fi.in_game_day,
+                    tbi.block_name
                 FROM future_info fi
-                JOIN time_blocks tb 
-                    ON fi.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
+                CROSS JOIN time_block_info tbi
                 JOIN strategy_time_blocks stb 
-                    ON tb.block_id = stb.time_block_id
+                    ON tbi.block_id = stb.time_block_id
                     AND fi.strategy_id = stb.strategy_id
                     AND fi.in_game_day = stb.day_name
                 JOIN block_potion_priorities bpp 
                     ON stb.block_id = bpp.block_id
                 JOIN potions p 
                     ON bpp.potion_id = p.potion_id
+                JOIN strategies s 
+                    ON fi.strategy_id = s.strategy_id
                 ORDER BY bpp.priority_order
-                """
+            """
             )
         ).mappings().all()
-
+        
+        logger.debug(
+            f"Getting priorities for time block - "
+            f"day: {result[0]['in_game_day']}, "
+            f"block: {result[0]['block_name']}"
+        )
+        
+        return list(result)
+    
     @staticmethod
-    def calculate_possible_potions(priorities: list, available_ml: dict, available_capacity: int) -> list:
+    def calculate_color_resource_limits(
+        potion: Dict,
+        available_ml: Dict[str, int]
+    ) -> int:
+        """Calculate maximum potions possible based on available color resources."""
+        return min(
+            available_ml[color] // potion[f"{color}_ml"]
+            for color in ["red", "green", "blue", "dark"]
+            if potion[f"{color}_ml"] > 0
+        )
+
+
+    @staticmethod 
+    def calculate_possible_potions(
+        priorities: List[Dict],
+        available_ml: Dict[str, int],
+        available_capacity: int
+    ) -> List[Dict]:
         """Calculates maximum potions that can be made with available resources."""
         bottling_plan = []
         remaining_ml = available_ml.copy()
@@ -691,21 +731,21 @@ class BottlerManager:
         for potion in priorities:
             if remaining_capacity <= 0:
                 break
+                
+            # Calculate resource limits
+            resource_max = min(
+                remaining_capacity,
+                BottlerManager.calculate_color_resource_limits(potion, remaining_ml)
+            )
             
-            max_quantities = [remaining_capacity]
+            # Apply strategy limits
+            final_max = min(
+                resource_max,
+                potion['max_potions_per_sku'] - potion['inventory'],
+                int(potion['sales_mix'] * available_capacity) - potion['inventory']
+            )
             
-            if potion['red_ml'] > 0:
-                max_quantities.append(remaining_ml['red_ml'] // potion['red_ml'])
-            if potion['green_ml'] > 0:
-                max_quantities.append(remaining_ml['green_ml'] // potion['green_ml'])
-            if potion['blue_ml'] > 0:
-                max_quantities.append(remaining_ml['blue_ml'] // potion['blue_ml'])
-            if potion['dark_ml'] > 0:
-                max_quantities.append(remaining_ml['dark_ml'] // potion['dark_ml'])
-            
-            quantity = min(max_quantities)
-            
-            if quantity > 0:
+            if final_max > 0:
                 bottling_plan.append({
                     "potion_type": [
                         potion['red_ml'],
@@ -713,62 +753,58 @@ class BottlerManager:
                         potion['blue_ml'],
                         potion['dark_ml']
                     ],
-                    "quantity": quantity
+                    "quantity": final_max
                 })
                 
-                remaining_capacity -= quantity
-                if potion['red_ml'] > 0:
-                    remaining_ml['red_ml'] -= quantity * potion['red_ml']
-                if potion['green_ml'] > 0:
-                    remaining_ml['green_ml'] -= quantity * potion['green_ml']
-                if potion['blue_ml'] > 0:
-                    remaining_ml['blue_ml'] -= quantity * potion['blue_ml']
-                if potion['dark_ml'] > 0:
-                    remaining_ml['dark_ml'] -= quantity * potion['dark_ml']
+                remaining_capacity -= final_max
+                for color in ["red", "green", "blue", "dark"]:
+                    if potion[f"{color}_ml"] > 0:
+                        remaining_ml[color] -= final_max * potion[f"{color}_ml"]
         
         return bottling_plan
 
     @staticmethod
-    def process_bottling(conn, potion_data: dict, time_id: int) -> None:
+    def process_bottling(conn, potion_data: Dict, time_id: int) -> None:
         """Processes potion bottling with ledger entries."""
         # Get potion_id for mixture
         potion_id = conn.execute(
             sqlalchemy.text("""
-                SELECT potion_id
-                FROM potions
+                SELECT potion_id 
+                FROM potions 
                 WHERE ARRAY[red_ml, green_ml, blue_ml, dark_ml] = :potion_type
-                """
-            ),
+            """),
             {"potion_type": potion_data['potion_type']}
         ).scalar_one()
-        
+
         # Update potion inventory
         conn.execute(
             sqlalchemy.text("""
                 UPDATE potions
                 SET current_quantity = current_quantity + :quantity
                 WHERE potion_id = :potion_id
-                """
-            ),
+            """),
             {
                 "quantity": potion_data['quantity'],
                 "potion_id": potion_id
             }
         )
-        
-        # Create ledger entries for each color used
-        color_map = {0: 'RED', 1: 'GREEN', 2: 'BLUE', 3: 'DARK'}
+
+        # Calculate ml used for logging
+        ml_used = {}
+        color_map = {0: 'red', 1: 'green', 2: 'blue', 3: 'dark'}
         
         for idx, amount in enumerate(potion_data['potion_type']):
             if amount > 0:
-                ml_used = amount * potion_data['quantity']
+                ml_used[color_map[idx]] = amount * potion_data['quantity']
+                
+                # Create ledger entry
                 color_id = conn.execute(
                     sqlalchemy.text("""
                         SELECT color_id 
                         FROM color_definitions 
                         WHERE color_name = :color
                     """),
-                    {"color": color_map[idx]}
+                    {"color": color_map[idx].upper()}
                 ).scalar_one()
                 
                 conn.execute(
@@ -792,12 +828,25 @@ class BottlerManager:
                     """),
                     {
                         "time_id": time_id,
-                        "ml_change": -ml_used,
+                        "ml_change": -ml_used[color_map[idx]],
                         "potion_change": potion_data['quantity'],
                         "color_id": color_id,
                         "potion_id": potion_id
                     }
                 )
+        
+        # Get remaining capacity for logging
+        remaining_capacity = conn.execute(
+            sqlalchemy.text("""
+                SELECT max_potions - total_potions as remaining
+                FROM current_state
+            """)
+        ).scalar_one()
+        
+        logger.info(
+            f"Bottled potions - quantity: {potion_data['quantity']}, "
+            f"ml used: {ml_used}, remaining capacity: {remaining_capacity}"
+        )
 
 class CartManager:
     """Handles cart operations and customer interactions."""
@@ -1225,30 +1274,23 @@ class InventoryManager:
             sqlalchemy.text("""
                 WITH ledger_totals AS (
                     SELECT
-                        COALESCE(SUM(gold_change), 100) as gold,
+                        COALESCE(SUM(gold_change), 0) as gold,
                         COALESCE(SUM(ml_change), 0) as total_ml,
                         COALESCE(SUM(potion_change), 0) as total_potions,
-                        COUNT(*) FILTER (
-                            WHERE entry_type = 'CAPACITY_UPGRADE' 
-                            AND potion_change IS NOT NULL
-                        ) as potion_upgrades,
-                        COUNT(*) FILTER (
-                            WHERE entry_type = 'CAPACITY_UPGRADE' 
-                            AND ml_change IS NOT NULL
-                        ) as ml_upgrades
+                        COALESCE(SUM(ml_capacity_change), 0) as ml_capacity_units,
+                        COALESCE(SUM(potion_capacity_change), 0) as potion_capacity_units
                     FROM ledger_entries
                 )
                 SELECT
                     gold,
                     total_ml,
                     total_potions,
-                    (1 + potion_upgrades) * 50 as max_potions,
-                    (1 + ml_upgrades) * 10000 as max_ml,
-                    (1 + potion_upgrades) as potion_capacity_units,
-                    (1 + ml_upgrades) as ml_capacity_units
+                    ml_capacity_units,
+                    potion_capacity_units,
+                    (potion_capacity_units * 50) as max_potions,
+                    (ml_capacity_units * 10000) as max_ml
                 FROM ledger_totals
-                """
-            )
+            """)
         ).mappings().one()
         
         return dict(result)
@@ -1259,6 +1301,12 @@ class InventoryManager:
         # Calculate current usage percentages
         potion_usage = state['total_potions'] / state['max_potions']
         ml_usage = state['total_ml'] / state['max_ml']
+        
+        logger.debug(
+            f"Checking capacity thresholds - "
+            f"potion usage: {potion_usage:.2%}, "
+            f"ml usage: {ml_usage:.2%}"
+        )
         
         threshold = conn.execute(
             sqlalchemy.text("""
@@ -1281,8 +1329,7 @@ class InventoryManager:
                     )
                 ORDER BY priority_order DESC
                 LIMIT 1
-                """
-            ),
+            """),
             {
                 "current_potion_units": state['potion_capacity_units'],
                 "current_ml_units": state['ml_capacity_units'],
@@ -1293,30 +1340,44 @@ class InventoryManager:
         ).mappings().first()
         
         if threshold:
+            logger.debug(
+                f"Found capacity upgrade threshold - "
+                f"potion purchase: {threshold['potion_capacity_purchase']}, "
+                f"ml purchase: {threshold['ml_capacity_purchase']}"
+            )
             return {
                 "potion_capacity": threshold['potion_capacity_purchase'],
                 "ml_capacity": threshold['ml_capacity_purchase']
             }
         
+        logger.debug("No capacity upgrade needed at current thresholds")
         return {
             "potion_capacity": 0,
             "ml_capacity": 0
         }
     
     @staticmethod
-    def process_capacity_upgrade(conn, potion_capacity: int, ml_capacity: int, time_id: int) -> None:
+    def process_capacity_upgrade(
+        conn,
+        potion_capacity: int,
+        ml_capacity: int,
+        time_id: int
+    ) -> None:
         """Process capacity upgrade with ledger entries."""
         total_cost = (potion_capacity + ml_capacity) * 1000
         
         current_gold = conn.execute(
             sqlalchemy.text("""
-                SELECT COALESCE(SUM(gold_change), 100) as gold
+                SELECT COALESCE(SUM(gold_change), 0) as gold
                 FROM ledger_entries
-                """
-            )
+            """)
         ).scalar_one()
         
         if current_gold < total_cost:
+            logger.error(
+                f"Insufficient gold for capacity upgrade - "
+                f"required: {total_cost}, available: {current_gold}"
+            )
             raise HTTPException(
                 status_code=400,
                 detail="Insufficient gold for capacity upgrade"
@@ -1365,3 +1426,10 @@ class InventoryManager:
                     "ml_capacity": ml_capacity
                 }
             )
+            
+        logger.info(
+            f"Processed capacity upgrade - "
+            f"potion units: +{potion_capacity}, "
+            f"ml units: +{ml_capacity}, "
+            f"total cost: {total_cost}"
+        )

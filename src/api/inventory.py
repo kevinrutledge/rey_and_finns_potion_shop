@@ -34,7 +34,10 @@ def get_inventory():
             
     except Exception as e:
         logger.error(f"Failed to get inventory state: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to get inventory")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get inventory"
+        )
 
 @router.post("/plan")
 def get_capacity_plan():
@@ -52,7 +55,10 @@ def get_capacity_plan():
             
     except Exception as e:
         logger.error(f"Failed to get capacity plan: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to plan capacity")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to plan capacity"
+        )
 
 @router.post("/deliver/{order_id}")
 def deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int):
@@ -60,13 +66,19 @@ def deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int):
     try:
         with db.engine.begin() as conn:
             current_time = TimeManager.get_current_time(conn)
-            time_id = current_time['time_id']
+            
+            logger.debug(
+                f"Processing capacity upgrade delivery - "
+                f"order: {order_id}, "
+                f"potion: {capacity_purchase.potion_capacity}, "
+                f"ml: {capacity_purchase.ml_capacity}"
+            )
             
             InventoryManager.process_capacity_upgrade(
                 conn,
                 capacity_purchase.potion_capacity,
                 capacity_purchase.ml_capacity,
-                time_id
+                current_time['time_id']
             )
             
             return {"success": True}
@@ -75,4 +87,7 @@ def deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int):
         raise
     except Exception as e:
         logger.error(f"Failed to process capacity upgrade: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to process upgrade")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process upgrade"
+        )
