@@ -185,26 +185,100 @@ def search_orders(
     time is 5 total line items.
     """
 
-    try:
-        with db.engine.begin() as conn:
-            results = CartManager.search_orders(
-                conn,
-                customer_name,
-                potion_sku,
-                search_page,
-                sort_col,
-                sort_order
-            )
-            
+    @router.get("/search/")
+    def search_orders(
+        customer_name: str = "",
+        potion_sku: str = "",
+        sort_col: search_sort_options = search_sort_options.timestamp,
+        sort_order: search_sort_order = search_sort_order.desc,
+    ):
+        """
+        Search for cart line items by customer name and/or potion sku.
+        Results are paginated with a maximum of 5 items per page.
+        """
+        try:
+            # Determine sort column
+            if sort_col is search_sort_options.customer_name:
+                order_by = "cu.customer_name"
+            elif sort_col is search_sort_options.item_sku:
+                order_by = "p.sku"
+            elif sort_col is search_sort_options.line_item_total:
+                order_by = "ci.line_total"
+            elif sort_col is search_sort_options.timestamp:
+                order_by = "c.checked_out_at"
+            else:
+                raise ValueError(f"Invalid sort column: {sort_col}")
+
+            # Build base query
+            query = """
+                SELECT
+                    ci.item_id as line_item_id,
+                    p.sku as item_sku,
+                    cu.customer_name,
+                    ci.line_total as line_item_total,
+                    c.checked_out_at as timestamp
+                FROM cart_items ci
+                JOIN carts c ON ci.cart_id = c.cart_id
+                JOIN customers cu ON c.customer_id = cu.customer_id
+                JOIN potions p ON ci.potion_id = p.potion_id
+                WHERE c.checked_out = true
+            """
+
+            # Prepare parameters
+            params = {"limit": 6}  # Get one extra to check for next page
+
+            # Add filters if provided
+            if customer_name:
+                query += " AND LOWER(cu.customer_name) LIKE LOWER(:customer_name)"
+                params["customer_name"] = f"%{customer_name}%"
+            if potion_sku:
+                query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
+                params["potion_sku"] = f"%{potion_sku}%"
+
+            # Add sorting
+            query += f" ORDER BY {order_by} {sort_order.value}"
+            query += " LIMIT :limit"
+
             logger.debug(
-                f"Search results - customer: {customer_name}, "
-                f"sku: {potion_sku}, found: {len(results['results'])}"
+                f"Executing search - sort: {sort_col.value} {sort_order.value}, "
+                f"filters: customer='{customer_name}', sku='{potion_sku}'"
             )
-            return results
-            
-    except Exception as e:
-        logger.error(f"Failed to search orders: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to search orders"
-        )
+
+            # Execute query
+            with db.engine.begin() as conn:
+                results = conn.execute(
+                    sqlalchemy.text(query),
+                    params
+                ).mappings().all()
+
+            # Handle pagination
+            has_next = len(results) > 5
+            if has_next:
+                results = results[:5]
+
+            # Format results
+            formatted_results = [
+                {
+                    "line_item_id": row["line_item_id"],
+                    "item_sku": row["item_sku"],
+                    "customer_name": row["customer_name"],
+                    "line_item_total": row["line_item_total"],
+                    "timestamp": row["timestamp"].isoformat()
+                }
+                for row in results
+            ]
+
+            logger.debug(f"Search found {len(formatted_results)} results")
+
+            return {
+                "results": formatted_results,
+                "previous": "",
+                "next": ""
+            }
+
+        except ValueError as e:
+            logger.error(f"Invalid search parameters: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            logger.error(f"Search failed: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to search orders")
