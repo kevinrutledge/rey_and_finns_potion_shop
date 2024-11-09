@@ -159,7 +159,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 def search_orders(
     customer_name: str = "",
     potion_sku: str = "",
-    search_page: str = "",
+    search_page: str = "0",
     sort_col: search_sort_options = search_sort_options.timestamp,
     sort_order: search_sort_order = search_sort_order.desc,
 ):
@@ -188,24 +188,33 @@ def search_orders(
     time is 5 total line items.
     """
     try:
-        # Determine primary sort column for cursor comparison
+        # Determine primary sort column
         if sort_col is search_sort_options.customer_name:
-            cursor_cols = ["cu.customer_name", "ci.item_id"]
-            order_by = "cu.customer_name, ci.item_id"
+            order_by_column = "cu.customer_name"
         elif sort_col is search_sort_options.item_sku:
-            cursor_cols = ["p.sku", "ci.item_id"]
-            order_by = "p.sku, ci.item_id"
+            order_by_column = "p.sku"
         elif sort_col is search_sort_options.line_item_total:
-            cursor_cols = ["ci.line_total", "ci.item_id"]
-            order_by = "ci.line_total, ci.item_id"
+            order_by_column = "ci.line_total"
         elif sort_col is search_sort_options.timestamp:
-            cursor_cols = ["c.checked_out_at", "ci.item_id"]
-            order_by = "c.checked_out_at, ci.item_id"
+            order_by_column = "c.checked_out_at"
         else:
             raise ValueError(f"Invalid sort column: {sort_col}")
 
+        # Set sort order
+        sort_order_value = "ASC" if sort_order is search_sort_order.asc else "DESC"
+
+        try:
+            page_number = int(search_page)
+            if page_number < 0:
+                raise ValueError("search_page must be a non-negative integer")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid search_page value; must be a non-negative integer string")
+
+        limit = 5
+        offset = page_number * limit
+
         # Build base query
-        query = """
+        query = f"""
             SELECT
                 ci.item_id as line_item_id,
                 p.sku as item_sku,
@@ -219,39 +228,7 @@ def search_orders(
             WHERE c.checked_out = true
         """
 
-        params = {"limit": 6}  # Get extra item for pagination check
-        current_sort_order = sort_order
-
-        # Handle pagination cursor - use cursor_col for comparison
-        if search_page:
-            try:
-                cursor_data = json.loads(base64.b64decode(search_page))
-                cursor_values = cursor_data["cursor_values"]
-                primary_cursor_value = cursor_values["primary"]
-                unique_cursor_value = cursor_values["unique"]
-                is_previous = cursor_data.get("direction") == "previous"
-
-                # Convert timestamp string to datetime if needed
-                if sort_col is search_sort_options.timestamp and primary_cursor_value:
-                    primary_cursor_value = datetime.fromisoformat(primary_cursor_value)
-
-                # Adjust operator and sort order for direction
-                if is_previous:
-                    operator = "<" if sort_order is search_sort_order.asc else ">"
-                    current_sort_order = (
-                        search_sort_order.asc if sort_order is search_sort_order.desc else search_sort_order.desc
-                    )
-                else:
-                    operator = "<" if sort_order is search_sort_order.desc else ">"
-
-                # Build the filtering condition
-                query += f" AND ({cursor_cols[0]}, ci.item_id) {operator} (:primary_cursor_value, :unique_cursor_value)"
-                params["primary_cursor_value"] = primary_cursor_value
-                params["unique_cursor_value"] = unique_cursor_value
-
-            except Exception as e:
-                logger.error(f"Invalid cursor format: {e}")
-                raise HTTPException(status_code=400, detail="Invalid cursor format")
+        params = {}
 
         # Add filters
         if customer_name:
@@ -261,26 +238,20 @@ def search_orders(
             query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
             params["potion_sku"] = f"%{potion_sku}%"
 
-        # Add sorting
-        query += f" ORDER BY {order_by} {current_sort_order.value}"
-        query += " LIMIT :limit"
+        # Add sorting and pagination
+        query += f" ORDER BY {order_by_column} {sort_order_value}, ci.item_id {sort_order_value}"
+        query += " LIMIT :limit OFFSET :offset"
+        params["limit"] = limit
+        params["offset"] = offset
 
         # Execute query
         with db.engine.begin() as conn:
-            results = list(conn.execute(
-                sqlalchemy.text(query),
-                params
-            ).mappings().all())
-
-        # Handle previous page order
-        is_previous_page = search_page and cursor_data.get("direction") == "previous"
-        if is_previous_page:
-            results = results[::-1]
-
-        # Check for next page and trim results
-        has_next = len(results) > 5
-        has_previous = bool(search_page)
-        results = results[:5]
+            results = list(
+                conn.execute(
+                    sqlalchemy.text(query),
+                    params
+                ).mappings().all()
+            )
 
         # Format results
         formatted_results = [
@@ -294,38 +265,37 @@ def search_orders(
             for row in results
         ]
 
-        # Generate cursors
-        previous_cursor = ""
-        next_cursor = ""
+        # Determine if there is a next page
+        total_items_query = f"""
+            SELECT COUNT(*) FROM cart_items ci
+            JOIN carts c ON ci.cart_id = c.cart_id
+            JOIN customers cu ON c.customer_id = cu.customer_id
+            JOIN potions p ON ci.potion_id = p.potion_id
+            WHERE c.checked_out = true
+        """
+        # Apply the same filters to count query
+        if customer_name:
+            total_items_query += " AND LOWER(cu.customer_name) LIKE LOWER(:customer_name)"
+        if potion_sku:
+            total_items_query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
 
-        if formatted_results:
-            first_result = formatted_results[0]
-            last_result = formatted_results[-1]
+        with db.engine.begin() as conn:
+            total_items = conn.execute(
+                sqlalchemy.text(total_items_query),
+                params
+            ).scalar()
 
-            if (is_previous_page and has_next) or (not is_previous_page and has_previous):
-                previous_cursor_data = {
-                    "cursor_values": {
-                        "primary": first_result[sort_col.value],
-                        "unique": first_result["line_item_id"]
-                    },
-                    "direction": "previous"
-                }
-                previous_cursor = base64.b64encode(json.dumps(previous_cursor_data).encode('utf-8')).decode('utf-8')
+        has_next = offset + limit < total_items
+        has_previous = page_number > 0
 
-            if (is_previous_page and has_previous) or (not is_previous_page and has_next):
-                next_cursor_data = {
-                    "cursor_values": {
-                        "primary": last_result[sort_col.value],
-                        "unique": last_result["line_item_id"]
-                    },
-                    "direction": "next"
-                }
-                next_cursor = base64.b64encode(json.dumps(next_cursor_data).encode('utf-8')).decode('utf-8')
+        # Generate next and previous page tokens
+        next_page = str(page_number + 1) if has_next else ""
+        previous_page = str(page_number - 1) if has_previous else ""
 
         return {
             "results": formatted_results,
-            "previous": previous_cursor,
-            "next": next_cursor
+            "previous": previous_page,
+            "next": next_page
         }
 
     except ValueError as e:
