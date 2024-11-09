@@ -188,14 +188,18 @@ def search_orders(
     time is 5 total line items.
     """
     try:
-        # Determine sort column
+        # Determine primary sort column for cursor comparison
         if sort_col is search_sort_options.customer_name:
+            cursor_col = "cu.customer_name"
             order_by = "cu.customer_name, c.checked_out_at"
         elif sort_col is search_sort_options.item_sku:
+            cursor_col = "p.sku"
             order_by = "p.sku, c.checked_out_at"
         elif sort_col is search_sort_options.line_item_total:
+            cursor_col = "ci.line_total"
             order_by = "ci.line_total, c.checked_out_at"
         elif sort_col is search_sort_options.timestamp:
+            cursor_col = "c.checked_out_at"
             order_by = "c.checked_out_at"
         else:
             raise ValueError(f"Invalid sort column: {sort_col}")
@@ -218,7 +222,7 @@ def search_orders(
         params = {"limit": 6}  # Get extra item for pagination check
         current_sort_order = sort_order
 
-        # Handle pagination cursor
+        # Handle pagination cursor - use cursor_col for comparison
         if search_page:
             try:
                 cursor_data = json.loads(base64.b64decode(search_page))
@@ -238,7 +242,8 @@ def search_orders(
                 else:
                     operator = "<" if sort_order is search_sort_order.desc else ">"
 
-                query += f" AND {order_by} {operator} :cursor_value"
+                # Use cursor_col for the comparison instead of order_by
+                query += f" AND {cursor_col} {operator} :cursor_value"
                 params["cursor_value"] = cursor_value
 
             except Exception as e:
@@ -248,10 +253,10 @@ def search_orders(
         # Add filters
         if customer_name:
             query += " AND LOWER(cu.customer_name) LIKE LOWER(:customer_name)"
-            params["customer_name"] = f"{customer_name}%"
+            params["customer_name"] = f"%{customer_name}%"
         if potion_sku:
             query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
-            params["potion_sku"] = f"{potion_sku}%"
+            params["potion_sku"] = f"%{potion_sku}%"
 
         # Add sorting
         query += f" ORDER BY {order_by} {current_sort_order.value}"
