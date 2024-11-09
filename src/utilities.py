@@ -709,14 +709,14 @@ class BottlerManager:
         available_ml: Dict[str, int]
     ) -> int:
         """Calculate maximum potions possible based on available color resources."""
-        return min(
-            available_ml[color] // potion[f"{color}_ml"]
-            for color in ["red", "green", "blue", "dark"]
-            if potion[f"{color}_ml"] > 0
-        )
+        limits = []
+        for color in ["red_ml", "green_ml", "blue_ml", "dark_ml"]:
+            if potion[color] > 0:
+                limits.append(available_ml[color] // potion[color])
+        return min(limits) if limits else 0
 
 
-    @staticmethod 
+    @staticmethod
     def calculate_possible_potions(
         priorities: List[Dict],
         available_ml: Dict[str, int],
@@ -756,9 +756,9 @@ class BottlerManager:
                 })
                 
                 remaining_capacity -= final_max
-                for color in ["red", "green", "blue", "dark"]:
-                    if potion[f"{color}_ml"] > 0:
-                        remaining_ml[color] -= final_max * potion[f"{color}_ml"]
+                for color in ["red_ml", "green_ml", "blue_ml", "dark_ml"]:
+                    if potion[color] > 0:
+                        remaining_ml[color] -= final_max * potion[color]
         
         return bottling_plan
 

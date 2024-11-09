@@ -248,10 +248,10 @@ def search_orders(
         # Add filters
         if customer_name:
             query += " AND LOWER(cu.customer_name) LIKE LOWER(:customer_name)"
-            params["customer_name"] = f"%{customer_name}%"
+            params["customer_name"] = f"{customer_name}%"
         if potion_sku:
             query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
-            params["potion_sku"] = f"%{potion_sku}%"
+            params["potion_sku"] = f"{potion_sku}%"
 
         # Add sorting
         query += f" ORDER BY {order_by} {current_sort_order.value}"
@@ -289,13 +289,13 @@ def search_orders(
         next_cursor = ""
 
         if formatted_results:
-            # Generate previous cursor if not at start
-            if search_page or has_next:
+            # Generate previous cursor only if not on the first page
+            if search_page:
                 previous_cursor = base64.b64encode(json.dumps({
                     "cursor_value": formatted_results[0][sort_col.value],
                     "direction": "previous"
                 }).encode('utf-8')).decode('utf-8')
-
+            
             # Generate next cursor if more results exist
             if has_next:
                 next_cursor = base64.b64encode(json.dumps({
