@@ -190,17 +190,17 @@ def search_orders(
     try:
         # Determine primary sort column for cursor comparison
         if sort_col is search_sort_options.customer_name:
-            cursor_col = "cu.customer_name"
-            order_by = "cu.customer_name, c.checked_out_at"
+            cursor_cols = ["cu.customer_name", "ci.item_id"]
+            order_by = "cu.customer_name, ci.item_id"
         elif sort_col is search_sort_options.item_sku:
-            cursor_col = "p.sku"
-            order_by = "p.sku, c.checked_out_at"
+            cursor_cols = ["p.sku", "ci.item_id"]
+            order_by = "p.sku, ci.item_id"
         elif sort_col is search_sort_options.line_item_total:
-            cursor_col = "ci.line_total"
-            order_by = "ci.line_total, c.checked_out_at"
+            cursor_cols = ["ci.line_total", "ci.item_id"]
+            order_by = "ci.line_total, ci.item_id"
         elif sort_col is search_sort_options.timestamp:
-            cursor_col = "c.checked_out_at"
-            order_by = "c.checked_out_at"
+            cursor_cols = ["c.checked_out_at", "ci.item_id"]
+            order_by = "c.checked_out_at, ci.item_id"
         else:
             raise ValueError(f"Invalid sort column: {sort_col}")
 
@@ -226,25 +226,28 @@ def search_orders(
         if search_page:
             try:
                 cursor_data = json.loads(base64.b64decode(search_page))
-                cursor_value = cursor_data["cursor_value"]
+                cursor_values = cursor_data["cursor_values"]
+                primary_cursor_value = cursor_values["primary"]
+                unique_cursor_value = cursor_values["unique"]
                 is_previous = cursor_data.get("direction") == "previous"
 
                 # Convert timestamp string to datetime if needed
-                if sort_col is search_sort_options.timestamp and cursor_value:
-                    cursor_value = datetime.fromisoformat(cursor_value)
+                if sort_col is search_sort_options.timestamp and primary_cursor_value:
+                    primary_cursor_value = datetime.fromisoformat(primary_cursor_value)
 
                 # Adjust operator and sort order for direction
                 if is_previous:
                     operator = "<" if sort_order is search_sort_order.asc else ">"
-                    current_sort_order = (search_sort_order.asc 
-                                        if sort_order is search_sort_order.desc 
-                                        else search_sort_order.desc)
+                    current_sort_order = (
+                        search_sort_order.asc if sort_order is search_sort_order.desc else search_sort_order.desc
+                    )
                 else:
                     operator = "<" if sort_order is search_sort_order.desc else ">"
 
-                # Use cursor_col for the comparison instead of order_by
-                query += f" AND {cursor_col} {operator} :cursor_value"
-                params["cursor_value"] = cursor_value
+                # Build the filtering condition
+                query += f" AND ({cursor_cols[0]}, ci.item_id) {operator} (:primary_cursor_value, :unique_cursor_value)"
+                params["primary_cursor_value"] = primary_cursor_value
+                params["unique_cursor_value"] = unique_cursor_value
 
             except Exception as e:
                 logger.error(f"Invalid cursor format: {e}")
@@ -296,16 +299,28 @@ def search_orders(
         next_cursor = ""
 
         if formatted_results:
+            first_result = formatted_results[0]
+            last_result = formatted_results[-1]
+
             if (is_previous_page and has_next) or (not is_previous_page and has_previous):
-                previous_cursor = base64.b64encode(json.dumps({
-                    "cursor_value": formatted_results[0][sort_col.value],
+                previous_cursor_data = {
+                    "cursor_values": {
+                        "primary": first_result[sort_col.value],
+                        "unique": first_result["line_item_id"]
+                    },
                     "direction": "previous"
-                }).encode('utf-8')).decode('utf-8')
+                }
+                previous_cursor = base64.b64encode(json.dumps(previous_cursor_data).encode('utf-8')).decode('utf-8')
+
             if (is_previous_page and has_previous) or (not is_previous_page and has_next):
-                next_cursor = base64.b64encode(json.dumps({
-                    "cursor_value": formatted_results[-1][sort_col.value],
+                next_cursor_data = {
+                    "cursor_values": {
+                        "primary": last_result[sort_col.value],
+                        "unique": last_result["line_item_id"]
+                    },
                     "direction": "next"
-                }).encode('utf-8')).decode('utf-8')
+                }
+                next_cursor = base64.b64encode(json.dumps(next_cursor_data).encode('utf-8')).decode('utf-8')
 
         return {
             "results": formatted_results,
