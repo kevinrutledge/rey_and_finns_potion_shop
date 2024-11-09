@@ -204,4 +204,7 @@ def search_orders(
             
     except Exception as e:
         logger.error(f"Failed to search orders: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to search orders")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to search orders"
+        )

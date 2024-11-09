@@ -851,8 +851,6 @@ class BottlerManager:
 class CartManager:
     """Handles cart operations and customer interactions."""
     
-    PAGE_SIZE = 5  # Maximum results per page for search
-    
     @staticmethod
     def record_customer_visit(conn, visit_id: int, customers: list, time_id: int) -> int:
         """Records customer visit and individual customers."""
@@ -1157,7 +1155,15 @@ class CartManager:
         sort_col: str,
         sort_order: str
     ) -> dict:
-        """Search orders with pagination."""
+        """Search for cart line items with pagination."""
+        # Define column mappings for sorting
+        sort_mapping = {
+            "customer_name": "cu.customer_name",
+            "item_sku": "p.sku",
+            "line_item_total": "ci.line_total",
+            "timestamp": "c.checked_out_at"
+        }
+        
         base_query = """
             SELECT
                 ci.item_id as line_item_id,
@@ -1183,16 +1189,9 @@ class CartManager:
             params["potion_sku"] = f"%{potion_sku}%"
         
         # Add sorting
-        sort_mapping = {
-            "customer_name": "cu.customer_name",
-            "item_sku": "p.sku",
-            "line_item_total": "ci.line_total",
-            "timestamp": "c.checked_out_at"
-        }
-        
         base_query += f" ORDER BY {sort_mapping[sort_col]} {sort_order}"
         
-        # Add pagination
+        # Handle pagination
         if search_page:
             try:
                 decoded_cursor = base64.b64decode(search_page).decode('utf-8')
@@ -1205,30 +1204,35 @@ class CartManager:
                     base_query += f" AND {sort_mapping[sort_col]} > :cursor_value"
                 
                 params["cursor_value"] = cursor_values[sort_col]
+                
             except (ValueError, KeyError) as e:
                 logger.error(f"Invalid search page cursor: {str(e)}")
-                raise HTTPException(status_code=400, detail="Invalid search page")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid search page"
+                )
         
         # Get one extra result to determine if there's a next page
         base_query += " LIMIT :limit"
-        params["limit"] = CartManager.PAGE_SIZE + 1
+        params["limit"] = 6
         
+        # Execute query
         results = conn.execute(
             sqlalchemy.text(base_query),
             params
         ).mappings().all()
         
         # Handle pagination tokens
-        has_next = len(results) > CartManager.PAGE_SIZE
+        has_next = len(results) > 5
         if has_next:
-            results = results[:CartManager.PAGE_SIZE]
-        
+            results = results[:5]
+            
         # Generate previous/next cursors
         previous_cursor = ""
         next_cursor = ""
         
-        # Create cursor for previous page
         if search_page:
+            # Create cursor for previous page
             previous_params = {
                 sort_col: results[0][sort_col] if results else None
             }
@@ -1236,9 +1240,8 @@ class CartManager:
                 json.dumps(previous_params).encode('utf-8')
             ).decode('utf-8')
         
-        # Create cursor for next page
         if has_next:
-
+            # Create cursor for next page
             next_params = {
                 sort_col: results[-1][sort_col]
             }
@@ -1246,17 +1249,22 @@ class CartManager:
                 json.dumps(next_params).encode('utf-8')
             ).decode('utf-8')
         
-        # Format
+        # Format results
         formatted_results = [
             {
                 "line_item_id": result["line_item_id"],
-                "item_sku": result["item_sku"],
+                "item_sku": result["item_sku"], 
                 "customer_name": result["customer_name"],
                 "line_item_total": result["line_item_total"],
                 "timestamp": result["timestamp"].isoformat()
             }
             for result in results
         ]
+        
+        logger.debug(
+            f"Search results - customer: {customer_name}, "
+            f"sku: {potion_sku}, found: {len(formatted_results)}"
+        )
         
         return {
             "previous": previous_cursor,
