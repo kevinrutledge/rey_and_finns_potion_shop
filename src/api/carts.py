@@ -1,9 +1,12 @@
 import sqlalchemy
 import logging
+import json
+import base64
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
 from enum import Enum
+from datetime import datetime
 from src.api import auth
 from src import database as db
 from src.utilities import CartManager, TimeManager
@@ -188,12 +191,16 @@ def search_orders(
         # Determine sort column
         if sort_col is search_sort_options.customer_name:
             order_by = "cu.customer_name"
+            cursor_col = "customer_name"
         elif sort_col is search_sort_options.item_sku:
             order_by = "p.sku"
+            cursor_col = "item_sku"
         elif sort_col is search_sort_options.line_item_total:
             order_by = "ci.line_total"
+            cursor_col = "line_item_total"
         elif sort_col is search_sort_options.timestamp:
             order_by = "c.checked_out_at"
+            cursor_col = "timestamp"
         else:
             raise ValueError(f"Invalid sort column: {sort_col}")
 
@@ -212,7 +219,6 @@ def search_orders(
             WHERE c.checked_out = true
         """
 
-        # Prepare parameters
         params = {"limit": 6}  # Get one extra to check for next page
 
         # Add filters
@@ -222,6 +228,25 @@ def search_orders(
         if potion_sku:
             query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
             params["potion_sku"] = f"%{potion_sku}%"
+
+        # Handle cursor pagination
+        if search_page:
+            try:
+                cursor_data = json.loads(base64.b64decode(search_page))
+                cursor_value = cursor_data.get(cursor_col)
+                
+                # Handle timestamp cursor specially
+                if cursor_col == "timestamp" and cursor_value:
+                    cursor_value = datetime.fromisoformat(cursor_value)
+                
+                # Add cursor condition
+                operator = "<" if sort_order is search_sort_order.desc else ">"
+                query += f" AND {order_by} {operator} :cursor_value"
+                params["cursor_value"] = cursor_value
+                
+            except Exception as e:
+                logger.error(f"Invalid cursor format: {e}")
+                raise HTTPException(status_code=400, detail="Invalid cursor format")
 
         # Add sorting
         query += f" ORDER BY {order_by} {sort_order.value}"
@@ -256,12 +281,31 @@ def search_orders(
             for row in results
         ]
 
+        # Generate cursor tokens
+        previous_cursor = ""
+        next_cursor = ""
+        
+        if results:
+            if search_page:
+                first_row = formatted_results[0]
+                prev_data = {cursor_col: first_row[cursor_col]}
+                previous_cursor = base64.b64encode(
+                    json.dumps(prev_data).encode('utf-8')
+                ).decode('utf-8')
+                
+            if has_next:
+                last_row = formatted_results[-1]
+                next_data = {cursor_col: last_row[cursor_col]}
+                next_cursor = base64.b64encode(
+                    json.dumps(next_data).encode('utf-8')
+                ).decode('utf-8')
+
         logger.debug(f"Search found {len(formatted_results)} results")
 
         return {
             "results": formatted_results,
-            "previous": "",
-            "next": ""
+            "previous": previous_cursor,
+            "next": next_cursor
         }
 
     except ValueError as e:
