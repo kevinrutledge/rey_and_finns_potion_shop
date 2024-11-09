@@ -88,14 +88,9 @@ CREATE TABLE strategies (
     name TEXT NOT NULL UNIQUE CHECK (
         name IN ('PREMIUM', 'PENETRATION', 'TIERED', 'DYNAMIC')
     ),
-    min_gold INT NOT NULL CHECK (min_gold >= 0),
-    max_gold INT,
     ml_capacity_units INT NOT NULL CHECK (ml_capacity_units > 0),
     potion_capacity_units INT NOT NULL CHECK (potion_capacity_units > 0),
-    max_potions_per_sku INT NOT NULL,
-    CONSTRAINT valid_gold_range CHECK (
-        max_gold IS NULL OR max_gold > min_gold
-    )
+    max_potions_per_sku INT NOT NULL
 );
 
 -- Initial insert for PREMIUM strategy
