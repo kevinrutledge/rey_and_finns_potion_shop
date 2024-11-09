@@ -95,6 +95,7 @@ CREATE TABLE strategies (
 
 -- Initial insert for PREMIUM strategy
 CREATE TABLE active_strategy (
+    active_strategy_id SERIAL PRIMARY KEY;
     strategy_id INT REFERENCES strategies(strategy_id),
     activated_at TIMESTAMPTZ DEFAULT NOW(),
     game_time_id INT REFERENCES game_time(time_id),
@@ -276,7 +277,6 @@ CREATE TABLE ledger_entries (
             'POTION_CAPACITY_UPGRADE',
             'GOLD_CHANGE',
             'ML_ADJUSTMENT',
-            'STRATEGY_CHANGE',
             'ADMIN_CHANGE'
         )
     ),

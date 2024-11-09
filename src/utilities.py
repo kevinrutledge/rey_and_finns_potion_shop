@@ -71,11 +71,47 @@ class TimeManager:
             return False
         
         return True
+    
+    @staticmethod
+    def check_premium_transition(conn, state: dict) -> tuple[bool, int]:
+        """Check if conditions are met for PREMIUM to PENETRATION transition."""
+        result = conn.execute(
+            sqlalchemy.text("""
+                WITH transition_check AS (
+                    SELECT 
+                        st.to_strategy_id,
+                        CASE 
+                            WHEN :gold >= st.gold_threshold THEN true
+                            WHEN :total_potions >= st.potion_threshold THEN true
+                            WHEN :total_ml >= st.ml_threshold THEN true
+                            ELSE false
+                        END as should_transition
+                    FROM active_strategy ast
+                    JOIN strategies s ON ast.strategy_id = s.strategy_id
+                    JOIN strategy_transitions st ON ast.strategy_id = st.from_strategy_id
+                    WHERE s.name = 'PREMIUM'
+                    ORDER BY ast.activated_at DESC
+                    LIMIT 1
+                )
+                SELECT to_strategy_id, should_transition
+                FROM transition_check
+                WHERE should_transition = true
+            """),
+            {
+                "gold": state['gold'],
+                "total_potions": state['total_potions'],
+                "total_ml": state['total_ml']
+            }
+        ).mappings().first()
+
+        if result:
+            return True, result['to_strategy_id']
+        return False, None
 
     @staticmethod
     def record_time(conn, day: str, hour: int) -> bool:
         """
-        Records current game time and checks for strategy transitions.
+        Records current game time and processes strategy transitions.
         Returns True if strategy transition occurred.
         """
         # Get time_id for new time
@@ -107,52 +143,20 @@ class TimeManager:
                 "hour": hour
             }
         )
-        
-        # Check state for strategy transition
+
+        # Get current state
         state = conn.execute(
-            sqlalchemy.text("""
-                WITH current_strat AS (
-                    SELECT st.*
-                    FROM active_strategy ast
-                    JOIN strategy_transitions st ON ast.strategy_id = st.from_strategy_id
-                    ORDER BY ast.activated_at DESC
-                    LIMIT 1
-                ),
-                state_check AS (
-                    SELECT 
-                        cs.*,
-                        c.gold,
-                        c.total_potions,
-                        c.total_ml,
-                        c.ml_capacity_units,
-                        c.potion_capacity_units
-                    FROM current_strat cs
-                    CROSS JOIN current_state c
-                )
-                SELECT 
-                    to_strategy_id,
-                    CASE
-                        WHEN require_all_thresholds THEN
-                            (gold >= gold_threshold OR gold_threshold IS NULL) AND
-                            (total_potions >= potion_threshold OR potion_threshold IS NULL) AND
-                            (total_ml >= ml_threshold OR ml_threshold IS NULL) AND
-                            ml_capacity_units >= ml_capacity_threshold AND
-                            potion_capacity_units >= potion_capacity_threshold
-                        ELSE
-                            gold >= gold_threshold OR
-                            total_potions >= potion_threshold OR
-                            total_ml >= ml_threshold
-                    END as should_transition
-                FROM state_check
-                WHERE to_strategy_id IS NOT NULL
-            """)
-        ).mappings().first()
-    
-        if state and state['should_transition']:
-            logger.info(
-                f"Strategy transition triggered to strategy_id: {state['to_strategy_id']}"
-            )
-            
+            sqlalchemy.text("SELECT * FROM current_state")
+        ).mappings().one()
+
+        # Check for PREMIUM to PENETRATION transition
+        should_transition, new_strategy_id = TimeManager.check_premium_transition(conn, state)
+        
+        if should_transition:
+            logger.info("Premium to penetration transition triggered by meeting condition thresholds")
+        
+        # Process transition if needed
+        if should_transition and new_strategy_id:
             conn.execute(
                 sqlalchemy.text("""
                     INSERT INTO active_strategy (
@@ -164,10 +168,25 @@ class TimeManager:
                     )
                 """),
                 {
-                    "strategy_id": state['to_strategy_id'],
+                    "strategy_id": new_strategy_id,
                     "time_id": time_id
                 }
             )
+            
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO ledger_entries (
+                        time_id,
+                        entry_type
+                    ) VALUES (
+                        :time_id,
+                        'STRATEGY_CHANGE'
+                    )
+                """),
+                {"time_id": time_id}
+            )
+            
+            logger.info(f"Successfully transitioned to strategy_id: {new_strategy_id}")
             return True
             
         return False
