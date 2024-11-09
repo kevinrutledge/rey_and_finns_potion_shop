@@ -1189,7 +1189,8 @@ class CartManager:
             params["potion_sku"] = f"%{potion_sku}%"
         
         # Add sorting
-        base_query += f" ORDER BY {sort_mapping[sort_col]} {sort_order}"
+        sort_column = sort_mapping[sort_col.value]
+        base_query += f" ORDER BY {sort_column} {sort_order.value}"
         
         # Handle pagination
         if search_page:
@@ -1198,12 +1199,12 @@ class CartManager:
                 cursor_values = json.loads(decoded_cursor)
                 
                 # Add pagination condition based on sort order
-                if sort_order == "desc":
-                    base_query += f" AND {sort_mapping[sort_col]} < :cursor_value"
+                if sort_order.value == "desc":
+                    base_query += f" AND {sort_column} < :cursor_value"
                 else:
-                    base_query += f" AND {sort_mapping[sort_col]} > :cursor_value"
+                    base_query += f" AND {sort_column} > :cursor_value"
                 
-                params["cursor_value"] = cursor_values[sort_col]
+                params["cursor_value"] = cursor_values[sort_col.value]
                 
             except (ValueError, KeyError) as e:
                 logger.error(f"Invalid search page cursor: {str(e)}")
@@ -1215,6 +1216,11 @@ class CartManager:
         # Get one extra result to determine if there's a next page
         base_query += " LIMIT :limit"
         params["limit"] = 6
+        
+        logger.debug(
+            f"Executing search query - sort: {sort_column} {sort_order.value}, "
+            f"params: {params}"
+        )
         
         # Execute query
         results = conn.execute(
@@ -1234,7 +1240,7 @@ class CartManager:
         if search_page:
             # Create cursor for previous page
             previous_params = {
-                sort_col: results[0][sort_col] if results else None
+                sort_col.value: results[0][sort_col.value] if results else None
             }
             previous_cursor = base64.b64encode(
                 json.dumps(previous_params).encode('utf-8')
@@ -1243,7 +1249,7 @@ class CartManager:
         if has_next:
             # Create cursor for next page
             next_params = {
-                sort_col: results[-1][sort_col]
+                sort_col.value: results[-1][sort_col.value]
             }
             next_cursor = base64.b64encode(
                 json.dumps(next_params).encode('utf-8')
