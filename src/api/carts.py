@@ -265,11 +265,13 @@ def search_orders(
             ).mappings().all())
 
         # Handle previous page order
-        if search_page and cursor_data.get("direction") == "previous":
+        is_previous_page = search_page and cursor_data.get("direction") == "previous"
+        if is_previous_page:
             results = results[::-1]
 
-        # Check for next page
+        # Check for next page and trim results
         has_next = len(results) > 5
+        has_previous = bool(search_page)
         results = results[:5]
 
         # Format results
@@ -289,15 +291,12 @@ def search_orders(
         next_cursor = ""
 
         if formatted_results:
-            # Generate previous cursor only if not on the first page
-            if search_page:
+            if (is_previous_page and has_next) or (not is_previous_page and has_previous):
                 previous_cursor = base64.b64encode(json.dumps({
                     "cursor_value": formatted_results[0][sort_col.value],
                     "direction": "previous"
                 }).encode('utf-8')).decode('utf-8')
-            
-            # Generate next cursor if more results exist
-            if has_next:
+            if (is_previous_page and has_previous) or (not is_previous_page and has_next):
                 next_cursor = base64.b64encode(json.dumps({
                     "cursor_value": formatted_results[-1][sort_col.value],
                     "direction": "next"
