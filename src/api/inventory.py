@@ -24,7 +24,9 @@ def get_inventory():
     try:
         with db.engine.begin() as conn:
             state = InventoryManager.get_inventory_state(conn)
-            logger.debug(f"Retrieved inventory state - gold: {state['gold']}")
+            logger.debug(f"Retrieved inventory state - gold: {state['gold']}, "
+                         f"total ml: {state['total_ml']}, "
+                         f"total potions: {state['total_potions']}")
             
             return {
                 "number_of_potions": state['total_potions'],

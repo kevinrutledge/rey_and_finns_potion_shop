@@ -198,9 +198,14 @@ class CatalogManager:
                 SELECT 
                     p.sku,
                     p.name,
-                    p.current_quantity as quantity,
+                    COALESCE(p.current_quantity, 0) as quantity,
                     p.base_price as price,
-                    ARRAY[p.red_ml, p.green_ml, p.blue_ml, p.dark_ml] as potion_type
+                    ARRAY[
+                        COALESCE(p.red_ml, 0),
+                        COALESCE(p.green_ml, 0),
+                        COALESCE(p.blue_ml, 0),
+                        COALESCE(p.dark_ml, 0)
+                    ] as potion_type
                 FROM current_info ci
                 JOIN time_blocks tb 
                     ON ci.current_hour BETWEEN tb.start_hour AND tb.end_hour
@@ -212,7 +217,7 @@ class CatalogManager:
                     ON stb.block_id = bpp.block_id
                 JOIN potions p 
                     ON bpp.potion_id = p.potion_id
-                WHERE p.current_quantity > 0
+                WHERE COALESCE(p.current_quantity, 0) > 0
                 ORDER BY bpp.priority_order
                 LIMIT 6
                 """
@@ -353,35 +358,32 @@ class BarrelManager:
             f"capacity: {available_capacity}"
         )
         
-        # Get current inventory levels
+        # Get current inventory levels with proper NULL handling
         current_inventory = conn.execute(
             sqlalchemy.text("""
-                WITH current_inventory AS (
+                WITH color_inventory AS (
                     SELECT 
-                        p.sku,
-                        p.current_quantity,
-                        p.red_ml,
-                        p.green_ml,
-                        p.blue_ml,
-                        p.dark_ml
-                    FROM potions p
-                    JOIN block_potion_priorities bpp ON p.potion_id = bpp.potion_id
-                    WHERE bpp.block_id = :block_id
-                    AND p.current_quantity > 0
+                        cd.color_name,
+                        COALESCE(
+                            SUM(
+                                p.current_quantity * 
+                                CASE 
+                                    WHEN cd.color_name = 'RED' THEN p.red_ml
+                                    WHEN cd.color_name = 'GREEN' THEN p.green_ml
+                                    WHEN cd.color_name = 'BLUE' THEN p.blue_ml
+                                    WHEN cd.color_name = 'DARK' THEN p.dark_ml
+                                END
+                            ),
+                            0
+                        ) as current_ml
+                    FROM color_definitions cd
+                    LEFT JOIN block_potion_priorities bpp ON bpp.block_id = :block_id
+                    LEFT JOIN potions p ON p.potion_id = bpp.potion_id 
+                        AND p.current_quantity > 0
+                    GROUP BY cd.color_name
                 )
-                SELECT
-                    'RED' as color_name,
-                    SUM(current_quantity * red_ml) as current_ml
-                FROM current_inventory
-                UNION ALL
-                SELECT 'GREEN', SUM(current_quantity * green_ml)
-                FROM current_inventory
-                UNION ALL
-                SELECT 'BLUE', SUM(current_quantity * blue_ml)
-                FROM current_inventory
-                UNION ALL
-                SELECT 'DARK', SUM(current_quantity * dark_ml)
-                FROM current_inventory
+                SELECT color_name, current_ml
+                FROM color_inventory
             """),
             {"block_id": block_id}
         ).mappings().all()
@@ -731,17 +733,25 @@ class BottlerManager:
             if remaining_capacity <= 0:
                 break
                 
-            # Calculate resource limits
-            resource_max = min(
-                remaining_capacity,
-                BottlerManager.calculate_color_resource_limits(potion, remaining_ml)
-            )
+            # Calculate resource limits with NULL safety
+            resource_limits = []
+            for color, ml_amount in [
+                ("red_ml", remaining_ml.get("red_ml", 0)),
+                ("green_ml", remaining_ml.get("green_ml", 0)),
+                ("blue_ml", remaining_ml.get("blue_ml", 0)),
+                ("dark_ml", remaining_ml.get("dark_ml", 0))
+            ]:
+                if potion[color] > 0:
+                    resource_limits.append(ml_amount // potion[color])
+            
+            resource_max = min(resource_limits) if resource_limits else 0
             
             # Apply strategy limits
             final_max = min(
                 resource_max,
-                potion['max_potions_per_sku'] - potion['inventory'],
-                int(potion['sales_mix'] * available_capacity) - potion['inventory']
+                remaining_capacity,
+                potion['max_potions_per_sku'] - potion.get('inventory', 0),
+                int(potion['sales_mix'] * available_capacity) - potion.get('inventory', 0)
             )
             
             if final_max > 0:
@@ -758,7 +768,7 @@ class BottlerManager:
                 remaining_capacity -= final_max
                 for color in ["red_ml", "green_ml", "blue_ml", "dark_ml"]:
                     if potion[color] > 0:
-                        remaining_ml[color] -= final_max * potion[color]
+                        remaining_ml[color] = remaining_ml.get(color, 0) - (final_max * potion[color])
         
         return bottling_plan
 
@@ -1049,10 +1059,10 @@ class CartManager:
             sqlalchemy.text("""
                 SELECT 
                     ci.potion_id,
-                    ci.quantity,
-                    ci.unit_price,
-                    ci.line_total,
-                    p.current_quantity,
+                    COALESCE(ci.quantity, 0) as quantity,
+                    COALESCE(ci.unit_price, 0) as unit_price,
+                    COALESCE(ci.line_total, 0) as line_total,
+                    COALESCE(p.current_quantity, 0) as current_quantity,
                     p.sku
                 FROM cart_items ci
                 JOIN potions p ON ci.potion_id = p.potion_id
@@ -1240,75 +1250,119 @@ class InventoryManager:
         }
     
     @staticmethod
+    def check_strategy_transition(conn, current_units: dict) -> tuple[bool, int]:
+        """Check if capacity upgrade triggers strategy transition."""
+        result = conn.execute(
+            sqlalchemy.text("""
+                WITH current_strategy AS (
+                    SELECT strategy_id 
+                    FROM active_strategy 
+                    ORDER BY activated_at DESC 
+                    LIMIT 1
+                )
+                SELECT 
+                    st.from_strategy_id,
+                    st.to_strategy_id,
+                    s.name as current_strategy
+                FROM current_strategy cs
+                JOIN strategies s ON cs.strategy_id = s.strategy_id
+                LEFT JOIN strategy_transitions st ON cs.strategy_id = st.from_strategy_id
+                WHERE s.name != 'DYNAMIC'
+            """)
+        ).mappings().first()
+        
+        if not result:
+            return False, None
+            
+        # PENETRATION to TIERED
+        if (result['current_strategy'] == 'PENETRATION' and
+            current_units['ml_capacity_units'] >= 2 and
+            current_units['potion_capacity_units'] >= 2):
+            return True, result['to_strategy_id']
+            
+        # TIERED to DYNAMIC
+        if (result['current_strategy'] == 'TIERED' and
+            current_units['ml_capacity_units'] >= 4 and
+            current_units['potion_capacity_units'] >= 4):
+            return True, result['to_strategy_id']
+            
+        return False, None
+    
+    @staticmethod
     def process_capacity_upgrade(
         conn,
         potion_capacity: int,
         ml_capacity: int,
         time_id: int
     ) -> None:
-        """Process capacity upgrade with ledger entries."""
+        """Process capacity upgrade with ledger entries and strategy transition."""
         total_cost = (potion_capacity + ml_capacity) * 1000
         
-        current_gold = conn.execute(
-            sqlalchemy.text("""
-                SELECT COALESCE(SUM(gold_change), 0) as gold
-                FROM ledger_entries
-            """)
-        ).scalar_one()
+        current_state = InventoryManager.get_inventory_state(conn)
         
-        if current_gold < total_cost:
+        if current_state['gold'] < total_cost:
             logger.error(
                 f"Insufficient gold for capacity upgrade - "
-                f"required: {total_cost}, available: {current_gold}"
+                f"required: {total_cost}, available: {current_state['gold']}"
             )
             raise HTTPException(
                 status_code=400,
                 detail="Insufficient gold for capacity upgrade"
             )
         
-        if potion_capacity > 0:
-            conn.execute(
-                sqlalchemy.text("""
-                    INSERT INTO ledger_entries (
-                        time_id,
-                        entry_type,
-                        gold_change,
-                        potion_capacity_change
-                    ) VALUES (
-                        :time_id,
-                        'POTION_CAPACITY_UPGRADE',
-                        :gold_change,
-                        :potion_capacity
-                    )
-                """),
-                {
-                    "time_id": time_id,
-                    "gold_change": -(potion_capacity * 1000),
-                    "potion_capacity": potion_capacity
-                }
-            )
+        # Record capacity upgrade in ledger
+        conn.execute(
+            sqlalchemy.text("""
+                INSERT INTO ledger_entries (
+                    time_id,
+                    entry_type,
+                    gold_change,
+                    ml_capacity_change,
+                    potion_capacity_change
+                ) VALUES (
+                    :time_id,
+                    'ML_CAPACITY_UPGRADE',
+                    :gold_change,
+                    :ml_capacity,
+                    :potion_capacity
+                )
+            """),
+            {
+                "time_id": time_id,
+                "gold_change": -total_cost,
+                "ml_capacity": ml_capacity,
+                "potion_capacity": potion_capacity
+            }
+        )
         
-        if ml_capacity > 0:
+        # Check if upgrade triggers strategy transition
+        new_units = {
+            'ml_capacity_units': current_state['ml_capacity_units'] + ml_capacity,
+            'potion_capacity_units': current_state['potion_capacity_units'] + potion_capacity
+        }
+        
+        should_transition, new_strategy_id = InventoryManager.check_strategy_transition(
+            conn, 
+            new_units
+        )
+        
+        if should_transition:
             conn.execute(
                 sqlalchemy.text("""
-                    INSERT INTO ledger_entries (
-                        time_id,
-                        entry_type,
-                        gold_change,
-                        ml_capacity_change
+                    INSERT INTO active_strategy (
+                        strategy_id,
+                        game_time_id
                     ) VALUES (
-                        :time_id,
-                        'ML_CAPACITY_UPGRADE',
-                        :gold_change,
-                        :ml_capacity
+                        :strategy_id,
+                        :time_id
                     )
                 """),
                 {
-                    "time_id": time_id,
-                    "gold_change": -(ml_capacity * 1000),
-                    "ml_capacity": ml_capacity
+                    "strategy_id": new_strategy_id,
+                    "time_id": time_id
                 }
             )
+            logger.info(f"Upgraded to strategy_id: {new_strategy_id}")
             
         logger.info(
             f"Processed capacity upgrade - "
