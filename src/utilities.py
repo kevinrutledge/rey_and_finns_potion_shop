@@ -71,44 +71,7 @@ class TimeManager:
             return False
         
         return True
-    
-    @staticmethod
-    def check_premium_transition(conn, state: dict) -> tuple[bool, int]:
-        """Check if conditions are met for PREMIUM to PENETRATION transition."""
-        result = conn.execute(
-            sqlalchemy.text("""
-                WITH transition_check AS (
-                    SELECT 
-                        st.to_strategy_id,
-                        CASE 
-                            WHEN :gold >= st.gold_threshold THEN true
-                            WHEN :total_potions >= st.potion_threshold THEN true
-                            WHEN :total_ml >= st.ml_threshold THEN true
-                            ELSE false
-                        END as should_transition
-                    FROM active_strategy ast
-                    JOIN strategies s ON ast.strategy_id = s.strategy_id
-                    JOIN strategy_transitions st ON ast.strategy_id = st.from_strategy_id
-                    WHERE s.name = 'PREMIUM'
-                    ORDER BY ast.activated_at DESC
-                    LIMIT 1
-                )
-                SELECT to_strategy_id, should_transition
-                FROM transition_check
-                WHERE should_transition = true
-            """),
-            {
-                "gold": state['gold'],
-                "total_potions": state['total_potions'],
-                "total_ml": state['total_ml']
-            }
-        ).mappings().first()
 
-        if result:
-            return True, result['to_strategy_id']
-        return False, None
-
-    @staticmethod
     def record_time(conn, day: str, hour: int) -> bool:
         """
         Records current game time and processes strategy transitions.
@@ -144,51 +107,88 @@ class TimeManager:
             }
         )
 
-        # Get current state
-        state = conn.execute(
-            sqlalchemy.text("SELECT * FROM current_state")
+        # Get current strategy
+        current_strategy = conn.execute(
+            sqlalchemy.text("""
+                SELECT s.name as strategy_name, s.strategy_id
+                FROM active_strategy ast
+                JOIN strategies s ON ast.strategy_id = s.strategy_id
+                ORDER BY ast.activated_at DESC
+                LIMIT 1
+            """)
         ).mappings().one()
-
-        # Check for PREMIUM to PENETRATION transition
-        should_transition, new_strategy_id = TimeManager.check_premium_transition(conn, state)
         
-        if should_transition:
-            logger.info("Premium to penetration transition triggered by meeting condition thresholds")
-        
-        # Process transition if needed
-        if should_transition and new_strategy_id:
-            conn.execute(
+        # Only check for transition if still in PREMIUM
+        if current_strategy['strategy_name'] == 'PREMIUM':
+            state = conn.execute(
+                sqlalchemy.text("SELECT * FROM current_state")
+            ).mappings().one()
+            
+            # Check if any transition condition is met
+            should_transition = conn.execute(
                 sqlalchemy.text("""
-                    INSERT INTO active_strategy (
-                        strategy_id,
-                        game_time_id
-                    ) VALUES (
-                        :strategy_id,
-                        :time_id
+                    WITH transition_check AS (
+                        SELECT 
+                            st.to_strategy_id,
+                            CASE 
+                                WHEN :gold >= st.gold_threshold THEN true
+                                WHEN :total_potions >= st.potion_threshold THEN true
+                                WHEN :total_ml >= st.ml_threshold THEN true
+                                ELSE false
+                            END as should_transition
+                        FROM active_strategy ast
+                        JOIN strategies s ON ast.strategy_id = s.strategy_id
+                        JOIN strategy_transitions st ON ast.strategy_id = st.from_strategy_id
+                        WHERE s.name = 'PREMIUM'
+                        ORDER BY ast.activated_at DESC
+                        LIMIT 1
                     )
+                    SELECT to_strategy_id, should_transition
+                    FROM transition_check
+                    WHERE should_transition = true
                 """),
                 {
-                    "strategy_id": new_strategy_id,
-                    "time_id": time_id
+                    "gold": state['gold'],
+                    "total_potions": state['total_potions'],
+                    "total_ml": state['total_ml']
                 }
-            )
-            
-            conn.execute(
-                sqlalchemy.text("""
-                    INSERT INTO ledger_entries (
-                        time_id,
-                        entry_type
-                    ) VALUES (
-                        :time_id,
-                        'STRATEGY_CHANGE'
-                    )
-                """),
-                {"time_id": time_id}
-            )
-            
-            logger.info(f"Successfully transitioned to strategy_id: {new_strategy_id}")
-            return True
-            
+            ).mappings().first()
+
+            if should_transition:
+                new_strategy_id = should_transition['to_strategy_id']
+                
+                conn.execute(
+                    sqlalchemy.text("""
+                        INSERT INTO active_strategy (
+                            strategy_id,
+                            game_time_id
+                        ) VALUES (
+                            :strategy_id,
+                            :time_id
+                        )
+                    """),
+                    {
+                        "strategy_id": new_strategy_id,
+                        "time_id": time_id
+                    }
+                )
+                
+                conn.execute(
+                    sqlalchemy.text("""
+                        INSERT INTO ledger_entries (
+                            time_id,
+                            entry_type
+                        ) VALUES (
+                            :time_id,
+                            'STRATEGY_CHANGE'
+                        )
+                    """),
+                    {"time_id": time_id}
+                )
+                
+                logger.info(f"Successfully transitioned from PREMIUM to PENETRATION")
+                return True
+                
         return False
 
 class CatalogManager:
