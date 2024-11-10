@@ -371,129 +371,82 @@ class BarrelManager:
         available_capacity: int,
         block_id: int
     ) -> list:
-        """Plan purchases based on needs, current inventory, and buffer strategy."""
+        """Plan purchases considering current color levels and largest barrels first."""
         logger.debug(
-            f"Starting purchase planning - gold: {available_gold}, "
-            f"capacity: {available_capacity}"
+            f"Starting purchase planning - "
+            f"gold: {available_gold}, "
+            f"capacity: {available_capacity}, "
+            f"needs: {color_needs}"
         )
         
-        # Get current inventory levels with proper NULL handling
-        current_inventory = conn.execute(
-            sqlalchemy.text("""
-                WITH color_inventory AS (
-                    SELECT 
-                        cd.color_name,
-                        COALESCE(
-                            SUM(
-                                p.current_quantity * 
-                                CASE 
-                                    WHEN cd.color_name = 'RED' THEN p.red_ml
-                                    WHEN cd.color_name = 'GREEN' THEN p.green_ml
-                                    WHEN cd.color_name = 'BLUE' THEN p.blue_ml
-                                    WHEN cd.color_name = 'DARK' THEN p.dark_ml
-                                END
-                            ),
-                            0
-                        ) as current_ml
-                    FROM color_definitions cd
-                    LEFT JOIN block_potion_priorities bpp ON bpp.block_id = :block_id
-                    LEFT JOIN potions p ON p.potion_id = bpp.potion_id 
-                        AND p.current_quantity > 0
-                    GROUP BY cd.color_name
-                )
-                SELECT color_name, current_ml
-                FROM color_inventory
-            """),
-            {"block_id": block_id}
-        ).mappings().all()
-        
-        current_ml = {row['color_name']: row['current_ml'] for row in current_inventory}
-        logger.debug(f"Current inventory ml by color: {current_ml}")
-        
-        # Calculate actual ml needed after inventory
-        adjusted_needs = {}
-        for color, needed_ml in color_needs.items():
-            current_amount = current_ml.get(color, 0)
-            adjusted_ml = max(0, needed_ml - current_amount)
-            adjusted_needs[color] = adjusted_ml
-            logger.debug(
-                f"{color} - buffered need: {needed_ml}, "
-                f"current: {current_amount}, "
-                f"adjusted need: {adjusted_ml}"
-            )
-        
-        # Get strategy size preferences
-        strategy = conn.execute(sqlalchemy.text("""
-            SELECT s.name as strategy_name
-            FROM strategies s
-            JOIN active_strategy ast ON s.strategy_id = ast.strategy_id
-            ORDER BY ast.activated_at DESC
-            LIMIT 1
+        # Get current ml levels for each color
+        current_levels = conn.execute(sqlalchemy.text("""
+            SELECT 
+                red_ml,
+                green_ml,
+                blue_ml,
+                dark_ml
+            FROM current_state
         """)).mappings().one()
         
-        logger.debug(f"Current strategy: {strategy['strategy_name']}")
+        logger.debug(f"Current color levels - {dict(current_levels)}")
         
-        if strategy['strategy_name'] == 'PREMIUM':
-            size_preferences = ['SMALL']
-        elif strategy['strategy_name'] == 'PENETRATION':
-            size_preferences = ['MEDIUM', 'SMALL']
-        else:  # TIERED or DYNAMIC
-            size_preferences = ['LARGE', 'MEDIUM']
-            
-        purchases = []
+        # Filter out MINI barrels and sort by size
+        valid_barrels = [b for b in wholesale_catalog if not b['sku'].startswith('MINI')]
+        sorted_barrels = sorted(valid_barrels, key=lambda x: (-x['ml_per_barrel'], x['price']))
+        
         remaining_gold = available_gold
         remaining_capacity = available_capacity
-        catalog_dict = {b['sku']: b for b in wholesale_catalog}
+        purchases = []
         
-        # Prioritize by adjusted color needs
-        for color, needed_ml in sorted(
-            adjusted_needs.items(),
-            key=lambda x: x[1],
-            reverse=True
-        ):
+        for color, needed_ml in sorted(color_needs.items(), key=lambda x: x[1], reverse=True):
             if needed_ml <= 0:
                 continue
                 
-            logger.debug(f"Processing {color} adjusted need of {needed_ml}ml")
-                
-            # Try each preferred size
-            for size in size_preferences:
-                barrel_sku = f"{size}_{color}_BARREL"
-                barrel = catalog_dict.get(barrel_sku)
-                
-                if not barrel:
-                    continue
-                    
-                max_by_gold = remaining_gold // barrel['price']
-                max_by_capacity = remaining_capacity // barrel['ml_per_barrel']
-                max_by_need = (needed_ml + barrel['ml_per_barrel'] - 1) // barrel['ml_per_barrel']
-                max_by_availability = barrel['quantity']
-                
+            # Adjust need based on current level
+            current_ml = current_levels.get(color.lower() + '_ml', 0)
+            adjusted_need = max(0, needed_ml - current_ml)
+            
+            logger.debug(
+                f"Processing {color} - "
+                f"need: {needed_ml}ml, "
+                f"current: {current_ml}ml, "
+                f"adjusted need: {adjusted_need}ml"
+            )
+            
+            if adjusted_need <= 0:
+                continue
+            
+            # Find all barrels for this color, already sorted by size
+            color_barrels = [b for b in sorted_barrels if color in b['sku']]
+            
+            for barrel in color_barrels:
                 quantity = min(
-                    max_by_gold,
-                    max_by_capacity,
-                    max_by_need,
-                    max_by_availability
+                    remaining_gold // barrel['price'],
+                    remaining_capacity // barrel['ml_per_barrel'],
+                    adjusted_need // barrel['ml_per_barrel'],
+                    barrel['quantity']
                 )
                 
                 if quantity > 0:
                     logger.debug(
-                        f"Adding purchase - sku: {barrel_sku}, "
+                        f"Adding purchase - "
+                        f"sku: {barrel['sku']}, "
                         f"quantity: {quantity}, "
-                        f"ml: {quantity * barrel['ml_per_barrel']}"
+                        f"ml: {quantity * barrel['ml_per_barrel']}, "
+                        f"cost: {quantity * barrel['price']}"
                     )
                     
-                    purchases.append({
-                        "sku": barrel_sku,
-                        "quantity": quantity
-                    })
-                    
+                    purchases.append({"sku": barrel['sku'], "quantity": quantity})
                     remaining_gold -= quantity * barrel['price']
                     remaining_capacity -= quantity * barrel['ml_per_barrel']
-                    needed_ml -= quantity * barrel['ml_per_barrel']
-                
-                if needed_ml <= 0:
-                    break
+                    
+                    logger.debug(
+                        f"Updated state - "
+                        f"remaining gold: {remaining_gold}, "
+                        f"remaining capacity: {remaining_capacity}"
+                    )
+                    break  # Move to next color after finding largest affordable barrel
         
         if purchases:
             logger.info(
@@ -502,7 +455,7 @@ class BarrelManager:
                 f"remaining capacity: {remaining_capacity}"
             )
         else:
-            logger.debug("No purchases planned after inventory adjustment")
+            logger.debug("No purchases planned")
         
         return purchases
     
@@ -538,24 +491,6 @@ class BarrelManager:
                 status_code=400,
                 detail=f"Purchase would exceed ml capacity: {total_ml} > {available_capacity}"
             )
-
-        # Validate max potions per SKU
-        for purchase in purchases:
-            potential_potions = (purchase['ml_per_barrel'] * purchase['quantity']) / 100
-            if potential_potions > strategy['max_potions_per_sku']:
-                logger.error(
-                    f"Purchase exceeds max potions per SKU - "
-                    f"sku: {purchase['sku']}, "
-                    f"potential: {potential_potions}, "
-                    f"max: {strategy['max_potions_per_sku']}"
-                )
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"Purchase would exceed max potions per SKU: "
-                        f"{potential_potions} > {strategy['max_potions_per_sku']}"
-                    )
-                )
         
         logger.debug("Purchase constraints validated successfully")
     
