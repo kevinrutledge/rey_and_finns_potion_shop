@@ -33,66 +33,26 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
         with db.engine.begin() as conn:
             # Convert Pydantic models to dicts
             catalog_dicts = [barrel.dict() for barrel in wholesale_catalog]
-
-            # Log the start of planning with catalog
-            logger.debug(f"Started purchase planning for {len(wholesale_catalog)} barrels: {catalog_dicts}")
             
-            # Get current time and state
+            # Get current time
             current_time = TimeManager.get_current_time(conn)
             time_id = current_time['time_id']
-            state = conn.execute(sqlalchemy.text(
-                "SELECT * FROM current_state"
-            )).mappings().one()
             
-            # Log current state
-            logger.debug(
-                f"Current state - gold: {state['gold']}, "
-                f"available capacity: {state['max_ml'] - state['total_ml']}"
-            )
-            
-            # Convert Pydantic models to dicts
-            catalog_dicts = [barrel.dict() for barrel in wholesale_catalog]
-            
-            # Record catalog
+            # Record catalog first
             visit_id = BarrelManager.record_catalog(
                 conn, 
                 catalog_dicts,
                 time_id
             )
             
-            # Get barrel time block
-            block = conn.execute(sqlalchemy.text("""
-                SELECT tb.block_id, tb.name as block_name
-                FROM game_time gt
-                JOIN time_blocks tb 
-                    ON gt.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
-                WHERE gt.time_id = (
-                    SELECT barrel_time_id
-                    FROM game_time
-                    WHERE time_id = :time_id
-                )
-            """), {"time_id": time_id}).mappings().one()
+            logger.debug(f"Recorded wholesale catalog with visit_id: {visit_id}")
             
-            # Calculate needs with buffers
-            color_needs = BarrelManager.get_color_needs(conn, block)
-            logger.debug(f"Calculated color needs: {color_needs}")
-            
-            # Plan and validate purchases
+            # Plan purchases
             purchases = BarrelManager.plan_barrel_purchases(
                 conn,
                 catalog_dicts,
-                color_needs,
-                state['gold'],
-                state['max_ml'] - state['total_ml'],
-                block['block_id']
+                time_id
             )
-            
-            if purchases:
-                logger.info(
-                    f"Planned purchases - skus: "
-                    f"{[BarrelPurchase(sku=p['sku'], quantity=p['quantity']) for p in purchases]}")
-            else:
-                logger.debug("No barrel purchases needed")
             
             return [
                 BarrelPurchase(sku=p['sku'], quantity=p['quantity']) 
@@ -101,7 +61,10 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
             
     except Exception as e:
         logger.error(f"Purchase planning failed: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to plan purchases")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to plan purchases"
+        )
 
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):

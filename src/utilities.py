@@ -303,9 +303,86 @@ class BarrelManager:
         return visit_id
     
     @staticmethod
-    def get_color_needs(conn, time_block: dict) -> dict:
-        """Calculate color needs based on strategy and time block."""
-        # First get base needs from block priorities
+    def get_future_block_priorities(conn, time_id: int) -> dict:
+        """Get time block and priorities for when barrels will arrive."""
+        logger.debug("Getting future block priorities for barrel arrival")
+        
+        future_block = conn.execute(sqlalchemy.text("""
+            WITH future_info AS (
+                SELECT 
+                    gt.in_game_day,
+                    gt.in_game_hour,
+                    ast.strategy_id
+                FROM game_time gt
+                CROSS JOIN (
+                    SELECT strategy_id 
+                    FROM active_strategy
+                    ORDER BY activated_at DESC
+                    LIMIT 1
+                ) ast
+                WHERE gt.time_id = (
+                    SELECT barrel_time_id
+                    FROM game_time
+                    WHERE time_id = :time_id
+                )
+            ),
+            time_block_info AS (
+                SELECT 
+                    tb.block_id,
+                    tb.name as block_name,
+                    fi.in_game_day,
+                    fi.strategy_id
+                FROM future_info fi
+                JOIN time_blocks tb 
+                    ON fi.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
+            )
+            SELECT 
+                tbi.block_id,
+                tbi.block_name,
+                tbi.in_game_day,
+                stb.buffer_multiplier,
+                stb.dark_buffer_multiplier
+            FROM time_block_info tbi
+            JOIN strategy_time_blocks stb 
+                ON tbi.block_id = stb.time_block_id
+                AND tbi.strategy_id = stb.strategy_id
+                AND tbi.in_game_day = stb.day_name;
+        """), {"time_id": time_id}).mappings().one()
+        
+        logger.debug(
+            f"Got future block info - "
+            f"day: {future_block['in_game_day']}, "
+            f"block: {future_block['block_name']}, "
+            f"buffer: {future_block['buffer_multiplier']}, "
+            f"dark_buffer: {future_block['dark_buffer_multiplier']}"
+        )
+        
+        return future_block
+
+    @staticmethod
+    def get_color_needs(conn, block: dict) -> dict:
+        """Calculate color needs based on future block priorities and current inventory."""
+        logger.debug(f"Calculating color needs for block {block['block_id']}")
+        
+        # Get current ml levels
+        current_levels = conn.execute(sqlalchemy.text("""
+            SELECT 
+                red_ml,
+                green_ml,
+                blue_ml,
+                dark_ml
+            FROM current_state
+        """)).mappings().one()
+        
+        logger.debug(
+            f"Current levels - "
+            f"red: {current_levels['red_ml']}, "
+            f"green: {current_levels['green_ml']}, "
+            f"blue: {current_levels['blue_ml']}, "
+            f"dark: {current_levels['dark_ml']}"
+        )
+        
+        # Get base needs
         base_needs = conn.execute(
             sqlalchemy.text("""
                 WITH current_cap AS (
@@ -327,7 +404,7 @@ class BarrelManager:
                     FROM block_potion_priorities bpp
                     JOIN potions p ON bpp.potion_id = p.potion_id
                     CROSS JOIN color_definitions cd
-                    WHERE bpp.block_id = 1
+                    WHERE bpp.block_id = :block_id
                     GROUP BY cd.color_name
                 )
                 SELECT 
@@ -335,96 +412,133 @@ class BarrelManager:
                     ml_needed
                 FROM block_needs
                 WHERE ml_needed > 0
-                ORDER BY ml_needed DESC;
+                ORDER BY ml_needed DESC
             """),
-            {"block_id": time_block['block_id']}
+            {"block_id": block['block_id']}
         ).mappings().all()
 
-        # Then get strategy multipliers
-        multipliers = conn.execute(
-            sqlalchemy.text("""
-                SELECT
-                    buffer_multiplier,
-                    dark_buffer_multiplier
-                FROM strategy_time_blocks
-                WHERE block_id = :block_id
-            """),
-            {"block_id": time_block['block_id']}
-        ).mappings().one()
-
-        # Apply multipliers to needs
+        # Apply multipliers and adjust for current inventory
         color_needs = {}
         for need in base_needs:
-            multiplier = (multipliers['dark_buffer_multiplier'] 
+            multiplier = (block['dark_buffer_multiplier'] 
                         if need['color_name'] == 'DARK'
-                        else multipliers['buffer_multiplier'])
-            color_needs[need['color_name']] = need['ml_needed'] * multiplier
-
+                        else block['buffer_multiplier'])
+            total_need = need['ml_needed'] * multiplier
+            
+            # Adjust for current inventory
+            current_amount = current_levels[f"{need['color_name'].lower()}_ml"]
+            adjusted_need = max(0, total_need - current_amount)
+            
+            if adjusted_need > 0:
+                color_needs[need['color_name']] = adjusted_need
+                
+            logger.debug(
+                f"{need['color_name']} - "
+                f"base need: {need['ml_needed']}, "
+                f"with buffer: {total_need}, "
+                f"current: {current_amount}, "
+                f"adjusted need: {adjusted_need}"
+            )
+        
+        logger.debug(
+            f"Final color needs after adjustment - "
+            f"total colors: {len(color_needs)}, "
+            f"needs: {color_needs}"
+        )
+        
         return color_needs
+
 
     @staticmethod
     def plan_barrel_purchases(
         conn,
         wholesale_catalog: list,
-        color_needs: dict,
-        available_gold: int,
-        available_capacity: int,
-        block_id: int
+        time_id: int
     ) -> list:
-        """Plan purchases considering current color levels and largest barrels first."""
-        logger.debug(
-            f"Starting purchase planning - "
-            f"gold: {available_gold}, "
-            f"capacity: {available_capacity}, "
-            f"needs: {color_needs}"
+        """Plan purchases based on future needs and available resources."""
+        logger.debug(f"Starting barrel purchase planning")
+        
+        # Get current state
+        state = conn.execute(sqlalchemy.text(
+            "SELECT * FROM current_state"
+        )).mappings().one()
+        
+        # Get future block info and priorities
+        future_block = BarrelManager.get_future_block_priorities(conn, time_id)
+        color_needs = BarrelManager.get_color_needs(conn, future_block)
+        
+        # Plan purchases considering constraints
+        purchases = BarrelManager.calculate_purchase_quantities(
+            wholesale_catalog,
+            color_needs,
+            state['gold'],
+            state['max_ml'] - state['total_ml']
         )
         
-        # Get current ml levels for each color
-        current_levels = conn.execute(sqlalchemy.text("""
-            SELECT 
-                red_ml,
-                green_ml,
-                blue_ml,
-                dark_ml
-            FROM current_state
-        """)).mappings().one()
-        
-        logger.debug(f"Current color levels - {dict(current_levels)}")
+        if purchases:
+            logger.info(
+                f"Planned purchases - "
+                f"total SKUs: {len(purchases)}, "
+                f"total quantity: {sum(p['quantity'] for p in purchases)}"
+            )
+        else:
+            logger.debug("No barrel purchases needed")
+            
+        return purchases
+
+    @staticmethod
+    def calculate_purchase_quantities(
+        catalog: list,
+        color_needs: dict,
+        available_gold: int,
+        available_capacity: int
+    ) -> list:
+        """Calculate purchases prioritizing largest barrels first."""
+        logger.debug(
+            f"Calculating purchases - "
+            f"gold: {available_gold}, "
+            f"capacity: {available_capacity}"
+        )
         
         # Filter out MINI barrels and sort by size
-        valid_barrels = [b for b in wholesale_catalog if not b['sku'].startswith('MINI')]
-        sorted_barrels = sorted(valid_barrels, key=lambda x: (-x['ml_per_barrel'], x['price']))
+        valid_barrels = [b for b in catalog if not b['sku'].startswith('MINI')]
+        sorted_barrels = sorted(
+            valid_barrels, 
+            key=lambda x: (x['ml_per_barrel'], -x['price']),  # Sort by size, then cheaper first
+            reverse=True  # Largest first
+        )
         
         remaining_gold = available_gold
         remaining_capacity = available_capacity
         purchases = []
         
-        for color, needed_ml in sorted(color_needs.items(), key=lambda x: x[1], reverse=True):
+        # Process colors by need amount
+        for color, needed_ml in sorted(
+            color_needs.items(), 
+            key=lambda x: x[1], 
+            reverse=True
+        ):
             if needed_ml <= 0:
                 continue
                 
-            # Adjust need based on current level
-            current_ml = current_levels.get(color.lower() + '_ml', 0)
-            adjusted_need = max(0, needed_ml - current_ml)
-            
             logger.debug(
                 f"Processing {color} - "
                 f"need: {needed_ml}ml, "
-                f"current: {current_ml}ml, "
-                f"adjusted need: {adjusted_need}ml"
+                f"remaining capacity: {remaining_capacity}, "
+                f"remaining gold: {remaining_gold}"
             )
-            
-            if adjusted_need <= 0:
-                continue
             
             # Find all barrels for this color, already sorted by size
             color_barrels = [b for b in sorted_barrels if color in b['sku']]
             
             for barrel in color_barrels:
+                if remaining_gold < barrel['price'] or remaining_capacity < barrel['ml_per_barrel']:
+                    continue
+                    
                 quantity = min(
                     remaining_gold // barrel['price'],
                     remaining_capacity // barrel['ml_per_barrel'],
-                    adjusted_need // barrel['ml_per_barrel'],
+                    needed_ml // barrel['ml_per_barrel'],
                     barrel['quantity']
                 )
                 
@@ -433,30 +547,27 @@ class BarrelManager:
                         f"Adding purchase - "
                         f"sku: {barrel['sku']}, "
                         f"quantity: {quantity}, "
-                        f"ml: {quantity * barrel['ml_per_barrel']}, "
-                        f"cost: {quantity * barrel['price']}"
+                        f"ml: {quantity * barrel['ml_per_barrel']}"
                     )
                     
-                    purchases.append({"sku": barrel['sku'], "quantity": quantity})
+                    purchases.append({
+                        "sku": barrel['sku'],
+                        "quantity": quantity
+                    })
+                    
                     remaining_gold -= quantity * barrel['price']
                     remaining_capacity -= quantity * barrel['ml_per_barrel']
-                    
-                    logger.debug(
-                        f"Updated state - "
-                        f"remaining gold: {remaining_gold}, "
-                        f"remaining capacity: {remaining_capacity}"
-                    )
-                    break  # Move to next color after finding largest affordable barrel
+                    needed_ml -= quantity * barrel['ml_per_barrel']
         
         if purchases:
             logger.info(
-                f"Planned {len(purchases)} purchases - "
-                f"remaining gold: {remaining_gold}, "
-                f"remaining capacity: {remaining_capacity}"
+                f"Planned purchases - "
+                f"total SKUs: {len(purchases)}, "
+                f"total quantity: {sum(p['quantity'] for p in purchases)}"
             )
         else:
-            logger.debug("No purchases planned")
-        
+            logger.debug("No barrel purchases needed")
+            
         return purchases
     
     @staticmethod
@@ -592,8 +703,13 @@ class BottlerManager:
     
     @staticmethod
     def get_bottling_priorities(conn) -> list:
-        """Gets prioritized potions for bottling based on strategy."""
-        result = conn.execute(
+        """Gets prioritized potions for bottling based on future time block."""
+        # Get current time
+        current_time = TimeManager.get_current_time(conn)
+        
+        logger.debug(f"Getting bottling priorities for future time block")
+        
+        priorities = conn.execute(
             sqlalchemy.text("""
                 WITH future_info AS (
                     SELECT 
@@ -610,13 +726,11 @@ class BottlerManager:
                     WHERE gt.time_id = (
                         SELECT bottling_time_id
                         FROM game_time
-                        ORDER BY created_at DESC
-                        LIMIT 1
+                        WHERE time_id = :time_id
                     )
                 ),
                 time_block_info AS (
                     SELECT 
-                        tb.name as block_name,
                         tb.block_id
                     FROM future_info fi
                     JOIN time_blocks tb 
@@ -633,7 +747,7 @@ class BottlerManager:
                     bpp.sales_mix,
                     s.max_potions_per_sku,
                     fi.in_game_day,
-                    tbi.block_name
+                    tbi.block_id
                 FROM future_info fi
                 CROSS JOIN time_block_info tbi
                 JOIN strategy_time_blocks stb 
@@ -647,38 +761,29 @@ class BottlerManager:
                 JOIN strategies s 
                     ON fi.strategy_id = s.strategy_id
                 ORDER BY bpp.priority_order
-            """
-            )
+            """),
+            {"time_id": current_time['time_id']}
         ).mappings().all()
         
-        logger.debug(
-            f"Getting priorities for time block - "
-            f"day: {result[0]['in_game_day']}, "
-            f"block: {result[0]['block_name']}"
-        )
+        if priorities:
+            logger.debug(
+                f"Got priorities for future block - "
+                f"day: {priorities[0]['in_game_day']}, "
+                f"block: {priorities[0]['block_id']}, "
+                f"count: {len(priorities)}"
+            )
+        else:
+            logger.error("No bottling priorities found for future time block")
         
-        return list(result)
+        return priorities
     
-    @staticmethod
-    def calculate_color_resource_limits(
-        potion: Dict,
-        available_ml: Dict[str, int]
-    ) -> int:
-        """Calculate maximum potions possible based on available color resources."""
-        limits = []
-        for color in ["red_ml", "green_ml", "blue_ml", "dark_ml"]:
-            if potion[color] > 0:
-                limits.append(available_ml[color] // potion[color])
-        return min(limits) if limits else 0
-
-
     @staticmethod
     def calculate_possible_potions(
         priorities: List[Dict],
         available_ml: Dict[str, int],
         available_capacity: int
     ) -> List[Dict]:
-        """Calculates maximum potions that can be made with available resources."""
+        """Calculates maximum potions based on priorities and available resources."""
         bottling_plan = []
         remaining_ml = available_ml.copy()
         remaining_capacity = available_capacity
@@ -687,7 +792,7 @@ class BottlerManager:
             if remaining_capacity <= 0:
                 break
                 
-            # Calculate resource limits with NULL safety
+            # Calculate resource limits
             resource_limits = []
             for color, ml_amount in [
                 ("red_ml", remaining_ml.get("red_ml", 0)),
@@ -700,7 +805,7 @@ class BottlerManager:
             
             resource_max = min(resource_limits) if resource_limits else 0
             
-            # Apply strategy limits
+            # Apply strategy and priority limits
             final_max = min(
                 resource_max,
                 remaining_capacity,
@@ -719,11 +824,28 @@ class BottlerManager:
                     "quantity": final_max
                 })
                 
+                # Update remaining resources
                 remaining_capacity -= final_max
                 for color in ["red_ml", "green_ml", "blue_ml", "dark_ml"]:
                     if potion[color] > 0:
                         remaining_ml[color] = remaining_ml.get(color, 0) - (final_max * potion[color])
+                        
+                logger.debug(
+                    f"Added potion to plan - "
+                    f"priority: {potion['priority_order']}, "
+                    f"quantity: {final_max}, "
+                    f"remaining capacity: {remaining_capacity}"
+                )
         
+        if bottling_plan:
+            logger.info(
+                f"Generated bottling plan - "
+                f"total potions: {sum(b['quantity'] for b in bottling_plan)}, "
+                f"potion types: {len(bottling_plan)}"
+            )
+        else:
+            logger.debug("No potions can be bottled with current resources")
+            
         return bottling_plan
 
     @staticmethod

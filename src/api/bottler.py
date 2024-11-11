@@ -21,37 +21,28 @@ class PotionInventory(BaseModel):
 
 @router.post("/plan")
 def get_bottle_plan():
-    """Plan potion bottling based on current resources."""
+    """Plan potion bottling based on future resources and priorities."""
     try:
         with db.engine.begin() as conn:
+            # Get current state
             state = conn.execute(sqlalchemy.text(
                 "SELECT * FROM current_state"
             )).mappings().one()
             
-            logger.debug(
-                f"Current state - potions: {state['total_potions']}/{state['max_potions']}, "
-                f"ml: r{state['red_ml']} g{state['green_ml']} "
-                f"b{state['blue_ml']} d{state['dark_ml']}"
-            )
-            
-            # Get priorities and calculate possible potions
+            # Get priorities and calculate plan
             priorities = BottlerManager.get_bottling_priorities(conn)
-            
-            available_ml = {
-                'red_ml': state['red_ml'],
-                'green_ml': state['green_ml'],
-                'blue_ml': state['blue_ml'],
-                'dark_ml': state['dark_ml']
-            }
-            available_capacity = state['max_potions'] - state['total_potions']
             
             bottling_plan = BottlerManager.calculate_possible_potions(
                 priorities,
-                available_ml,
-                available_capacity
+                {
+                    'red_ml': state['red_ml'],
+                    'green_ml': state['green_ml'],
+                    'blue_ml': state['blue_ml'],
+                    'dark_ml': state['dark_ml']
+                },
+                state['max_potions'] - state['total_potions']
             )
             
-            logger.debug(f"Generated bottling plan for {len(bottling_plan)} potion types")
             return [
                 PotionInventory(
                     potion_type=b['potion_type'],
