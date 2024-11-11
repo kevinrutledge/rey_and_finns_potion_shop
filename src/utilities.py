@@ -341,23 +341,48 @@ class BarrelManager:
                 tbi.block_name,
                 tbi.in_game_day,
                 stb.buffer_multiplier,
-                stb.dark_buffer_multiplier
+                stb.dark_buffer_multiplier,
+                s.name as strategy_name
             FROM time_block_info tbi
             JOIN strategy_time_blocks stb 
                 ON tbi.block_id = stb.time_block_id
                 AND tbi.strategy_id = stb.strategy_id
-                AND tbi.in_game_day = stb.day_name;
+                AND tbi.in_game_day = stb.day_name
+            JOIN strategies s ON s.strategy_id = stb.strategy_id;
         """), {"time_id": time_id}).mappings().one()
         
         logger.debug(
             f"Got future block info - "
             f"day: {future_block['in_game_day']}, "
             f"block: {future_block['block_name']}, "
+            f"strategy: {future_block['strategy_name']}, "
             f"buffer: {future_block['buffer_multiplier']}, "
             f"dark_buffer: {future_block['dark_buffer_multiplier']}"
         )
         
         return future_block
+    
+    @staticmethod
+    def filter_barrels_by_strategy(barrels: list, strategy: str) -> list:
+        """Filter and sort barrels based on strategy restrictions."""
+        logger.debug(f"Filtering barrels for strategy: {strategy}")
+        
+        # Filter out MINI barrels first
+        valid_barrels = [b for b in barrels if not b['sku'].startswith('MINI')]
+        
+        if strategy == 'PREMIUM':
+            filtered = [b for b in valid_barrels if 'SMALL' in b['sku']]
+        elif strategy == 'PENETRATION':
+            medium = [b for b in valid_barrels if 'MEDIUM' in b['sku']]
+            small = [b for b in valid_barrels if 'SMALL' in b['sku']]
+            filtered = medium + small
+        else:  # TIERED or DYNAMIC
+            large = [b for b in valid_barrels if 'LARGE' in b['sku']]
+            medium = [b for b in valid_barrels if 'MEDIUM' in b['sku']]
+            filtered = large + medium
+            
+        logger.debug(f"Filtered to {len(filtered)} barrels based on strategy")
+        return filtered
 
     @staticmethod
     def get_color_needs(conn, block: dict) -> dict:
@@ -455,7 +480,7 @@ class BarrelManager:
         wholesale_catalog: list,
         time_id: int
     ) -> list:
-        """Plan purchases based on future needs and available resources."""
+        """Plan purchases based on future needs and strategy."""
         logger.debug(f"Starting barrel purchase planning")
         
         # Get current state
@@ -472,7 +497,8 @@ class BarrelManager:
             wholesale_catalog,
             color_needs,
             state['gold'],
-            state['max_ml'] - state['total_ml']
+            state['max_ml'] - state['total_ml'],
+            future_block['strategy_name']
         )
         
         if purchases:
@@ -491,22 +517,19 @@ class BarrelManager:
         catalog: list,
         color_needs: dict,
         available_gold: int,
-        available_capacity: int
+        available_capacity: int,
+        strategy: str
     ) -> list:
-        """Calculate purchases prioritizing largest barrels first."""
+        """Calculate purchases considering strategy and forward-looking needs."""
         logger.debug(
             f"Calculating purchases - "
             f"gold: {available_gold}, "
-            f"capacity: {available_capacity}"
+            f"capacity: {available_capacity}, "
+            f"strategy: {strategy}"
         )
         
-        # Filter out MINI barrels and sort by size
-        valid_barrels = [b for b in catalog if not b['sku'].startswith('MINI')]
-        sorted_barrels = sorted(
-            valid_barrels, 
-            key=lambda x: (x['ml_per_barrel'], -x['price']),  # Sort by size, then cheaper first
-            reverse=True  # Largest first
-        )
+        # Filter barrels based on strategy
+        filtered_barrels = BarrelManager.filter_barrels_by_strategy(catalog, strategy)
         
         remaining_gold = available_gold
         remaining_capacity = available_capacity
@@ -528,19 +551,27 @@ class BarrelManager:
                 f"remaining gold: {remaining_gold}"
             )
             
-            # Find all barrels for this color, already sorted by size
-            color_barrels = [b for b in sorted_barrels if color in b['sku']]
-            
+            # Get barrels for this color
+            color_barrels = [b for b in filtered_barrels if color in b['sku']]
+            if not color_barrels:
+                continue
+                
+            # Try each barrel size
             for barrel in color_barrels:
-                if remaining_gold < barrel['price'] or remaining_capacity < barrel['ml_per_barrel']:
+                # Always try to buy at least one of larger size if we can afford it
+                quantity = 1
+                
+                # If we can afford more and need more, calculate full quantity
+                if (barrel['price'] <= remaining_gold and 
+                    barrel['ml_per_barrel'] <= remaining_capacity):
+                    quantity = min(
+                        remaining_gold // barrel['price'],
+                        remaining_capacity // barrel['ml_per_barrel'],
+                        max(1, needed_ml // barrel['ml_per_barrel']),  # At least 1
+                        barrel['quantity']
+                    )
+                else:
                     continue
-                    
-                quantity = min(
-                    remaining_gold // barrel['price'],
-                    remaining_capacity // barrel['ml_per_barrel'],
-                    needed_ml // barrel['ml_per_barrel'],
-                    barrel['quantity']
-                )
                 
                 if quantity > 0:
                     logger.debug(
@@ -558,6 +589,7 @@ class BarrelManager:
                     remaining_gold -= quantity * barrel['price']
                     remaining_capacity -= quantity * barrel['ml_per_barrel']
                     needed_ml -= quantity * barrel['ml_per_barrel']
+                    break  # Move to next color after finding suitable barrel
         
         if purchases:
             logger.info(
@@ -841,7 +873,7 @@ class BottlerManager:
             logger.info(
                 f"Generated bottling plan - "
                 f"total potions: {sum(b['quantity'] for b in bottling_plan)}, "
-                f"potion types: {len(bottling_plan)}"
+                f"potion types: {bottling_plan}"
             )
         else:
             logger.debug("No potions can be bottled with current resources")
