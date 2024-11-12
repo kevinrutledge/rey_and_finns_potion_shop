@@ -7,7 +7,8 @@ from src.api import auth
 from src import database as db
 from src.utilities import BarrelManager, TimeManager
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('test_barrels.barrels')
+#logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/barrels",
@@ -33,6 +34,9 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
         with db.engine.begin() as conn:
             # Convert Pydantic models to dicts
             catalog_dicts = [barrel.dict() for barrel in wholesale_catalog]
+
+            # Log wholesale catalog
+            logger.debug(f"Wholesale catalog: {catalog_dicts}")
             
             # Get current time
             current_time = TimeManager.get_current_time(conn)
