@@ -4,8 +4,8 @@ import logging
 from fastapi import HTTPException
 from typing import Dict, List
 
-logger = logging.getLogger('test_barrels.utils')
-#logger = logging.getLogger(__name__)
+#logger = logging.getLogger('test_barrels.utils')
+logger = logging.getLogger(__name__)
 
 class LedgerManager:
     """Handles ledger operations."""

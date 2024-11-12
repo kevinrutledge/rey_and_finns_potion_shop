@@ -3,7 +3,7 @@ import dotenv
 from sqlalchemy import create_engine
 
 def create_engine_with_config(testing: bool = False):
-    """Create database engine with appropriate configuration"""
+    """Create database engine with postgres and test config"""
     if testing:
         return create_engine(
             "sqlite:///:memory:",
