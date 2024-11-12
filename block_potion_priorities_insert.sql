@@ -27,7 +27,7 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
@@ -37,11 +37,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
@@ -51,7 +51,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
  -- HEARTHDAY MORNING
 -- Premium
@@ -74,31 +74,31 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- HEARTHDAY AFTERNOON
 -- Premium
@@ -121,31 +121,31 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- HEARTHDAY EVENING
 -- Premium
@@ -168,31 +168,31 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- CROWNDAY NIGHT
 -- Premium
@@ -211,7 +211,7 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
@@ -221,11 +221,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
@@ -235,7 +235,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- CROWNDAY MORNING
 -- Premium
@@ -268,7 +268,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Crownday'),
@@ -282,7 +282,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- CROWNDAY AFTERNOON
 -- Premium
@@ -315,7 +315,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Crownday'),
@@ -329,7 +329,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- CROWNDAY EVENING
 -- Premium
@@ -362,7 +362,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Crownday'),
@@ -376,7 +376,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- BLESSEDAY NIGHT
 -- Premium
@@ -397,7 +397,7 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
@@ -407,11 +407,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
@@ -421,7 +421,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- BLESSEDAY MORNING
 -- Premium
@@ -452,13 +452,13 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.10, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.10, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
@@ -468,7 +468,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 -- BLESSEDAY AFTERNOON
 -- Premium
@@ -499,13 +499,13 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.10, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.10, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
@@ -515,7 +515,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
 
 
 -- BLESSEDAY EVENING
@@ -541,7 +541,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.20, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
@@ -555,7 +555,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.20, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Blesseday'),
@@ -585,7 +585,7 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.30, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Soulday'),
@@ -599,7 +599,7 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.30, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Soulday'),
@@ -640,7 +640,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.10, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.10, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
@@ -654,7 +654,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.10, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.10, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
@@ -687,7 +687,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.10, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.10, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
@@ -701,7 +701,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_TEAL'), 0.10, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.10, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
@@ -729,7 +729,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.20, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Soulday'),
@@ -743,7 +743,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.35, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Soulday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.20, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Soulday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Soulday'),
@@ -764,11 +764,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
@@ -780,7 +780,7 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
@@ -801,11 +801,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
@@ -817,7 +817,7 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
@@ -838,11 +838,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
@@ -854,7 +854,7 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
@@ -875,11 +875,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
@@ -891,7 +891,7 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.30, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
  (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
@@ -914,11 +914,11 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.10, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.10, 4),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 4),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.40, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.40, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
@@ -926,13 +926,13 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.05, 5),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.40, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.40, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
@@ -940,7 +940,7 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.10, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.05, 5),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
@@ -953,19 +953,19 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.60, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.20, 2),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.20, 3),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.25, 2),
+(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 3),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
@@ -973,13 +973,13 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.25, 2),
+(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 3),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Bloomday'),
@@ -994,37 +994,37 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.60, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.20, 2),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.20, 3),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.25, 2),
+(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 3),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 4),
+(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+(SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.25, 2),
+(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 3),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 4),
+(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.25, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
+(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+(SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- BLOOMDAY EVENING
 -- Premium
@@ -1035,35 +1035,35 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.60, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.20, 2),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.20, 3),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.20, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.20, 2),
+(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.20, 3),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.20, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.20, 4),
+(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.20, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 5),
+(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.20, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.20, 1),
+(SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'STEEL_BLUE'), 0.20, 2),
+(SELECT potion_id FROM potions WHERE sku = 'RED'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.20, 3),
+(SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.20, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.20, 4),
+(SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.20, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
-(SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 5),
+(SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.20, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Bloomday'),
 (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
 
@@ -1082,13 +1082,13 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
@@ -1096,13 +1096,13 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Arcanaday'),
@@ -1123,13 +1123,13 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
@@ -1137,13 +1137,13 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
  (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'MORNING' AND day_name = 'Arcanaday'),
@@ -1164,31 +1164,31 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.05, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 5),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 6),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.05, 6),
 
 -- ARCANADAY EVENING
 -- Premium
@@ -1205,13 +1205,13 @@ VALUES
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
@@ -1219,13 +1219,13 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.15, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.35, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.25, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
  (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'EVENING' AND day_name = 'Arcanaday'),
