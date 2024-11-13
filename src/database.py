@@ -8,7 +8,7 @@ def create_engine_with_config(testing: bool = False):
         return create_engine(
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
-            isolation_level="READ COMITTED",
+            isolation_level="SERIALIZABLE",
             pool_pre_ping=True
         )
     else:
@@ -16,7 +16,7 @@ def create_engine_with_config(testing: bool = False):
         postgres_url = os.environ.get("POSTGRES_URI")
         return create_engine(
             postgres_url,
-            isolation_level="READ COMITTED",
+            isolation_level="SERIALIZABLE",
             pool_pre_ping=True
         )
 
