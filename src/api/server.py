@@ -2,31 +2,26 @@ from fastapi import FastAPI, exceptions
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from src.api import carts, catalog, bottler, barrels, admin, info, inventory
+from src.logging_config import logging_manager
 import json
 import logging
 import sys
 from starlette.middleware.cors import CORSMiddleware
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+logging_manager.setup_production_logging()
 
 description = """
-Central Coast Cauldrons is the premier ecommerce site for all your alchemical desires.
+Rey and Finn's Potion Shop is the premier ecommerce site for all your alchemical desires.
 """
 
 app = FastAPI(
-    title="Central Coast Cauldrons",
+    title="Rey and Finn's Potion Shop",
     description=description,
     version="0.0.1",
     terms_of_service="http://example.com/terms/",
     contact={
-        "name": "Lucas Pierce",
-        "email": "lupierce@calpoly.edu",
+        "name": "Kevin Rutledge",
+        "email": "krutledg@calpoly.edu",
     },
 )
 
@@ -61,4 +56,4 @@ async def validation_exception_handler(request, exc):
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the Central Coast Cauldrons."}
+    return {"message": "Welcome to Rey and Finn's Potion Shop."}

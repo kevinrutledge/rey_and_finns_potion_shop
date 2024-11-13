@@ -20,7 +20,8 @@ class CatalogItem(BaseModel):
 def get_catalog():
     """Get available potions for sale, maximum 6 items."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             items = CatalogManager.get_available_potions(conn)
             
             if items:

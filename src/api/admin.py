@@ -17,7 +17,8 @@ router = APIRouter(
 def reset():
     """Reset the game state to initial values."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             # Get current time
             current_time = TimeManager.get_current_time(conn)
             logger.debug("Starting game state reset")

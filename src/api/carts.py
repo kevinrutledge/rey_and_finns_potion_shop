@@ -42,7 +42,8 @@ class search_sort_order(str, Enum):
 def post_visits(visit_id: int, customers: List[Customer]):
     """Record customers visiting the shop."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             customers_dicts = [customer.dict() for customer in customers]
 
             current_time = TimeManager.get_current_time(conn)
@@ -66,7 +67,8 @@ def post_visits(visit_id: int, customers: List[Customer]):
 def create_cart(new_cart: Customer):
     """Create new cart for customer."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             current_time = TimeManager.get_current_time(conn)
             time_id = current_time['time_id']
             
@@ -98,7 +100,8 @@ def create_cart(new_cart: Customer):
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """Add or update item quantity in cart."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             cart = CartManager.validate_cart_status(conn, cart_id)
             current_time = TimeManager.get_current_time(conn)
             time_id = current_time['time_id']
@@ -128,7 +131,8 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """Process cart checkout."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             cart = CartManager.validate_cart_status(conn, cart_id)
             current_time = TimeManager.get_current_time(conn)
             time_id = current_time['time_id']
@@ -243,7 +247,8 @@ def search_orders(
         params["offset"] = offset
 
         # Execute query
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             results = list(
                 conn.execute(
                     sqlalchemy.text(query),
@@ -277,7 +282,8 @@ def search_orders(
         if potion_sku:
             total_items_query += " AND LOWER(p.sku) LIKE LOWER(:potion_sku)"
 
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             total_items = conn.execute(
                 sqlalchemy.text(total_items_query),
                 params

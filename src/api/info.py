@@ -30,7 +30,8 @@ def post_time(timestamp: Timestamp):
                 detail="Invalid game time values"
             )
         
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             TimeManager.record_time(conn, timestamp.day, timestamp.hour)
             logger.info(f"Successfully recorded time - day: {timestamp.day}, hour: {timestamp.hour}")
             return {"success": True}

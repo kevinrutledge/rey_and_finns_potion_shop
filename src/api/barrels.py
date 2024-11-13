@@ -31,7 +31,8 @@ class BarrelPurchase(BaseModel):
 def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
     """Plan barrel purchases based on future needs and strategy constraints."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             # Convert Pydantic models to dicts
             catalog_dicts = [barrel.dict() for barrel in wholesale_catalog]
 
@@ -74,7 +75,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
 def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
     """Process delivery of barrels with strategy constraints."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             # Convert Pydantic models to dicts
             barrel_dicts = [barrel.dict() for barrel in barrels_delivered]
 

@@ -23,7 +23,8 @@ class PotionInventory(BaseModel):
 def get_bottle_plan():
     """Plan potion bottling based on future resources and priorities."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             # Get current state
             state = conn.execute(sqlalchemy.text(
                 "SELECT * FROM current_state"
@@ -62,7 +63,8 @@ def get_bottle_plan():
 def post_deliver_bottles(potions_delivered: List[PotionInventory], order_id: int):
     """Process potion bottling."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             state = conn.execute(sqlalchemy.text(
                 "SELECT * FROM current_state"
             )).mappings().one()

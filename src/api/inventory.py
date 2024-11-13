@@ -22,7 +22,8 @@ class CapacityPurchase(BaseModel):
 def get_inventory():
     """Get current inventory state."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             state = InventoryManager.get_inventory_state(conn)
             logger.debug(f"Retrieved inventory state - gold: {state['gold']}, "
                          f"total ml: {state['total_ml']}, "
@@ -45,7 +46,8 @@ def get_inventory():
 def get_capacity_plan():
     """Get capacity purchase plan. Called once per day."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             state = InventoryManager.get_inventory_state(conn)
             plan = InventoryManager.get_capacity_purchase_plan(conn, state)
             logger.debug(f"Generated capacity plan: {plan}")
@@ -66,7 +68,8 @@ def get_capacity_plan():
 def deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int):
     """Process capacity purchase delivery. Called once per day."""
     try:
-        with db.engine.begin() as conn:
+        engine = db.get_engine()
+        with engine.begin() as conn:
             current_time = TimeManager.get_current_time(conn)
             
             logger.debug(
