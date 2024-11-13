@@ -1,29 +1,11 @@
-name: Python package and Keep Alive
+name: Python package
 
-on: 
-  push:
-    branches:
-      - main
-  schedule:
-    - cron: '*/10 * * * *'
-  workflow_dispatch:
+on: [push]
 
 jobs:
-  keep-alive:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Print Debug Info
-        run: |
-          echo "Event Name: ${{ github.event_name }}"
-          echo "Current UTC Time: $(date -u)"
-      - name: Send GET request
-        run: |
-          curl https://rey-and-finns-potion-shop.onrender.com/
-
   build:
+
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     strategy:
       matrix:
         python-version: ["3.9"]
