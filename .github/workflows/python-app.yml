@@ -1,11 +1,25 @@
-name: Python package
+name: Python package and Keep Alive
 
-on: [push]
+on: 
+  push:  # Run tests on push
+  schedule:
+    - cron: '*/10 * * * *'  # Run keep-alive every 10 minutes
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
-  build:
-
+  keep-alive:
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Send GET request
+        run: |
+          curl -X POST \
+          -H "access_token: ${{ secrets.API_KEY }}" \
+          https://your-render-url.onrender.com/inventory/audit
+
+  build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     strategy:
       matrix:
         python-version: ["3.9"]

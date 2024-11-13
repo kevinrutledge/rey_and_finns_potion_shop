@@ -329,7 +329,8 @@ VALUES
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Crownday'),
  (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.15, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'AFTERNOON' AND day_name = 'Crownday'),
- (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6)
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.05, 6),
+
 -- CROWNDAY EVENING
 -- Premium
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PREMIUM' AND time_block = 'EVENING' AND day_name = 'Crownday'),
