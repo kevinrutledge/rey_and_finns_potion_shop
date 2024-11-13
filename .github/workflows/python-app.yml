@@ -1,10 +1,10 @@
 name: Python package and Keep Alive
 
 on: 
-  push:  # Run tests on push
+  push:
   schedule:
-    - cron: '*/10 * * * *'  # Run keep-alive every 10 minutes
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
 
 jobs:
   keep-alive:
@@ -13,9 +13,7 @@ jobs:
     steps:
       - name: Send GET request
         run: |
-          curl -X POST \
-          -H "access_token: ${{ secrets.API_KEY }}" \
-          https://your-render-url.onrender.com/inventory/audit
+          curl https://rey-and-finns-potion-shop.onrender.com/
 
   build:
     runs-on: ubuntu-latest
