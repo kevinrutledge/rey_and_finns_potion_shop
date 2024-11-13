@@ -1212,118 +1212,129 @@ class CartManager:
 
     @staticmethod
     def process_checkout(conn, cart_id: int, payment: str, time_id: int) -> dict:
-        """Process cart checkout with proper locking."""
-        # Get items with row locks
-        items = conn.execute(
-            sqlalchemy.text("""
-                SELECT 
-                    ci.potion_id,
-                    COALESCE(ci.quantity, 0) as quantity,
-                    COALESCE(ci.unit_price, 0) as unit_price,
-                    COALESCE(ci.line_total, 0) as line_total,
-                    COALESCE(p.current_quantity, 0) as current_quantity,
-                    p.sku
-                FROM cart_items ci
-                JOIN potions p ON ci.potion_id = p.potion_id
-                WHERE ci.cart_id = :cart_id
-                FOR UPDATE
-            """),
-            {"cart_id": cart_id}
-        ).mappings().all()
-        
-        if not items:
-            raise HTTPException(status_code=400, detail="Cart is empty")
-        
-        total_potions = sum(item['quantity'] for item in items)
-        total_gold = sum(item['line_total'] for item in items)
-        
-        # Verify inventory with locks
-        for item in items:
-            potion = conn.execute(
+        """
+        Process cart checkout with proper locking and transaction handling.
+        Uses serializable isolation level with explicit locks to prevent race conditions.
+        """
+        try:
+            # First lock the cart and get items with SELECT FOR UPDATE
+            cart_items = conn.execute(
                 sqlalchemy.text("""
-                    SELECT current_quantity
-                    FROM potions
-                    WHERE potion_id = :potion_id
-                    FOR UPDATE
+                    WITH locked_cart AS (
+                        SELECT cart_id, checked_out 
+                        FROM carts 
+                        WHERE cart_id = :cart_id
+                        FOR UPDATE
+                    )
+                    SELECT 
+                        ci.potion_id,
+                        ci.quantity,
+                        ci.unit_price,
+                        ci.line_total,
+                        p.current_quantity,
+                        p.sku
+                    FROM cart_items ci
+                    JOIN potions p ON ci.potion_id = p.potion_id
+                    JOIN locked_cart lc ON ci.cart_id = lc.cart_id
+                    WHERE ci.cart_id = :cart_id
+                    FOR UPDATE OF p
                 """),
-                {"potion_id": item['potion_id']}
-            ).mappings().one()
-            
-            if potion['current_quantity'] < item['quantity']:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Insufficient quantity for {item['sku']}"
+                {"cart_id": cart_id}
+            ).mappings().all()
+
+            if not cart_items:
+                raise HTTPException(status_code=400, detail="Cart is empty")
+
+            # Calculate totals
+            total_potions = sum(item['quantity'] for item in cart_items)
+            total_gold = sum(item['line_total'] for item in cart_items)
+
+            # Verify inventory availability
+            for item in cart_items:
+                if item['current_quantity'] < item['quantity']:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Insufficient quantity for {item['sku']}"
+                    )
+
+            # Update inventory and create ledger entries atomically
+            for item in cart_items:
+                # Update potion inventory
+                conn.execute(
+                    sqlalchemy.text("""
+                        UPDATE potions
+                        SET current_quantity = current_quantity - :quantity
+                        WHERE potion_id = :potion_id
+                    """),
+                    {
+                        "quantity": item['quantity'],
+                        "potion_id": item['potion_id']
+                    }
                 )
-        
-        # Process each item atomically
-        for item in items:
-            # Update inventory
+
+                # Create ledger entry
+                conn.execute(
+                    sqlalchemy.text("""
+                        INSERT INTO ledger_entries (
+                            time_id,
+                            entry_type,
+                            cart_id,
+                            potion_id,
+                            gold_change,
+                            potion_change
+                        ) VALUES (
+                            :time_id,
+                            'POTION_SOLD',
+                            :cart_id,
+                            :potion_id,
+                            :gold_change,
+                            :potion_change
+                        )
+                    """),
+                    {
+                        "time_id": time_id,
+                        "cart_id": cart_id,
+                        "potion_id": item['potion_id'],
+                        "gold_change": item['line_total'],
+                        "potion_change": -item['quantity']
+                    }
+                )
+
+            # Mark cart as checked out
             conn.execute(
                 sqlalchemy.text("""
-                    UPDATE potions
-                    SET current_quantity = current_quantity - :quantity
-                    WHERE potion_id = :potion_id
+                    UPDATE carts
+                    SET 
+                        checked_out = true,
+                        checked_out_at = CURRENT_TIMESTAMP,
+                        payment = :payment,
+                        total_potions = :total_potions,
+                        total_gold = :total_gold,
+                        purchase_success = true
+                    WHERE cart_id = :cart_id
                 """),
                 {
-                    "quantity": item['quantity'],
-                    "potion_id": item['potion_id']
+                    "payment": payment,
+                    "total_potions": total_potions,
+                    "total_gold": total_gold,
+                    "cart_id": cart_id
                 }
             )
-            
-            # Create ledger entry
-            conn.execute(
-                sqlalchemy.text("""
-                    INSERT INTO ledger_entries (
-                        time_id,
-                        entry_type,
-                        cart_id,
-                        potion_id,
-                        gold_change,
-                        potion_change
-                    )
-                    VALUES (
-                        :time_id,
-                        'POTION_SOLD',
-                        :cart_id,
-                        :potion_id,
-                        :gold_change,
-                        :potion_change
-                    )
-                """),
-                {
-                    "time_id": time_id,
-                    "cart_id": cart_id,
-                    "potion_id": item['potion_id'],
-                    "gold_change": item['line_total'],
-                    "potion_change": -item['quantity']
-                }
-            )
-        
-        # Mark cart as checked out with lock
-        conn.execute(
-            sqlalchemy.text("""
-                UPDATE carts
-                SET 
-                    checked_out = true,
-                    checked_out_at = NOW(),
-                    payment = :payment,
-                    total_potions = :total_potions,
-                    total_gold = :total_gold,
-                    purchase_success = true
-                WHERE cart_id = :cart_id
-            """),
-            {
-                "payment": payment,
-                "total_potions": total_potions,
-                "total_gold": total_gold,
-                "cart_id": cart_id
+
+            return {
+                "total_potions_bought": total_potions,
+                "total_gold_paid": total_gold
             }
-        )
-        
-        return {
-            "total_potions_bought": total_potions,
-            "total_gold_paid": total_gold
-        }
+
+        except sqlalchemy.exc.SerializationFailure as e:
+            logger.error(f"Serialization failure during checkout: {str(e)}")
+            raise HTTPException(
+                status_code=409,
+                detail="Transaction conflict"
+            )
+        except Exception as e:
+            logger.error(f"Checkout failed: {str(e)}")
+            raise
 
 class InventoryManager:
     """Handles inventory state and capacity management."""
