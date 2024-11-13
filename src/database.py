@@ -14,7 +14,7 @@ def get_engine():
             _engine = create_engine(
                 "sqlite:///:memory:",
                 connect_args={"check_same_thread": False},
-                isolation_level="READ COMITTED",
+                isolation_level="READ COMMITTED",
                 pool_pre_ping=True
             )
 
@@ -23,7 +23,7 @@ def get_engine():
             postgres_url = os.environ.get("POSTGRES_URI")
             _engine = create_engine(
                 postgres_url,
-                isolation_level="READ COMITTED",
+                isolation_level="READ COMMITTED",
                 pool_pre_ping=True
             )
             
