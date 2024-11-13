@@ -2,36 +2,29 @@ import os
 import dotenv
 from sqlalchemy import create_engine
 
-def create_engine_with_config(testing: bool = False):
-    """Create database engine with postgres and test config"""
-    if testing:
-        return create_engine(
-            "sqlite:///:memory:",
-            connect_args={"check_same_thread": False},
-            isolation_level="SERIALIZABLE",
-            pool_pre_ping=True
-        )
-    else:
-        dotenv.load_dotenv()
-        postgres_url = os.environ.get("POSTGRES_URI")
-        return create_engine(
-            postgres_url,
-            isolation_level="SERIALIZABLE",
-            pool_pre_ping=True
-        )
+_engine = None
 
-# Global engine
-engine = create_engine_with_config(testing=False)
+def get_engine():
+    global _engine
+    if _engine is None:
+        testing = os.environ.get('TESTING') == 'true'
 
-# Switch engine
-def use_test_db():
-    """Switch to SQLite test database"""
-    global engine
-    engine = create_engine_with_config(testing=True)
-    return engine
+        if testing:
+            # Use SQLite test database
+            _engine = create_engine(
+                "sqlite:///:memory:",
+                connect_args={"check_same_thread": False},
+                isolation_level="READ COMITTED",
+                pool_pre_ping=True
+            )
 
-def use_prod_db():
-    """Switch back to PostgreSQL database"""
-    global engine
-    engine = create_engine_with_config(testing=False)
-    return engine
+        else:
+            dotenv.load_dotenv()
+            postgres_url = os.environ.get("POSTGRES_URI")
+            _engine = create_engine(
+                postgres_url,
+                isolation_level="READ COMITTED",
+                pool_pre_ping=True
+            )
+            
+    return _engine

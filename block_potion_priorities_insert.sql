@@ -41,13 +41,13 @@ VALUES
 
 -- Dynamic
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.35, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK'), 0.30, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.35, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'DARK_BLUE'), 0.30, 2),
  ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
  (SELECT potion_id FROM potions WHERE sku = 'DARK_PURPLE'), 0.05, 3),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
- (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.15, 4),
+ (SELECT potion_id FROM potions WHERE sku = 'YELLOW'), 0.25, 4),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
  (SELECT potion_id FROM potions WHERE sku = 'RED'), 0.05, 5),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'DYNAMIC' AND time_block = 'NIGHT' AND day_name = 'Hearthday'),
