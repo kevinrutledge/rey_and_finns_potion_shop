@@ -318,32 +318,24 @@ class BarrelManager:
                     FROM game_time
                     WHERE time_id = :time_id
                 )
-            ),
-            time_block_info AS (
-                SELECT 
-                    tb.block_id,
-                    tb.name as block_name,
-                    fi.in_game_day,
-                    fi.strategy_id
-                FROM future_info fi
-                JOIN time_blocks tb 
-                    ON fi.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
             )
             SELECT 
-                tbi.block_id,
-                tbi.block_name,
-                tbi.in_game_day,
+                stb.block_id,
+                tb.name as block_name,
+                fi.in_game_day,
                 stb.buffer_multiplier,
                 stb.dark_buffer_multiplier,
                 s.name as strategy_name
-            FROM time_block_info tbi
+            FROM future_info fi
+            JOIN time_blocks tb 
+                ON fi.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
             JOIN strategy_time_blocks stb 
-                ON tbi.block_id = stb.time_block_id
-                AND tbi.strategy_id = stb.strategy_id
-                AND tbi.in_game_day = stb.day_name
-            JOIN strategies s ON s.strategy_id = stb.strategy_id;
+                ON tb.block_id = stb.time_block_id
+                AND fi.strategy_id = stb.strategy_id
+                AND fi.in_game_day = stb.day_name
+            JOIN strategies s ON s.strategy_id = fi.strategy_id
         """), {"time_id": time_id}).mappings().one()
-        
+
         logger.debug(
             f"Got future block info - "
             f"day: {future_block['in_game_day']}, "
@@ -377,92 +369,95 @@ class BarrelManager:
 
     @staticmethod
     def get_color_needs(conn, block: dict) -> dict:
-        """Calculate color needs based on future block priorities and current inventory."""
+        """Calculate color needs based on future potions that need to sell."""
         logger.debug(f"Calculating color needs for block {block['block_id']}")
         
-        # Get current ml levels
-        current_levels = conn.execute(sqlalchemy.text("""
-            SELECT 
-                red_ml,
-                green_ml,
-                blue_ml,
-                dark_ml
-            FROM current_state
-        """)).mappings().one()
+        # Get current state (potions and ML)
+        current_state = conn.execute(sqlalchemy.text("""
+            SELECT p.potion_id, p.sku, p.current_quantity,
+                p.red_ml, p.green_ml, p.blue_ml, p.dark_ml,
+                cs.max_potions
+            FROM potions p
+            CROSS JOIN current_state cs
+        """)).mappings().all()
         
-        logger.debug(
-            f"Current levels - "
-            f"red: {current_levels['red_ml']}, "
-            f"green: {current_levels['green_ml']}, "
-            f"blue: {current_levels['blue_ml']}, "
-            f"dark: {current_levels['dark_ml']}"
-        )
+        logger.debug(f"Current state - max potions: {current_state[0]['max_potions']}")
         
-        # Get base needs
-        base_needs = conn.execute(
+        # Get potion needs in priority order
+        potion_priorities = conn.execute(
             sqlalchemy.text("""
-                WITH current_cap AS (
-                    SELECT potion_capacity_units * 50 as total_potion_capacity
-                    FROM current_state
-                ),
-                block_needs AS (
-                    SELECT
-                        cd.color_name,
-                        SUM(
-                            CASE
-                                WHEN cd.color_name = 'RED' THEN p.red_ml
-                                WHEN cd.color_name = 'GREEN' THEN p.green_ml
-                                WHEN cd.color_name = 'BLUE' THEN p.blue_ml
-                                WHEN cd.color_name = 'DARK' THEN p.dark_ml
-                            END * bpp.sales_mix * 
-                            (SELECT total_potion_capacity FROM current_cap)
-                        ) as ml_needed
-                    FROM block_potion_priorities bpp
-                    JOIN potions p ON bpp.potion_id = p.potion_id
-                    CROSS JOIN color_definitions cd
-                    WHERE bpp.block_id = :block_id
-                    GROUP BY cd.color_name
-                )
                 SELECT 
-                    color_name,
-                    ml_needed
-                FROM block_needs
-                WHERE ml_needed > 0
-                ORDER BY ml_needed DESC
+                    p.potion_id, p.sku,
+                    p.red_ml, p.green_ml, p.blue_ml, p.dark_ml,
+                    bpp.sales_mix,
+                    s.max_potions_per_sku
+                FROM block_potion_priorities bpp
+                JOIN potions p ON bpp.potion_id = p.potion_id
+                JOIN strategies s ON s.strategy_id = 
+                    (SELECT strategy_id FROM active_strategy 
+                    ORDER BY activated_at DESC LIMIT 1)
+                WHERE bpp.block_id = :block_id
+                ORDER BY bpp.priority_order
             """),
             {"block_id": block['block_id']}
         ).mappings().all()
-
-        # Apply multipliers and adjust for current inventory
-        color_needs = {}
-        for need in base_needs:
-            multiplier = (block['dark_buffer_multiplier'] 
-                        if need['color_name'] == 'DARK'
-                        else block['buffer_multiplier'])
-            total_need = need['ml_needed'] * multiplier
+        
+        logger.debug(f"Found {len(potion_priorities)} potions in priority order")
+        
+        # Calculate ML needed for each color
+        color_needs = {'RED': 0, 'GREEN': 0, 'BLUE': 0, 'DARK': 0}
+        
+        for potion in potion_priorities:
+            # Calculate target quantity based on sales mix and max allowed
+            target_quantity = min(
+                int(potion['sales_mix'] * current_state[0]['max_potions']),
+                potion['max_potions_per_sku']
+            )
             
             # Adjust for current inventory
-            current_amount = current_levels[f"{need['color_name'].lower()}_ml"]
-            adjusted_need = max(0, total_need - current_amount)
+            current_quantity = next(
+                (p['current_quantity'] for p in current_state 
+                if p['potion_id'] == potion['potion_id']), 
+                0
+            )
+            needed_quantity = max(0, target_quantity - current_quantity)
             
-            if adjusted_need > 0:
-                color_needs[need['color_name']] = adjusted_need
-                
             logger.debug(
-                f"{need['color_name']} - "
-                f"base need: {need['ml_needed']}, "
-                f"with buffer: {total_need}, "
-                f"current: {current_amount}, "
-                f"adjusted need: {adjusted_need}"
+                f"Potion {potion['sku']} - "
+                f"target: {target_quantity}, "
+                f"current: {current_quantity}, "
+                f"needed: {needed_quantity}"
+            )
+            
+            # Add ML needs for each color with buffer
+            for color, ml, multiplier in [
+                ('RED', potion['red_ml'], block['buffer_multiplier']),
+                ('GREEN', potion['green_ml'], block['buffer_multiplier']),
+                ('BLUE', potion['blue_ml'], block['buffer_multiplier']),
+                ('DARK', potion['dark_ml'], block['dark_buffer_multiplier'])
+            ]:
+                if ml > 0:
+                    ml_needed = ml * needed_quantity * multiplier
+                    color_needs[color] += ml_needed
+        
+        # Adjust for current ML inventory
+        logger.debug("Current ML inventory:")
+        for color in color_needs:
+            current_ml = current_state[0][f"{color.lower()}_ml"]
+            original_need = color_needs[color]
+            color_needs[color] = max(0, color_needs[color] - current_ml)
+            
+            logger.debug(
+                f"{color}: {original_need:.0f} needed - "
+                f"{current_ml} current = "
+                f"{color_needs[color]:.0f} adjusted need"
             )
         
-        logger.debug(
-            f"Final color needs after adjustment - "
-            f"total colors: {len(color_needs)}, "
-            f"needs: {color_needs}"
-        )
+        # Remove colors with no needs
+        result = {k: v for k, v in color_needs.items() if v > 0}
         
-        return color_needs
+        logger.debug(f"Final color needs: {result}")
+        return result
 
 
     @staticmethod

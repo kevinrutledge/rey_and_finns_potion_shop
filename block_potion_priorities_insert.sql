@@ -760,11 +760,15 @@ VALUES
 
 -- Penetration
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.60, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.20, 3),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 4),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.10, 5),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'NIGHT' AND day_name = 'Edgeday'),
@@ -797,11 +801,15 @@ VALUES
 
 -- Penetration
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.60, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.20, 3),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 4),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.10, 5),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'MORNING' AND day_name = 'Edgeday'),
@@ -834,11 +842,15 @@ VALUES
 
 -- Penetration
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.60, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.20, 3),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 4),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.10, 5),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'AFTERNOON' AND day_name = 'Edgeday'),
@@ -871,11 +883,15 @@ VALUES
 
 -- Penetration
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.60, 1),
+ (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.25, 1),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.30, 2),
+ (SELECT potion_id FROM potions WHERE sku = 'GREEN'), 0.20, 2),
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
- (SELECT potion_id FROM potions WHERE sku = 'OLIVE'), 0.10, 3),
+ (SELECT potion_id FROM potions WHERE sku = 'BLUE'), 0.20, 3),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'VIOLET'), 0.15, 4),
+((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'PENETRATION' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
+ (SELECT potion_id FROM potions WHERE sku = 'RUSSET'), 0.10, 5),
 
 -- Tiered
 ((SELECT block_id FROM strategy_blocks WHERE strategy_name = 'TIERED' AND time_block = 'EVENING' AND day_name = 'Edgeday'),
