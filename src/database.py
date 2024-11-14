@@ -14,7 +14,7 @@ def get_engine():
             _engine = create_engine(
                 "sqlite:///:memory:",
                 connect_args={"check_same_thread": False},
-                isolation_level="READ COMMITTED",
+                isolation_level="SERIALIZABLE",
                 pool_pre_ping=True
             )
 

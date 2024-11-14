@@ -699,7 +699,7 @@ class BottlerManager:
         current_time = TimeManager.get_current_time(conn)
         
         logger.debug(f"Getting bottling priorities for future time block")
-        
+    
         priorities = conn.execute(
             sqlalchemy.text("""
                 WITH future_info AS (
@@ -729,11 +729,11 @@ class BottlerManager:
                 )
                 SELECT 
                     p.potion_id,
-                    p.red_ml,
-                    p.green_ml,
-                    p.blue_ml,
-                    p.dark_ml,
-                    p.current_quantity as inventory,
+                    COALESCE(p.red_ml, 0) as red_ml,
+                    COALESCE(p.green_ml, 0) as green_ml,
+                    COALESCE(p.blue_ml, 0) as blue_ml,
+                    COALESCE(p.dark_ml, 0) as dark_ml,
+                    COALESCE(p.current_quantity, 0) as inventory,
                     bpp.priority_order,
                     bpp.sales_mix,
                     s.max_potions_per_sku,
@@ -783,21 +783,40 @@ class BottlerManager:
             f"capacity: {available_capacity}, "
             f"available ml: {available_ml}"
         )
+
+        # Early return if no ML available
+        if all(ml == 0 for ml in available_ml.values()):
+            logger.debug("No ML available for bottling")
+            return []
+            
+        # Early return if no capacity
+        if available_capacity <= 0:
+            logger.debug("No capacity available for bottling")
+            return []
         
         bottling_plan = {}  # Track quantities per potion type
         remaining_ml = available_ml.copy()
         remaining_capacity = available_capacity
         
-        # Keep bottling until can't
+        # Keep bottling until can't 
         can_bottle = True
         while can_bottle and remaining_capacity > 0:
             can_bottle = False
             
             # Try each potion in priority order
             for potion in priorities:
+                # Create potion type array from individual ML values
+                potion_type = [
+                    potion['red_ml'],
+                    potion['green_ml'],
+                    potion['blue_ml'],
+                    potion['dark_ml']
+                ]
+                potion_key = str(potion_type)  # Use as dict key
+                
                 # Skip if hit max for this potion
                 current_quantity = bottling_plan.get(
-                    str(potion['potion_type']), 
+                    potion_key, 
                     {"quantity": 0}
                 )["quantity"]
                 
@@ -811,33 +830,21 @@ class BottlerManager:
                     
                 # Check if there is resources for one potion
                 can_make = True
-                for i, (color, ml) in enumerate([
+                for color, ml in [
                     ("red_ml", potion['red_ml']),
                     ("green_ml", potion['green_ml']),
                     ("blue_ml", potion['blue_ml']),
                     ("dark_ml", potion['dark_ml'])
-                ]):
+                ]:
                     if ml > 0 and remaining_ml.get(color, 0) < ml:
                         can_make = False
                         break
                 
                 if can_make and remaining_capacity > 0:
                     # Add one potion
-                    potion_key = str([
-                        potion['red_ml'],
-                        potion['green_ml'],
-                        potion['blue_ml'],
-                        potion['dark_ml']
-                    ])
-                    
                     if potion_key not in bottling_plan:
                         bottling_plan[potion_key] = {
-                            "potion_type": [
-                                potion['red_ml'],
-                                potion['green_ml'],
-                                potion['blue_ml'],
-                                potion['dark_ml']
-                            ],
+                            "potion_type": potion_type,
                             "quantity": 0
                         }
                     
@@ -854,26 +861,21 @@ class BottlerManager:
                         if ml > 0:
                             remaining_ml[color] = remaining_ml.get(color, 0) - ml
                     
-                    can_bottle = True  # Made progress
-                    
-                    logger.debug(
-                        f"Added 1 potion of type {potion_key} - "
-                        f"remaining capacity: {remaining_capacity}"
-                    )
+                    can_bottle = True
         
         # Convert plan to list format
-        potion_plan = list(bottling_plan.values())
+        result = list(bottling_plan.values())
         
-        if potion_plan:
+        if result:
             logger.info(
                 f"Bottling plan complete - "
-                f"total types: {len(potion_plan)}, "
-                f"total potions: {sum(p['quantity'] for p in potion_plan)}"
+                f"total types: {len(result)}, "
+                f"total potions: {sum(p['quantity'] for p in result)}"
             )
         else:
             logger.debug("No potions can be bottled")
-        
-        return potion_plan
+            
+        return result
 
     @staticmethod
     def process_bottling(conn, potion_data: Dict, time_id: int) -> None:
