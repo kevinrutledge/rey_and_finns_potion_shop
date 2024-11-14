@@ -4,7 +4,6 @@ import logging
 from fastapi import HTTPException
 from typing import Dict, List
 
-#logger = logging.getLogger('test_barrels.utils')
 logger = logging.getLogger(__name__)
 
 class LedgerManager:
@@ -359,8 +358,6 @@ class BarrelManager:
     @staticmethod
     def filter_barrels_by_strategy(barrels: list, strategy: str) -> list:
         """Filter and sort barrels based on strategy restrictions."""
-        logger.debug(f"Filtering barrels for strategy: {strategy}")
-        
         # Filter out MINI barrels first
         valid_barrels = [b for b in barrels if not b['sku'].startswith('MINI')]
         
@@ -373,10 +370,9 @@ class BarrelManager:
         else:  # TIERED or DYNAMIC
             large = [b for b in valid_barrels if 'LARGE' in b['sku']]
             medium = [b for b in valid_barrels if 'MEDIUM' in b['sku']]
-            filtered = large + medium
-            
-        logger.debug(f"Filtered to {len(filtered)} barrels based on strategy")
-        logger.debug(f"Filtered barrels: {filtered}")
+            small = [b for b in valid_barrels if 'SMALL' in b['sku']]
+            filtered = large + medium + small
+                
         return filtered
 
     @staticmethod
@@ -476,8 +472,7 @@ class BarrelManager:
         time_id: int
     ) -> list:
         """Plan purchases based on future needs and strategy."""
-        logger.debug(f"Starting barrel purchase planning")
-        
+
         # Get current state
         state = conn.execute(sqlalchemy.text(
             "SELECT * FROM current_state"
@@ -485,6 +480,8 @@ class BarrelManager:
         
         # Get future block info and priorities
         future_block = BarrelManager.get_future_block_priorities(conn, time_id)
+
+        # Calculate color needs based on future block
         color_needs = BarrelManager.get_color_needs(conn, future_block)
         
         # Plan purchases considering constraints
@@ -517,84 +514,52 @@ class BarrelManager:
     ) -> list:
         """Calculate purchases considering strategy and forward-looking needs."""
         logger.debug(
-            f"Calculating purchases - "
+            f"Planning purchases - "
             f"gold: {available_gold}, "
-            f"capacity: {available_capacity}, "
-            f"strategy: {strategy}"
+            f"capacity: {available_capacity}"
         )
         
-        # Filter barrels based on strategy
+        # Filter to allowed barrel sizes for strategy
         filtered_barrels = BarrelManager.filter_barrels_by_strategy(catalog, strategy)
         
         remaining_gold = available_gold
         remaining_capacity = available_capacity
-        purchases = []
+        purchase_quantities = {}  # Track quantities per SKU
         
-        # Process colors by need amount
-        for color, needed_ml in sorted(
-            color_needs.items(), 
-            key=lambda x: x[1], 
-            reverse=True
-        ):
-            if needed_ml <= 0:
-                continue
-                
-            logger.debug(
-                f"Processing {color} - "
-                f"need: {needed_ml}ml, "
-                f"remaining capacity: {remaining_capacity}, "
-                f"remaining gold: {remaining_gold}"
-            )
+        # Keep trying to buy until can't 
+        can_purchase = True
+        while can_purchase and remaining_gold > 0 and remaining_capacity > 0:
+            can_purchase = False
             
-            # Get barrels for this color
-            color_barrels = [b for b in filtered_barrels if color in b['sku']]
-            if not color_barrels:
-                continue
-                
-            # Try each barrel size
-            for barrel in color_barrels:
-                # Always try to buy at least one of larger size if we can afford it
-                quantity = 1
-                
-                # If we can afford more and need more, calculate full quantity
-                if (barrel['price'] <= remaining_gold and 
-                    barrel['ml_per_barrel'] <= remaining_capacity):
-                    quantity = min(
-                        remaining_gold // barrel['price'],
-                        remaining_capacity // barrel['ml_per_barrel'],
-                        max(1, needed_ml // barrel['ml_per_barrel']),  # At least 1
-                        barrel['quantity']
-                    )
-                else:
+            # Try each color in needs
+            for color, needed_ml in color_needs.items():
+                if needed_ml <= 0:
                     continue
+                    
+                # Get barrels for this color
+                color_barrels = [b for b in filtered_barrels if color in b['sku']]
                 
-                if quantity > 0:
-                    logger.debug(
-                        f"Adding purchase - "
-                        f"sku: {barrel['sku']}, "
-                        f"quantity: {quantity}, "
-                        f"ml: {quantity * barrel['ml_per_barrel']}"
-                    )
-                    
-                    purchases.append({
-                        "sku": barrel['sku'],
-                        "quantity": quantity
-                    })
-                    
-                    remaining_gold -= quantity * barrel['price']
-                    remaining_capacity -= quantity * barrel['ml_per_barrel']
-                    needed_ml -= quantity * barrel['ml_per_barrel']
-                    break  # Move to next color after finding suitable barrel
+                # Try each barrel size
+                for barrel in color_barrels:
+                    if barrel['price'] <= remaining_gold and \
+                    barrel['ml_per_barrel'] <= remaining_capacity:
+                        # Track quantity for this SKU
+                        purchase_quantities[barrel['sku']] = \
+                            purchase_quantities.get(barrel['sku'], 0) + 1
+                        
+                        remaining_gold -= barrel['price']
+                        remaining_capacity -= barrel['ml_per_barrel']
+                        color_needs[color] -= barrel['ml_per_barrel']
+                        can_purchase = True
+                        break  # Move to next color
         
-        if purchases:
-            logger.info(
-                f"Planned purchases - "
-                f"total SKUs: {len(purchases)}, "
-                f"total quantity: {sum(p['quantity'] for p in purchases)}"
-            )
-        else:
-            logger.debug("No barrel purchases needed")
-            
+        # Convert quantities dict to list of purchases
+        purchases = [
+            {"sku": sku, "quantity": qty}
+            for sku, qty in purchase_quantities.items()
+        ]
+        
+        logger.debug(f"Planned {len(purchases)} purchases")
         return purchases
     
     @staticmethod
@@ -809,70 +774,106 @@ class BottlerManager:
         available_ml: Dict[str, int],
         available_capacity: int
     ) -> List[Dict]:
-        """Calculates maximum potions based on priorities and available resources."""
-        bottling_plan = []
+        """
+        Calculate potion bottling plan with even distribution based on priorities.
+        Tries to bottle one potion at a time following priority order and sales mix.
+        """
+        logger.debug(
+            f"Planning bottling - "
+            f"capacity: {available_capacity}, "
+            f"available ml: {available_ml}"
+        )
+        
+        bottling_plan = {}  # Track quantities per potion type
         remaining_ml = available_ml.copy()
         remaining_capacity = available_capacity
         
-        for potion in priorities:
-            if remaining_capacity <= 0:
-                break
+        # Keep bottling until can't
+        can_bottle = True
+        while can_bottle and remaining_capacity > 0:
+            can_bottle = False
+            
+            # Try each potion in priority order
+            for potion in priorities:
+                # Skip if hit max for this potion
+                current_quantity = bottling_plan.get(
+                    str(potion['potion_type']), 
+                    {"quantity": 0}
+                )["quantity"]
                 
-            # Calculate resource limits
-            resource_limits = []
-            for color, ml_amount in [
-                ("red_ml", remaining_ml.get("red_ml", 0)),
-                ("green_ml", remaining_ml.get("green_ml", 0)),
-                ("blue_ml", remaining_ml.get("blue_ml", 0)),
-                ("dark_ml", remaining_ml.get("dark_ml", 0))
-            ]:
-                if potion[color] > 0:
-                    resource_limits.append(ml_amount // potion[color])
-            
-            resource_max = min(resource_limits) if resource_limits else 0
-            
-            # Apply strategy and priority limits
-            final_max = min(
-                resource_max,
-                remaining_capacity,
-                potion['max_potions_per_sku'] - potion.get('inventory', 0),
-                int(potion['sales_mix'] * available_capacity) - potion.get('inventory', 0)
-            )
-            
-            if final_max > 0:
-                bottling_plan.append({
-                    "potion_type": [
+                max_allowed = min(
+                    potion['max_potions_per_sku'] - potion.get('inventory', 0),
+                    int(potion['sales_mix'] * available_capacity) - potion.get('inventory', 0)
+                )
+                
+                if current_quantity >= max_allowed:
+                    continue
+                    
+                # Check if there is resources for one potion
+                can_make = True
+                for i, (color, ml) in enumerate([
+                    ("red_ml", potion['red_ml']),
+                    ("green_ml", potion['green_ml']),
+                    ("blue_ml", potion['blue_ml']),
+                    ("dark_ml", potion['dark_ml'])
+                ]):
+                    if ml > 0 and remaining_ml.get(color, 0) < ml:
+                        can_make = False
+                        break
+                
+                if can_make and remaining_capacity > 0:
+                    # Add one potion
+                    potion_key = str([
                         potion['red_ml'],
                         potion['green_ml'],
                         potion['blue_ml'],
                         potion['dark_ml']
-                    ],
-                    "quantity": final_max
-                })
-                
-                # Update remaining resources
-                remaining_capacity -= final_max
-                for color in ["red_ml", "green_ml", "blue_ml", "dark_ml"]:
-                    if potion[color] > 0:
-                        remaining_ml[color] = remaining_ml.get(color, 0) - (final_max * potion[color])
-                        
-                logger.debug(
-                    f"Added potion to plan - "
-                    f"priority: {potion['priority_order']}, "
-                    f"quantity: {final_max}, "
-                    f"remaining capacity: {remaining_capacity}"
-                )
+                    ])
+                    
+                    if potion_key not in bottling_plan:
+                        bottling_plan[potion_key] = {
+                            "potion_type": [
+                                potion['red_ml'],
+                                potion['green_ml'],
+                                potion['blue_ml'],
+                                potion['dark_ml']
+                            ],
+                            "quantity": 0
+                        }
+                    
+                    bottling_plan[potion_key]["quantity"] += 1
+                    
+                    # Update remaining resources
+                    remaining_capacity -= 1
+                    for color, ml in [
+                        ("red_ml", potion['red_ml']),
+                        ("green_ml", potion['green_ml']),
+                        ("blue_ml", potion['blue_ml']),
+                        ("dark_ml", potion['dark_ml'])
+                    ]:
+                        if ml > 0:
+                            remaining_ml[color] = remaining_ml.get(color, 0) - ml
+                    
+                    can_bottle = True  # Made progress
+                    
+                    logger.debug(
+                        f"Added 1 potion of type {potion_key} - "
+                        f"remaining capacity: {remaining_capacity}"
+                    )
         
-        if bottling_plan:
+        # Convert plan to list format
+        potion_plan = list(bottling_plan.values())
+        
+        if potion_plan:
             logger.info(
-                f"Generated bottling plan - "
-                f"total potions: {sum(b['quantity'] for b in bottling_plan)}, "
-                f"potion types: {bottling_plan}"
+                f"Bottling plan complete - "
+                f"total types: {len(potion_plan)}, "
+                f"total potions: {sum(p['quantity'] for p in potion_plan)}"
             )
         else:
-            logger.debug("No potions can be bottled with current resources")
-            
-        return bottling_plan
+            logger.debug("No potions can be bottled")
+        
+        return potion_plan
 
     @staticmethod
     def process_bottling(conn, potion_data: Dict, time_id: int) -> None:

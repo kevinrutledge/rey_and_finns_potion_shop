@@ -512,16 +512,16 @@ INSERT INTO strategy_time_blocks
 VALUES
     -- HEARTHDAY
     -- PREMIUM
-    (1, 1, 'Hearthday', 1.5, 1.0),
-    (1, 2, 'Hearthday', 1.5, 1.0),
-    (1, 3, 'Hearthday', 1.5, 1.0),
-    (1, 4, 'Hearthday', 1.5, 2.0),
+    (1, 1, 'Hearthday', 1.0, 1.0),
+    (1, 2, 'Hearthday', 1.0, 1.0),
+    (1, 3, 'Hearthday', 1.0, 1.0),
+    (1, 4, 'Hearthday', 1.0, 2.0),
 
     -- PENETRATION
-    (2, 1, 'Hearthday', 1.5, 1.0), 
-    (2, 2, 'Hearthday', 1.5, 1.0),
-    (2, 3, 'Hearthday', 1.5, 1.0),
-    (2, 4, 'Hearthday', 1.5, 2.0),
+    (2, 1, 'Hearthday', 1.0, 1.0), 
+    (2, 2, 'Hearthday', 1.0, 1.0),
+    (2, 3, 'Hearthday', 1.0, 1.0),
+    (2, 4, 'Hearthday', 1.0, 2.0),
 
     -- TIERED
     (3, 1, 'Hearthday', 1.5, 1.0),
@@ -537,16 +537,16 @@ VALUES
 
     -- CROWNDAY
     -- PREMIUM
-    (1, 1, 'Crownday', 1.5, 1.0),
-    (1, 2, 'Crownday', 1.5, 1.0),
-    (1, 3, 'Crownday', 1.5, 1.0),
-    (1, 4, 'Crownday', 1.5, 1.0),
+    (1, 1, 'Crownday', 1.0, 1.0),
+    (1, 2, 'Crownday', 1.0, 1.0),
+    (1, 3, 'Crownday', 1.0, 1.0),
+    (1, 4, 'Crownday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Crownday', 1.5, 1.0), 
-    (2, 2, 'Crownday', 1.5, 1.0),
-    (2, 3, 'Crownday', 1.5, 1.0),
-    (2, 4, 'Crownday', 1.5, 1.0),
+    (2, 1, 'Crownday', 1.0, 1.0), 
+    (2, 2, 'Crownday', 1.0, 1.0),
+    (2, 3, 'Crownday', 1.0, 1.0),
+    (2, 4, 'Crownday', 1.0, 1.0),
 
     -- TIERED
     (3, 1, 'Crownday', 1.5, 1.0),
@@ -562,16 +562,16 @@ VALUES
 
     -- BLESSEDAY
     -- PREMIUM
-    (1, 1, 'Blesseday', 1.5, 1.0),
-    (1, 2, 'Blesseday', 1.5, 1.0),
-    (1, 3, 'Blesseday', 1.5, 1.0),
-    (1, 4, 'Blesseday', 1.5, 1.0),
+    (1, 1, 'Blesseday', 1.0, 1.0),
+    (1, 2, 'Blesseday', 1.0, 1.0),
+    (1, 3, 'Blesseday', 1.0, 1.0),
+    (1, 4, 'Blesseday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Blesseday', 1.5, 1.0), 
-    (2, 2, 'Blesseday', 1.5, 1.0),
-    (2, 3, 'Blesseday', 1.5, 1.0),
-    (2, 4, 'Blesseday', 1.5, 1.0),
+    (2, 1, 'Blesseday', 1.0, 1.0), 
+    (2, 2, 'Blesseday', 1.0, 1.0),
+    (2, 3, 'Blesseday', 1.0, 1.0),
+    (2, 4, 'Blesseday', 1.0, 1.0),
 
     -- TIERED
     (3, 1, 'Blesseday', 1.5, 1.0),
@@ -587,16 +587,16 @@ VALUES
 
     -- SOULDAY
     -- PREMIUM
-    (1, 1, 'Soulday', 1.5, 1.0),
-    (1, 2, 'Soulday', 1.5, 1.0),
-    (1, 3, 'Soulday', 1.5, 1.0),
-    (1, 4, 'Soulday', 1.5, 1.0),
+    (1, 1, 'Soulday', 1.0, 1.0),
+    (1, 2, 'Soulday', 1.0, 1.0),
+    (1, 3, 'Soulday', 1.0, 1.0),
+    (1, 4, 'Soulday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Soulday', 1.5, 1.0), 
-    (2, 2, 'Soulday', 1.5, 1.0),
-    (2, 3, 'Soulday', 1.5, 1.0),
-    (2, 4, 'Soulday', 1.5, 1.0),
+    (2, 1, 'Soulday', 1.0, 1.0), 
+    (2, 2, 'Soulday', 1.0, 1.0),
+    (2, 3, 'Soulday', 1.0, 1.0),
+    (2, 4, 'Soulday', 1.0, 1.0),
 
     -- TIERED
     (3, 1, 'Soulday', 1.5, 1.0),
@@ -612,16 +612,16 @@ VALUES
 
     -- EDGEDAY
     -- PREMIUM
-    (1, 1, 'Edgeday', 1.5, 1.0),
-    (1, 2, 'Edgeday', 1.5, 1.0),
-    (1, 3, 'Edgeday', 1.5, 1.0),
-    (1, 4, 'Edgeday', 1.5, 1.0),
+    (1, 1, 'Edgeday', 1.0, 1.0),
+    (1, 2, 'Edgeday', 1.0, 1.0),
+    (1, 3, 'Edgeday', 1.0, 1.0),
+    (1, 4, 'Edgeday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Edgeday', 1.5, 1.0), 
-    (2, 2, 'Edgeday', 1.5, 1.0),
-    (2, 3, 'Edgeday', 1.5, 1.0),
-    (2, 4, 'Edgeday', 1.5, 1.0),
+    (2, 1, 'Edgeday', 1.0, 1.0), 
+    (2, 2, 'Edgeday', 1.0, 1.0),
+    (2, 3, 'Edgeday', 1.0, 1.0),
+    (2, 4, 'Edgeday', 1.0, 1.0),
 
     -- TIERED
     (3, 1, 'Edgeday', 1.5, 1.0),
@@ -637,16 +637,16 @@ VALUES
 
     -- BLOOMDAY
     -- PREMIUM
-    (1, 1, 'Bloomday', 1.5, 1.0),
-    (1, 2, 'Bloomday', 1.5, 1.0),
-    (1, 3, 'Bloomday', 1.5, 1.0),
-    (1, 4, 'Bloomday', 1.5, 1.0),
+    (1, 1, 'Bloomday', 1.0, 1.0),
+    (1, 2, 'Bloomday', 1.0, 1.0),
+    (1, 3, 'Bloomday', 1.0, 1.0),
+    (1, 4, 'Bloomday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Bloomday', 1.5, 1.0), 
-    (2, 2, 'Bloomday', 1.5, 1.0),
-    (2, 3, 'Bloomday', 1.5, 1.0),
-    (2, 4, 'Bloomday', 1.5, 1.0),
+    (2, 1, 'Bloomday', 1.0, 1.0), 
+    (2, 2, 'Bloomday', 1.0, 1.0),
+    (2, 3, 'Bloomday', 1.0, 1.0),
+    (2, 4, 'Bloomday', 1.0, 1.0),
 
     -- TIERED
     (3, 1, 'Bloomday', 1.5, 1.0),
@@ -662,16 +662,16 @@ VALUES
 
     -- ARCANADAY
     -- PREMIUM
-    (1, 1, 'Arcanaday', 1.5, 1.0),
-    (1, 2, 'Arcanaday', 1.5, 1.0),
-    (1, 3, 'Arcanaday', 1.5, 1.0),
-    (1, 4, 'Arcanaday', 1.5, 1.0),
+    (1, 1, 'Arcanaday', 1.0, 1.0),
+    (1, 2, 'Arcanaday', 1.0, 1.0),
+    (1, 3, 'Arcanaday', 1.0, 1.0),
+    (1, 4, 'Arcanaday', 1.0, 1.0),
 
     -- PENETRATION
-    (2, 1, 'Arcanaday', 1.5, 1.0), 
-    (2, 2, 'Arcanaday', 1.5, 1.0),
-    (2, 3, 'Arcanaday', 1.5, 1.0),
-    (2, 4, 'Arcanaday', 1.5, 1.0),
+    (2, 1, 'Arcanaday', 1.0, 1.0), 
+    (2, 2, 'Arcanaday', 1.0, 1.0),
+    (2, 3, 'Arcanaday', 1.0, 1.0),
+    (2, 4, 'Arcanaday', 1.0, 1.0),
 
     -- TIERED
     (3, 1, 'Arcanaday', 1.5, 1.0),
