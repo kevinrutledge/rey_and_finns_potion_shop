@@ -369,96 +369,66 @@ class BarrelManager:
 
     @staticmethod
     def get_color_needs(conn, block: dict) -> dict:
-        """Calculate color needs based on future potions that need to sell."""
-        logger.debug(f"Calculating color needs for block {block['block_id']}")
+        """Calculate color needs based on future block priorities and current inventory."""
+        # Get current ml levels
+        current_levels = conn.execute(sqlalchemy.text("""
+            SELECT red_ml, green_ml, blue_ml, dark_ml
+            FROM current_state
+        """)).mappings().one()
         
-        # Get current state (potions and ML)
-        current_state = conn.execute(sqlalchemy.text("""
-            SELECT p.potion_id, p.sku, p.current_quantity,
-                p.red_ml, p.green_ml, p.blue_ml, p.dark_ml,
-                cs.max_potions
-            FROM potions p
-            CROSS JOIN current_state cs
-        """)).mappings().all()
-        
-        logger.debug(f"Current state - max potions: {current_state[0]['max_potions']}")
-        
-        # Get potion needs in priority order
-        potion_priorities = conn.execute(
+        # Get base needs
+        base_needs = conn.execute(
             sqlalchemy.text("""
-                SELECT 
-                    p.potion_id, p.sku,
-                    p.red_ml, p.green_ml, p.blue_ml, p.dark_ml,
-                    bpp.sales_mix,
-                    s.max_potions_per_sku
-                FROM block_potion_priorities bpp
-                JOIN potions p ON bpp.potion_id = p.potion_id
-                JOIN strategies s ON s.strategy_id = 
-                    (SELECT strategy_id FROM active_strategy 
-                    ORDER BY activated_at DESC LIMIT 1)
-                WHERE bpp.block_id = :block_id
-                ORDER BY bpp.priority_order
+                WITH current_cap AS (
+                    SELECT potion_capacity_units * 50 as total_potion_capacity
+                    FROM current_state
+                ),
+                block_needs AS (
+                    SELECT
+                        cd.color_name,
+                        SUM(
+                            CASE
+                                WHEN cd.color_name = 'RED' THEN p.red_ml
+                                WHEN cd.color_name = 'GREEN' THEN p.green_ml
+                                WHEN cd.color_name = 'BLUE' THEN p.blue_ml
+                                WHEN cd.color_name = 'DARK' THEN p.dark_ml
+                            END * bpp.sales_mix * 
+                            (SELECT total_potion_capacity FROM current_cap)
+                        ) as ml_needed
+                    FROM block_potion_priorities bpp
+                    JOIN potions p ON bpp.potion_id = p.potion_id
+                    CROSS JOIN color_definitions cd
+                    WHERE bpp.block_id = :block_id
+                    GROUP BY cd.color_name
+                )
+                SELECT color_name, ml_needed
+                FROM block_needs
+                WHERE ml_needed > 0
+                ORDER BY ml_needed DESC
             """),
             {"block_id": block['block_id']}
         ).mappings().all()
-        
-        logger.debug(f"Found {len(potion_priorities)} potions in priority order")
-        
-        # Calculate ML needed for each color
-        color_needs = {'RED': 0, 'GREEN': 0, 'BLUE': 0, 'DARK': 0}
-        
-        for potion in potion_priorities:
-            # Calculate target quantity based on sales mix and max allowed
-            target_quantity = min(
-                int(potion['sales_mix'] * current_state[0]['max_potions']),
-                potion['max_potions_per_sku']
-            )
-            
-            # Adjust for current inventory
-            current_quantity = next(
-                (p['current_quantity'] for p in current_state 
-                if p['potion_id'] == potion['potion_id']), 
-                0
-            )
-            needed_quantity = max(0, target_quantity - current_quantity)
-            
-            logger.debug(
-                f"Potion {potion['sku']} - "
-                f"target: {target_quantity}, "
-                f"current: {current_quantity}, "
-                f"needed: {needed_quantity}"
-            )
-            
-            # Add ML needs for each color with buffer
-            for color, ml, multiplier in [
-                ('RED', potion['red_ml'], block['buffer_multiplier']),
-                ('GREEN', potion['green_ml'], block['buffer_multiplier']),
-                ('BLUE', potion['blue_ml'], block['buffer_multiplier']),
-                ('DARK', potion['dark_ml'], block['dark_buffer_multiplier'])
-            ]:
-                if ml > 0:
-                    ml_needed = ml * needed_quantity * multiplier
-                    color_needs[color] += ml_needed
-        
-        # Adjust for current ML inventory
-        logger.debug("Current ML inventory:")
-        for color in color_needs:
-            current_ml = current_state[0][f"{color.lower()}_ml"]
-            original_need = color_needs[color]
-            color_needs[color] = max(0, color_needs[color] - current_ml)
-            
-            logger.debug(
-                f"{color}: {original_need:.0f} needed - "
-                f"{current_ml} current = "
-                f"{color_needs[color]:.0f} adjusted need"
-            )
-        
-        # Remove colors with no needs
-        result = {k: v for k, v in color_needs.items() if v > 0}
-        
-        logger.debug(f"Final color needs: {result}")
-        return result
 
+        # Calculate adjusted needs considering current inventory
+        color_needs = {}
+        for need in base_needs:
+            color = need['color_name']
+            current = current_levels[f"{color.lower()}_ml"]
+            needed = need['ml_needed']
+                
+            # Apply buffer and calculate adjusted need
+            buffer = block['dark_buffer_multiplier'] if color == 'DARK' else block['buffer_multiplier']
+            total_need = needed * buffer
+            
+            # Only add to needs if we actually need more
+            if current < total_need:
+                color_needs[color] = total_need - current
+                
+        logger.debug(
+            f"Color needs after inventory adjustment: {color_needs}"
+        )
+        
+        return color_needs
 
     @staticmethod
     def plan_barrel_purchases(
@@ -514,31 +484,30 @@ class BarrelManager:
             f"capacity: {available_capacity}"
         )
         
-        # Filter to allowed barrel sizes for strategy
         filtered_barrels = BarrelManager.filter_barrels_by_strategy(catalog, strategy)
-        
         remaining_gold = available_gold
         remaining_capacity = available_capacity
-        purchase_quantities = {}  # Track quantities per SKU
+        purchase_quantities = {}
         
-        # Keep trying to buy until can't 
         can_purchase = True
         while can_purchase and remaining_gold > 0 and remaining_capacity > 0:
             can_purchase = False
             
-            # Try each color in needs
-            for color, needed_ml in color_needs.items():
+            # Sort colors by need amount, ensuring DARK is first if present
+            sorted_colors = sorted(
+                color_needs.items(),
+                key=lambda x: (-1000000 if x[0] == 'DARK' else -x[1])
+            )
+            
+            for color, needed_ml in sorted_colors:
                 if needed_ml <= 0:
                     continue
                     
-                # Get barrels for this color
                 color_barrels = [b for b in filtered_barrels if color in b['sku']]
                 
-                # Try each barrel size
                 for barrel in color_barrels:
                     if barrel['price'] <= remaining_gold and \
                     barrel['ml_per_barrel'] <= remaining_capacity:
-                        # Track quantity for this SKU
                         purchase_quantities[barrel['sku']] = \
                             purchase_quantities.get(barrel['sku'], 0) + 1
                         
@@ -548,7 +517,6 @@ class BarrelManager:
                         can_purchase = True
                         break  # Move to next color
         
-        # Convert quantities dict to list of purchases
         purchases = [
             {"sku": sku, "quantity": qty}
             for sku, qty in purchase_quantities.items()
