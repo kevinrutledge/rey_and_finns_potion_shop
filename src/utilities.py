@@ -1427,58 +1427,16 @@ class InventoryManager:
         }
     
     @staticmethod
-    def check_strategy_transition(conn, current_units: dict) -> tuple[bool, int]:
-        """Check if capacity upgrade triggers strategy transition."""
-        result = conn.execute(
-            sqlalchemy.text("""
-                WITH current_strategy AS (
-                    SELECT strategy_id 
-                    FROM active_strategy 
-                    ORDER BY activated_at DESC 
-                    LIMIT 1
-                )
-                SELECT 
-                    st.from_strategy_id,
-                    st.to_strategy_id,
-                    s.name as current_strategy
-                FROM current_strategy cs
-                JOIN strategies s ON cs.strategy_id = s.strategy_id
-                LEFT JOIN strategy_transitions st ON cs.strategy_id = st.from_strategy_id
-                WHERE s.name != 'DYNAMIC'
-            """)
-        ).mappings().first()
-        
-        if not result:
-            return False, None
-            
-        # PENETRATION to TIERED
-        if (result['current_strategy'] == 'PENETRATION' and
-            current_units['ml_capacity_units'] >= 2 and
-            current_units['potion_capacity_units'] >= 2):
-            return True, result['to_strategy_id']
-            
-        # TIERED to DYNAMIC
-        if (result['current_strategy'] == 'TIERED' and
-            current_units['ml_capacity_units'] >= 4 and
-            current_units['potion_capacity_units'] >= 4):
-            return True, result['to_strategy_id']
-            
-        return False, None
-    
-    @staticmethod
     def process_capacity_upgrade(conn, potion_capacity: int, ml_capacity: int, time_id: int) -> None:
         """Process capacity upgrade with ledger entries and strategy transition."""
         total_cost = (potion_capacity + ml_capacity) * 1000
         
-        # Get current state with row locks
+        # Lock ledger entries first and get current state
         current_state = conn.execute(
             sqlalchemy.text("""
                 WITH locked_ledger AS (
-                    SELECT 
-                        entry_id,
-                        gold_change,
-                        ml_capacity_change,
-                        potion_capacity_change
+                    SELECT entry_id, gold_change, ml_change,
+                        ml_capacity_change, potion_capacity_change
                     FROM ledger_entries
                     FOR UPDATE
                 )
@@ -1495,8 +1453,8 @@ class InventoryManager:
                 status_code=400,
                 detail="Insufficient gold for capacity upgrade"
             )
-        
-        # Record capacity upgrade in ledger with a single transaction
+
+        # Create capacity upgrade ledger entry
         conn.execute(
             sqlalchemy.text("""
                 INSERT INTO ledger_entries (
@@ -1521,45 +1479,48 @@ class InventoryManager:
             }
         )
         
-        # Check if upgrade triggers strategy transition
+        # Calculate new totals and check for strategy transition
         new_units = {
             'ml_capacity_units': current_state['ml_capacity_units'] + ml_capacity,
             'potion_capacity_units': current_state['potion_capacity_units'] + potion_capacity
         }
         
-        # Get current strategy with lock
+        # Lock and check current strategy in one atomic operation
         current_strategy = conn.execute(
             sqlalchemy.text("""
                 WITH current_strategy AS (
-                    SELECT strategy_id 
-                    FROM active_strategy 
-                    ORDER BY activated_at DESC 
-                    LIMIT 1
+                    SELECT 
+                        ast.strategy_id,
+                        s.name as strategy_name
+                    FROM active_strategy ast
+                    JOIN strategies s ON ast.strategy_id = s.strategy_id
+                    WHERE ast.activated_at = (
+                        SELECT MAX(activated_at)
+                        FROM active_strategy
+                    )
                     FOR UPDATE
                 )
                 SELECT 
-                    st.from_strategy_id,
-                    st.to_strategy_id,
-                    s.name as current_strategy
+                    cs.strategy_id,
+                    cs.strategy_name,
+                    st.to_strategy_id
                 FROM current_strategy cs
-                JOIN strategies s ON cs.strategy_id = s.strategy_id
                 LEFT JOIN strategy_transitions st ON cs.strategy_id = st.from_strategy_id
-                WHERE s.name != 'DYNAMIC'
+                WHERE cs.strategy_name != 'DYNAMIC'
             """)
         ).mappings().first()
         
         if current_strategy:
-            # Check transition conditions and update strategy if needed
             should_transition = False
             new_strategy_id = None
             
-            if (current_strategy['current_strategy'] == 'PENETRATION' and
+            if (current_strategy['strategy_name'] == 'PENETRATION' and
                 new_units['ml_capacity_units'] >= 2 and
                 new_units['potion_capacity_units'] >= 2):
                 should_transition = True
                 new_strategy_id = current_strategy['to_strategy_id']
                 
-            elif (current_strategy['current_strategy'] == 'TIERED' and
+            elif (current_strategy['strategy_name'] == 'TIERED' and
                 new_units['ml_capacity_units'] >= 4 and
                 new_units['potion_capacity_units'] >= 4):
                 should_transition = True
