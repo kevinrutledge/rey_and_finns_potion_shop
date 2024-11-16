@@ -207,31 +207,64 @@ class CatalogManager:
                     ) ast
                     ORDER BY cgt.created_at DESC
                     LIMIT 1
+                ),
+                prioritized_potions AS (
+                    SELECT 
+                        p.potion_id,
+                        p.sku,
+                        p.name,
+                        p.current_quantity,
+                        p.base_price,
+                        ARRAY[
+                            COALESCE(p.red_ml, 0),
+                            COALESCE(p.green_ml, 0),
+                            COALESCE(p.blue_ml, 0),
+                            COALESCE(p.dark_ml, 0)
+                        ] as potion_type,
+                        bpp.priority_order
+                    FROM current_info ci
+                    JOIN time_blocks tb 
+                        ON ci.current_hour BETWEEN tb.start_hour AND tb.end_hour
+                    JOIN strategy_time_blocks stb 
+                        ON tb.block_id = stb.time_block_id
+                        AND ci.strategy_id = stb.strategy_id
+                        AND ci.current_day = stb.day_name
+                    JOIN block_potion_priorities bpp 
+                        ON stb.block_id = bpp.block_id
+                    JOIN potions p 
+                        ON bpp.potion_id = p.potion_id
+                    WHERE p.current_quantity > 0
+                ),
+                other_potions AS (
+                    SELECT 
+                        p.potion_id,
+                        p.sku,
+                        p.name,
+                        p.current_quantity,
+                        p.base_price,
+                        ARRAY[
+                            COALESCE(p.red_ml, 0),
+                            COALESCE(p.green_ml, 0),
+                            COALESCE(p.blue_ml, 0),
+                            COALESCE(p.dark_ml, 0)
+                        ] as potion_type,
+                        999 as priority_order
+                    FROM potions p
+                    WHERE p.current_quantity > 0
+                    AND p.potion_id NOT IN (SELECT potion_id FROM prioritized_potions)
                 )
                 SELECT 
-                    p.sku,
-                    p.name,
-                    COALESCE(p.current_quantity, 0) as quantity,
-                    p.base_price as price,
-                    ARRAY[
-                        COALESCE(p.red_ml, 0),
-                        COALESCE(p.green_ml, 0),
-                        COALESCE(p.blue_ml, 0),
-                        COALESCE(p.dark_ml, 0)
-                    ] as potion_type
-                FROM current_info ci
-                JOIN time_blocks tb 
-                    ON ci.current_hour BETWEEN tb.start_hour AND tb.end_hour
-                JOIN strategy_time_blocks stb 
-                    ON tb.block_id = stb.time_block_id
-                    AND ci.strategy_id = stb.strategy_id
-                    AND ci.current_day = stb.day_name
-                JOIN block_potion_priorities bpp 
-                    ON stb.block_id = bpp.block_id
-                JOIN potions p 
-                    ON bpp.potion_id = p.potion_id
-                WHERE COALESCE(p.current_quantity, 0) > 0
-                ORDER BY bpp.priority_order
+                    sku,
+                    name,
+                    current_quantity as quantity,
+                    base_price as price,
+                    potion_type
+                FROM (
+                    SELECT * FROM prioritized_potions
+                    UNION ALL
+                    SELECT * FROM other_potions
+                ) AS all_potions  -- Added the required alias
+                ORDER BY priority_order, sku
                 LIMIT 6
                 """
             )
