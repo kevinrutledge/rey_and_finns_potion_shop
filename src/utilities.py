@@ -696,6 +696,12 @@ class BottlerManager:
         
         logger.debug(f"Getting bottling priorities for future time block")
     
+        current_state = conn.execute(
+            sqlalchemy.text("SELECT * FROM current_state")
+        ).mappings().one()
+        
+        logger.debug(f"Current state: {current_state}")
+    
         priorities = conn.execute(
             sqlalchemy.text("""
                 WITH future_info AS (
@@ -725,6 +731,7 @@ class BottlerManager:
                 )
                 SELECT 
                     p.potion_id,
+                    p.sku,
                     COALESCE(p.red_ml, 0) as red_ml,
                     COALESCE(p.green_ml, 0) as green_ml,
                     COALESCE(p.blue_ml, 0) as blue_ml,
@@ -759,6 +766,14 @@ class BottlerManager:
                 f"block: {priorities[0]['block_id']}, "
                 f"count: {len(priorities)}"
             )
+            # Log each priority for debugging
+            for p in priorities:
+                logger.debug(
+                    f"Priority: {p['sku']} - "
+                    f"sales_mix: {p['sales_mix']}, "
+                    f"current_inventory: {p['inventory']}, "
+                    f"max_per_sku: {p['max_potions_per_sku']}"
+                )
         else:
             logger.error("No bottling priorities found for future time block")
         
@@ -772,7 +787,7 @@ class BottlerManager:
     ) -> List[Dict]:
         """
         Calculate potion bottling plan with even distribution based on priorities.
-        Tries to bottle one potion at a time following priority order and sales mix.
+        Considers total inventory when checking max_potions_per_sku.
         """
         logger.debug(
             f"Planning bottling - "
@@ -780,94 +795,114 @@ class BottlerManager:
             f"available ml: {available_ml}"
         )
 
-        # Early return if no ML available
-        if all(ml == 0 for ml in available_ml.values()):
-            logger.debug("No ML available for bottling")
-            return []
-            
-        # Early return if no capacity
-        if available_capacity <= 0:
-            logger.debug("No capacity available for bottling")
+        if not priorities or all(ml == 0 for ml in available_ml.values()) or available_capacity <= 0:
+            logger.debug("Early return due to insufficient resources")
             return []
         
-        bottling_plan = {}  # Track quantities per potion type
+        bottling_plan = {}
         remaining_ml = available_ml.copy()
         remaining_capacity = available_capacity
         
-        # Keep bottling until can't 
+        # Calculate target quantities with proper max_per_sku consideration
+        target_quantities = {}
+        for potion in priorities:
+            target_qty = int(potion['sales_mix'] * available_capacity)
+            # Consider TOTAL inventory after bottling
+            max_allowed = potion['max_potions_per_sku'] - potion['inventory']
+            if max_allowed <= 0:
+                logger.debug(
+                    f"Skipping {potion['sku']} - at max capacity "
+                    f"(current: {potion['inventory']}, max: {potion['max_potions_per_sku']})"
+                )
+                continue
+                
+            final_qty = min(target_qty, max_allowed)
+            if final_qty > 0:
+                target_quantities[potion['sku']] = {
+                    'quantity': final_qty,
+                    'current_inventory': potion['inventory'],
+                    'max_per_sku': potion['max_potions_per_sku']
+                }
+                logger.debug(
+                    f"Target for {potion['sku']}: "
+                    f"sales_mix={potion['sales_mix']}, "
+                    f"max_allowed={max_allowed}, "
+                    f"final_target={final_qty}"
+                )
+        
         can_bottle = True
         while can_bottle and remaining_capacity > 0:
             can_bottle = False
             
-            # Try each potion in priority order
             for potion in priorities:
-                # Create potion type array from individual ML values
                 potion_type = [
                     potion['red_ml'],
                     potion['green_ml'],
                     potion['blue_ml'],
                     potion['dark_ml']
                 ]
-                potion_key = str(potion_type)  # Use as dict key
+                potion_key = str(potion_type)
                 
-                # Skip if hit max for this potion
+                # Get current bottling quantity
                 current_quantity = bottling_plan.get(
                     potion_key, 
                     {"quantity": 0}
                 )["quantity"]
                 
-                max_allowed = min(
-                    potion['max_potions_per_sku'] - potion.get('inventory', 0),
-                    int(potion['sales_mix'] * available_capacity) - potion.get('inventory', 0)
-                )
-                
-                if current_quantity >= max_allowed:
+                target_info = target_quantities.get(potion['sku'])
+                if not target_info or current_quantity >= target_info['quantity']:
                     continue
-                    
-                # Check if there is resources for one potion
+                
+                # Verify we won't exceed max_per_sku
+                total_after_bottling = (
+                    current_quantity + 
+                    target_info['current_inventory'] + 
+                    1  # Adding one more
+                )
+                if total_after_bottling > potion['max_potions_per_sku']:
+                    logger.debug(
+                        f"Would exceed max_per_sku for {potion['sku']} "
+                        f"(would be {total_after_bottling}, max is {potion['max_potions_per_sku']})"
+                    )
+                    continue
+                
+                # Check ML availability
                 can_make = True
+                required_ml = {}
                 for color, ml in [
                     ("red_ml", potion['red_ml']),
                     ("green_ml", potion['green_ml']),
                     ("blue_ml", potion['blue_ml']),
                     ("dark_ml", potion['dark_ml'])
                 ]:
-                    if ml > 0 and remaining_ml.get(color, 0) < ml:
-                        can_make = False
-                        break
+                    if ml > 0:
+                        if remaining_ml.get(color, 0) < ml:
+                            can_make = False
+                            break
+                        required_ml[color] = ml
                 
                 if can_make and remaining_capacity > 0:
-                    # Add one potion
                     if potion_key not in bottling_plan:
                         bottling_plan[potion_key] = {
                             "potion_type": potion_type,
-                            "quantity": 0
+                            "quantity": 0,
+                            "sku": potion['sku']
                         }
                     
                     bottling_plan[potion_key]["quantity"] += 1
-                    
-                    # Update remaining resources
                     remaining_capacity -= 1
-                    for color, ml in [
-                        ("red_ml", potion['red_ml']),
-                        ("green_ml", potion['green_ml']),
-                        ("blue_ml", potion['blue_ml']),
-                        ("dark_ml", potion['dark_ml'])
-                    ]:
-                        if ml > 0:
-                            remaining_ml[color] = remaining_ml.get(color, 0) - ml
+                    
+                    for color, ml in required_ml.items():
+                        remaining_ml[color] = remaining_ml.get(color, 0) - ml
                     
                     can_bottle = True
         
-        # Convert plan to list format
         result = list(bottling_plan.values())
         
         if result:
-            logger.info(
-                f"Bottling plan complete - "
-                f"total types: {len(result)}, "
-                f"total potions: {sum(p['quantity'] for p in result)}"
-            )
+            logger.info(f"Bottling plan complete - total types: {len(result)}, total potions: {sum(p['quantity'] for p in result)}")
+            for plan in result:
+                logger.debug(f"Plan for {plan['sku']}: quantity={plan['quantity']}")
         else:
             logger.debug("No potions can be bottled")
             
