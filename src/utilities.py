@@ -195,40 +195,44 @@ class CatalogManager:
             sqlalchemy.text("""
                 WITH current_info AS (
                     SELECT 
-                        cgt.current_day,
-                        cgt.current_hour,
+                        gt.in_game_day,
+                        gt.in_game_hour,
                         ast.strategy_id
-                    FROM current_game_time cgt
+                    FROM game_time gt 
                     CROSS JOIN (
                         SELECT strategy_id
                         FROM active_strategy
                         ORDER BY activated_at DESC
                         LIMIT 1
+                        FOR UPDATE
                     ) ast
-                    ORDER BY cgt.created_at DESC
-                    LIMIT 1
+                    WHERE gt.time_id = (
+                        SELECT bottling_time_id 
+                        FROM game_time
+                        WHERE time_id = (
+                            SELECT game_time_id 
+                            FROM current_game_time 
+                            ORDER BY created_at DESC 
+                            LIMIT 1
+                        )
+                    )
+                    FOR UPDATE
                 ),
                 prioritized_potions AS (
                     SELECT 
-                        p.potion_id,
                         p.sku,
                         p.name,
-                        p.current_quantity,
-                        p.base_price,
-                        ARRAY[
-                            COALESCE(p.red_ml, 0),
-                            COALESCE(p.green_ml, 0),
-                            COALESCE(p.blue_ml, 0),
-                            COALESCE(p.dark_ml, 0)
-                        ] as potion_type,
+                        p.current_quantity as quantity,
+                        p.base_price as price,
+                        ARRAY[p.red_ml, p.green_ml, p.blue_ml, p.dark_ml] as potion_type,
                         bpp.priority_order
                     FROM current_info ci
                     JOIN time_blocks tb 
-                        ON ci.current_hour BETWEEN tb.start_hour AND tb.end_hour
+                        ON ci.in_game_hour BETWEEN tb.start_hour AND tb.end_hour
                     JOIN strategy_time_blocks stb 
                         ON tb.block_id = stb.time_block_id
                         AND ci.strategy_id = stb.strategy_id
-                        AND ci.current_day = stb.day_name
+                        AND ci.in_game_day = stb.day_name
                     JOIN block_potion_priorities bpp 
                         ON stb.block_id = bpp.block_id
                     JOIN potions p 
@@ -237,33 +241,22 @@ class CatalogManager:
                 ),
                 other_potions AS (
                     SELECT 
-                        p.potion_id,
                         p.sku,
                         p.name,
-                        p.current_quantity,
-                        p.base_price,
-                        ARRAY[
-                            COALESCE(p.red_ml, 0),
-                            COALESCE(p.green_ml, 0),
-                            COALESCE(p.blue_ml, 0),
-                            COALESCE(p.dark_ml, 0)
-                        ] as potion_type,
+                        p.current_quantity as quantity,
+                        p.base_price as price,
+                        ARRAY[p.red_ml, p.green_ml, p.blue_ml, p.dark_ml] as potion_type,
                         999 as priority_order
                     FROM potions p
                     WHERE p.current_quantity > 0
-                    AND p.potion_id NOT IN (SELECT potion_id FROM prioritized_potions)
+                    AND p.sku NOT IN (SELECT sku FROM prioritized_potions)
                 )
-                SELECT 
-                    sku,
-                    name,
-                    current_quantity as quantity,
-                    base_price as price,
-                    potion_type
+                SELECT *
                 FROM (
                     SELECT * FROM prioritized_potions
                     UNION ALL
                     SELECT * FROM other_potions
-                ) AS all_potions  -- Added the required alias
+                ) AS all_potions
                 ORDER BY priority_order, sku
                 LIMIT 6
                 """
