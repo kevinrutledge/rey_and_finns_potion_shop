@@ -10,9 +10,35 @@ logger = logging.getLogger(__name__)
 
 class LedgerManager:
     """Handles ledger operations."""
-    
+
+    MAX_RETRIES = 3
+    RETRY_DELAY = 0.1
+
     @staticmethod
-    def create_admin_entry(conn, time_id: int) -> None:
+    def with_retry(func):
+        """Decorator to retry database operations on failure."""
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(LedgerManager.MAX_RETRIES):
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    last_error = e
+                    if attempt < LedgerManager.MAX_RETRIES - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1}/{LedgerManager.MAX_RETRIES} "
+                            f"for admin operation: {str(e)}"
+                        )
+                        time.sleep(LedgerManager.RETRY_DELAY)
+                        continue
+                    logger.error(f"All retries failed: {str(last_error)}")
+                    raise
+            return None
+        return wrapper
+    
+    @classmethod
+    @with_retry
+    def create_admin_entry(cls, conn, time_id: int) -> None:
         """Creates admin reset ledger entry with initial values."""
         conn.execute(
             sqlalchemy.text("""
@@ -41,6 +67,30 @@ class TimeManager:
         'Hearthday', 'Crownday', 'Blesseday', 'Soulday',
         'Edgeday', 'Bloomday', 'Arcanaday'
     }
+    MAX_RETRIES = 3
+    RETRY_DELAY = 0.1
+
+    @staticmethod
+    def with_retry(func):
+        """Decorator to retry database operations on failure."""
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(TimeManager.MAX_RETRIES):
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    last_error = e
+                    if attempt < TimeManager.MAX_RETRIES - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1}/{TimeManager.MAX_RETRIES} "
+                            f"for time recording: {str(e)}"
+                        )
+                        time.sleep(TimeManager.RETRY_DELAY)
+                        continue
+                    logger.error(f"All retries failed: {str(last_error)}")
+                    raise
+            return None
+        return wrapper
 
     @staticmethod
     def get_current_time(conn) -> dict:
@@ -74,7 +124,9 @@ class TimeManager:
         
         return True
 
-    def record_time(conn, day: str, hour: int) -> bool:
+    @classmethod
+    @with_retry
+    def record_time(cls, conn, day: str, hour: int) -> bool:
         """
         Records current game time and processes strategy transitions.
         Returns True if strategy transition occurred.
@@ -412,11 +464,10 @@ class BarrelManager:
             medium = [b for b in valid_barrels if 'MEDIUM' in b['sku']]
             small = [b for b in valid_barrels if 'SMALL' in b['sku']]
             filtered = medium + small
-        else:  # TIERED or DYNAMIC
+        else:
             large = [b for b in valid_barrels if 'LARGE' in b['sku']]
             medium = [b for b in valid_barrels if 'MEDIUM' in b['sku']]
-            small = [b for b in valid_barrels if 'SMALL' in b['sku']]
-            filtered = large + medium + small
+            filtered = large + medium
                 
         return filtered
 
