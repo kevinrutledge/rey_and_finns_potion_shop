@@ -81,37 +81,37 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
             barrel_dicts = [barrel.dict() for barrel in barrels_delivered]
 
             logger.debug(f"Processing barrel delivery order {order_id}: {barrel_dicts}")
-            
+
             # Get current time and state
             current_time = TimeManager.get_current_time(conn)
             time_id = current_time['time_id']
             state = conn.execute(sqlalchemy.text(
                 "SELECT * FROM current_state"
             )).mappings().one()
-            
+
             # Validate total costs and capacity
             total_cost = sum(b['price'] * b['quantity'] for b in barrel_dicts)
             total_ml = sum(b['ml_per_barrel'] * b['quantity'] for b in barrel_dicts)
-            
+
             logger.debug(
                 f"Validating delivery - cost: {total_cost}, "
                 f"ml: {total_ml}, gold: {state['gold']}"
             )
-            
+
             if state['gold'] < total_cost:
                 logger.error(
                     f"Insufficient gold for delivery - "
                     f"required: {total_cost}, available: {state['gold']}"
                 )
                 raise HTTPException(status_code=400, detail="Insufficient gold")
-                
+
             available_capacity = state['max_ml'] - state['total_ml']
             BarrelManager.validate_purchase_constraints(
                 conn, 
                 barrel_dicts,
                 available_capacity
             )
-            
+
             # Get latest visit
             visit_id = conn.execute(sqlalchemy.text("""
                 SELECT visit_id 
@@ -119,26 +119,16 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
                 ORDER BY created_at DESC 
                 LIMIT 1
             """)).scalar_one()
-            
-            # Process each barrel
-            for barrel_dict in barrel_dicts:
-                barrel_id = conn.execute(sqlalchemy.text("""
-                    SELECT barrel_id 
-                    FROM barrel_details 
-                    WHERE visit_id = :visit_id AND sku = :sku
-                """), {
-                    "visit_id": visit_id,
-                    "sku": barrel_dict['sku']
-                }).scalar_one()
-                
-                BarrelManager.process_barrel_purchase(
-                    conn,
-                    barrel_dict,
-                    barrel_id,
-                    time_id,
-                    visit_id
-                )
-            
+
+            # Process barrels in batch
+            BarrelManager.process_barrel_purchases(
+                conn,
+                barrel_dicts,
+                time_id,
+                visit_id,
+                order_id
+            )
+
             logger.info(
                 f"Completed delivery order {order_id} - "
                 f"total cost: {total_cost}, total ml: {total_ml}"
