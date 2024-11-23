@@ -1156,12 +1156,16 @@ class CartManager:
     @staticmethod
     def validate_cart_status(conn, cart_id: int) -> dict:
         """Validates cart exists and is not checked out with row lock."""
+
+        # First check if cart was successfully checked out already
         result = conn.execute(
             sqlalchemy.text("""
                 SELECT 
                     c.cart_id,
                     c.visit_id,
-                    c.checked_out
+                    c.checked_out,
+                    c.total_potions,
+                    c.total_gold
                 FROM carts c
                 WHERE c.cart_id = :cart_id
                 FOR UPDATE
@@ -1173,7 +1177,39 @@ class CartManager:
             raise HTTPException(status_code=404, detail="Cart not found")
         
         if result['checked_out']:
-            raise HTTPException(status_code=400, detail="Cart already checked out")
+            # Return previous successful checkout details
+            return {
+                "total_potions_bought": result['total_potions'],
+                "total_gold_paid": result['total_gold']
+            }
+            
+        # Check for pending checkout
+        pending = conn.execute(
+            sqlalchemy.text("""
+                SELECT 
+                    p.time_id,
+                    EXISTS (
+                        SELECT 1 
+                        FROM ledger_entries le 
+                        WHERE le.cart_id = :cart_id 
+                        AND le.entry_type = 'POTION_SOLD'
+                    ) as has_ledger
+                FROM pending_checkouts p
+                WHERE p.cart_id = :cart_id
+            """),
+            {"cart_id": cart_id}
+        ).mappings().first()
+        
+        if pending:
+            if pending['has_ledger']:
+                # Previous attempt succeeded but didn't finalize
+                return CartManager.finalize_pending_checkout(conn, cart_id, pending['time_id'])
+            else:
+                # Previous attempt failed - clean up and allow retry
+                conn.execute(
+                    sqlalchemy.text("DELETE FROM pending_checkouts WHERE cart_id = :cart_id"),
+                    {"cart_id": cart_id}
+                )
         
         return dict(result)
 
@@ -1244,15 +1280,87 @@ class CartManager:
         Uses serializable isolation level with explicit locks to prevent race conditions.
         """
         try:
-            # First lock the cart and get items with SELECT FOR UPDATE
-            cart_items = conn.execute(
+            # Check for pending/completed checkout first
+            result = conn.execute(
                 sqlalchemy.text("""
-                    WITH locked_cart AS (
-                        SELECT cart_id, checked_out 
-                        FROM carts 
-                        WHERE cart_id = :cart_id
+                    WITH cart_status AS (
+                        SELECT 
+                            c.checked_out,
+                            c.total_potions,
+                            c.total_gold,
+                            EXISTS (
+                                SELECT 1 FROM pending_checkouts 
+                                WHERE cart_id = c.cart_id
+                            ) as has_pending,
+                            EXISTS (
+                                SELECT 1 FROM ledger_entries 
+                                WHERE cart_id = c.cart_id 
+                                AND entry_type = 'POTION_SOLD'
+                            ) as has_ledger
+                        FROM carts c
+                        WHERE c.cart_id = :cart_id
                         FOR UPDATE
                     )
+                    SELECT * FROM cart_status
+                """),
+                {"cart_id": cart_id}
+            ).mappings().one()
+
+            # If already checked out, return previous totals
+            if result['checked_out']:
+                return {
+                    "total_potions_bought": result['total_potions'],
+                    "total_gold_paid": result['total_gold']
+                }
+
+            # If pending with ledger entries, previous attempt succeeded
+            if result['has_pending'] and result['has_ledger']:
+                totals = conn.execute(
+                    sqlalchemy.text("""
+                        SELECT 
+                            -SUM(potion_change) as total_potions,
+                            SUM(gold_change) as total_gold
+                        FROM ledger_entries
+                        WHERE cart_id = :cart_id
+                        AND entry_type = 'POTION_SOLD'
+                    """),
+                    {"cart_id": cart_id}
+                ).mappings().one()
+
+                # Mark cart as checked out and remove pending
+                conn.execute(
+                    sqlalchemy.text("""
+                        UPDATE carts
+                        SET 
+                            checked_out = true,
+                            checked_out_at = CURRENT_TIMESTAMP,
+                            payment = :payment,
+                            total_potions = :total_potions,
+                            total_gold = :total_gold,
+                            purchase_success = true
+                        WHERE cart_id = :cart_id
+                    """),
+                    {
+                        "payment": payment,
+                        "total_potions": totals['total_potions'],
+                        "total_gold": totals['total_gold'],
+                        "cart_id": cart_id
+                    }
+                )
+
+                conn.execute(
+                    sqlalchemy.text("DELETE FROM pending_checkouts WHERE cart_id = :cart_id"),
+                    {"cart_id": cart_id}
+                )
+
+                return {
+                    "total_potions_bought": totals['total_potions'],
+                    "total_gold_paid": totals['total_gold']
+                }
+
+            # For new checkout or failed pending, get cart items with locks
+            cart_items = conn.execute(
+                sqlalchemy.text("""
                     SELECT 
                         ci.potion_id,
                         ci.quantity,
@@ -1262,7 +1370,6 @@ class CartManager:
                         p.sku
                     FROM cart_items ci
                     JOIN potions p ON ci.potion_id = p.potion_id
-                    JOIN locked_cart lc ON ci.cart_id = lc.cart_id
                     WHERE ci.cart_id = :cart_id
                     FOR UPDATE OF p
                 """),
@@ -1284,9 +1391,18 @@ class CartManager:
                         detail=f"Insufficient quantity for {item['sku']}"
                     )
 
+            # Record pending checkout if not exists
+            if not result['has_pending']:
+                conn.execute(
+                    sqlalchemy.text("""
+                        INSERT INTO pending_checkouts (cart_id, time_id)
+                        VALUES (:cart_id, :time_id)
+                    """),
+                    {"cart_id": cart_id, "time_id": time_id}
+                )
+
             # Update inventory and create ledger entries atomically
             for item in cart_items:
-                # Update potion inventory
                 conn.execute(
                     sqlalchemy.text("""
                         UPDATE potions
@@ -1299,7 +1415,6 @@ class CartManager:
                     }
                 )
 
-                # Create ledger entry
                 conn.execute(
                     sqlalchemy.text("""
                         INSERT INTO ledger_entries (
@@ -1346,6 +1461,12 @@ class CartManager:
                     "total_gold": total_gold,
                     "cart_id": cart_id
                 }
+            )
+
+            # Clean up pending state
+            conn.execute(
+                sqlalchemy.text("DELETE FROM pending_checkouts WHERE cart_id = :cart_id"),
+                {"cart_id": cart_id}
             )
 
             return {
