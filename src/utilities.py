@@ -267,6 +267,31 @@ class CatalogManager:
 
 class BarrelManager:
     """Handles barrel purchase planning and processing."""
+
+    MAX_RETRIES = 3
+    RETRY_DELAY = 0.1
+
+    @staticmethod
+    def with_retry(func):
+        """Decorator to retry database operations on failure."""
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(BarrelManager.MAX_RETRIES):
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    last_error = e
+                    if attempt < BarrelManager.MAX_RETRIES - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1}/{BarrelManager.MAX_RETRIES} "
+                            f"for barrel purchase: {str(e)}"
+                        )
+                        time.sleep(BarrelManager.RETRY_DELAY)
+                        continue
+                    logger.error(f"All retries failed: {str(last_error)}")
+                    raise
+            return None
+        return wrapper
     
     @staticmethod
     def record_catalog(conn, wholesale_catalog: list, time_id: int) -> int:
@@ -588,8 +613,9 @@ class BarrelManager:
         
         logger.debug("Purchase constraints validated successfully")
     
-    @staticmethod
-    def process_barrel_purchase(conn, barrel: dict, barrel_id: int, time_id: int, visit_id: int) -> int:
+    @classmethod
+    @with_retry
+    def process_barrel_purchase(cls, conn, barrel: dict, barrel_id: int, time_id: int, visit_id: int) -> int:
         """Records a barrel purchase with ledger entry."""
         color_name = barrel['sku'].split('_')[1]
         total_cost = barrel['price'] * barrel['quantity']
@@ -682,6 +708,31 @@ class BarrelManager:
 
 class BottlerManager:
     """Handles potion bottling planning and processing."""
+
+    MAX_RETRIES = 3
+    RETRY_DELAY = 0.1
+
+    @staticmethod
+    def with_retry(func):
+        """Decorator to retry database operations on failure."""
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(BottlerManager.MAX_RETRIES):
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    last_error = e
+                    if attempt < BottlerManager.MAX_RETRIES - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1}/{BottlerManager.MAX_RETRIES} "
+                            f"for bottling operation: {str(e)}"
+                        )
+                        time.sleep(BottlerManager.RETRY_DELAY)
+                        continue
+                    logger.error(f"All retries failed: {str(last_error)}")
+                    raise
+            return None
+        return wrapper
     
     @staticmethod
     def get_bottling_priorities(conn) -> list:
@@ -903,8 +954,9 @@ class BottlerManager:
             
         return result
 
-    @staticmethod
-    def process_bottling(conn, potion_data: Dict, time_id: int) -> None:
+    @classmethod
+    @with_retry
+    def process_bottling(cls, conn, potion_data: Dict, time_id: int) -> None:
         """Processes potion bottling with ledger entries."""
         # First get and lock the potion
         potion = conn.execute(
@@ -1404,6 +1456,31 @@ class CartManager:
 class InventoryManager:
     """Handles inventory state and capacity management."""
     
+    MAX_RETRIES = 3
+    RETRY_DELAY = 0.1
+
+    @staticmethod
+    def with_retry(func):
+        """Decorator to retry database operations on failure."""
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(InventoryManager.MAX_RETRIES):
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    last_error = e
+                    if attempt < InventoryManager.MAX_RETRIES - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1}/{InventoryManager.MAX_RETRIES} "
+                            f"for capacity upgrade: {str(e)}"
+                        )
+                        time.sleep(InventoryManager.RETRY_DELAY)
+                        continue
+                    logger.error(f"All retries failed: {str(last_error)}")
+                    raise
+            return None
+        return wrapper
+
     @staticmethod
     def get_inventory_state(conn) -> dict:
         """Get current inventory state from ledger."""
@@ -1493,8 +1570,9 @@ class InventoryManager:
             "ml_capacity": 0
         }
     
-    @staticmethod
-    def process_capacity_upgrade(conn, potion_capacity: int, ml_capacity: int, time_id: int) -> None:
+    @classmethod
+    @with_retry
+    def process_capacity_upgrade(cls, conn, potion_capacity: int, ml_capacity: int, time_id: int) -> None:
         """Process capacity upgrade with ledger entries and strategy transition."""
         total_cost = (potion_capacity + ml_capacity) * 1000
         
