@@ -1459,6 +1459,8 @@ class CartManager:
     def process_checkout(cls, conn, cart_id: int, payment: str, time_id: int) -> dict:
         """Process cart checkout with retry logic and basic concurrency handling."""
         
+        payment_id = f"{cart_id}"
+    
         # Check if payment was already processed
         existing_checkout = conn.execute(
             sqlalchemy.text("""
@@ -1467,11 +1469,11 @@ class CartManager:
                 WHERE payment_id = :payment_id
                 AND checked_out = true
             """),
-            {"payment_id": payment}
+            {"payment_id": payment_id}
         ).mappings().first()
 
         if existing_checkout:
-            logger.info(f"Payment {payment} was already processed, returning cached result")
+            logger.info(f"Payment {payment_id} was already processed, returning cached result")
             return {
                 "total_potions_bought": existing_checkout['total_potions'],
                 "total_gold_paid": existing_checkout['total_gold']
@@ -1561,8 +1563,8 @@ class CartManager:
                 }
             )
 
-        # Mark cart as checked out with payment_id
-        conn.execute(
+        # Mark cart as checked out
+        rows_updated = conn.execute(
             sqlalchemy.text("""
                 UPDATE carts
                 SET 
@@ -1575,15 +1577,36 @@ class CartManager:
                     purchase_success = true
                 WHERE cart_id = :cart_id
                 AND payment_id IS NULL
+                RETURNING cart_id
             """),
             {
-                "payment_id": payment,
-                "payment": payment,
+                "payment_id": payment_id,  # Now using unique payment_id
+                "payment": payment,        # Original payment string
                 "total_potions": total_potions,
                 "total_gold": total_gold,
                 "cart_id": cart_id
             }
-        )
+        ).rowcount
+
+        if rows_updated == 0:
+            # Cart was already processed - try to get the results
+            existing_result = conn.execute(
+                sqlalchemy.text("""
+                    SELECT total_potions, total_gold
+                    FROM carts
+                    WHERE cart_id = :cart_id
+                    AND checked_out = true
+                """),
+                {"cart_id": cart_id}
+            ).mappings().first()
+
+            if existing_result:
+                return {
+                    "total_potions_bought": existing_result['total_potions'],
+                    "total_gold_paid": existing_result['total_gold']
+                }
+            else:
+                raise HTTPException(status_code=400, detail="Cart was already processed")
 
         return {
             "total_potions_bought": total_potions,
