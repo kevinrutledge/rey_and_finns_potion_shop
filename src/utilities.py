@@ -348,22 +348,32 @@ class BarrelManager:
     @staticmethod
     def record_catalog(conn, wholesale_catalog: list, time_id: int) -> int: 
         """Records wholesale catalog excluding MINI barrels with batch insertion."""
-        # Filter out MINI barrels
-        valid_barrels = [b for b in wholesale_catalog if not b['sku'].startswith('MINI')]
+        # Get current strategy
+        current_strategy_row = conn.execute(
+            sqlalchemy.text("""
+                SELECT s.name as strategy_name
+                FROM active_strategy ast
+                JOIN strategies s ON ast.strategy_id = s.strategy_id
+                ORDER BY ast.activated_at DESC
+                LIMIT 1
+            """)
+        ).mappings().one()
+        
+        current_strategy = current_strategy_row['strategy_name']
+        
+        # Filter barrels
+        valid_barrels = BarrelManager.filter_barrels_by_strategy(wholesale_catalog, current_strategy)
         
         # Record visit
         visit_id = conn.execute(
             sqlalchemy.text("""
-                INSERT INTO barrel_visits (time_id, wholesale_catalog)
-                VALUES (:time_id, :catalog)
+                INSERT INTO barrel_visits (time_id)
+                VALUES (:time_id)
                 RETURNING visit_id
             """),
-            {
-                "time_id": time_id,
-                "catalog": json.dumps([dict(b) for b in wholesale_catalog])
-            }
+            {"time_id": time_id}
         ).scalar_one()
-
+        
         # Prepare data for batch insertion
         barrel_values = []
         for barrel in valid_barrels:
@@ -680,20 +690,20 @@ class BarrelManager:
             """),
             {"order_id": order_id}
         ).fetchone()
-        
+
         if existing_order:
             logger.info(f"Order {order_id} has already been processed.")
             return  # Order already processed, do nothing
-        
+
         logger.info(f"Processing new delivery order {order_id}.")
-        
+
         # Prepare data for batch insert
         purchase_values = []
         ledger_values = []
         total_cost = 0
         total_ml = 0
-        
-        # Get barrel_ids for all barrels
+
+        # Get barrel_ids for all barrels from the inserted barrel_details
         sku_list = [barrel['sku'] for barrel in barrels]
         barrel_id_rows = conn.execute(
             sqlalchemy.text("""
@@ -705,19 +715,23 @@ class BarrelManager:
                 "visit_id": visit_id,
                 "sku_list": sku_list
             }
-        ).fetchall()
-        
+        ).mappings().all()
+
         barrel_ids = {row['sku']: row['barrel_id'] for row in barrel_id_rows}
-        
+
         for barrel in barrels:
+            if barrel['sku'] not in barrel_ids:
+                logger.warning(f"Barrel SKU {barrel['sku']} is not allowed for the current strategy.")
+                continue
+
             barrel_id = barrel_ids[barrel['sku']]
             color_name = barrel['sku'].split('_')[1]
             barrel_total_cost = barrel['price'] * barrel['quantity']
             barrel_total_ml = barrel['ml_per_barrel'] * barrel['quantity']
-            
+
             total_cost += barrel_total_cost
             total_ml += barrel_total_ml
-            
+
             purchase_values.append({
                 "visit_id": visit_id,
                 "barrel_id": barrel_id,
@@ -728,7 +742,7 @@ class BarrelManager:
                 "color_name": color_name,
                 "order_id": order_id
             })
-        
+
         # Validate resources (gold)
         state = conn.execute(
             sqlalchemy.text("""
@@ -742,69 +756,70 @@ class BarrelManager:
                 FROM locked_ledger
             """)
         ).mappings().one()
-        
+
         if state['gold'] < total_cost:
             raise HTTPException(status_code=400, detail="Insufficient gold")
-        
+
         # Batch insert into barrel_purchases
-        conn.execute(
-            sqlalchemy.text("""
-                INSERT INTO barrel_purchases (
-                    visit_id,
-                    barrel_id,
-                    time_id,
-                    quantity,
-                    total_cost,
-                    ml_added,
-                    color_id,
-                    purchase_success,
-                    order_id
-                )
-                VALUES (
-                    :visit_id,
-                    :barrel_id,
-                    :time_id,
-                    :quantity,
-                    :total_cost,
-                    :ml_added,
-                    (SELECT color_id FROM color_definitions WHERE color_name = :color_name),
-                    true,
-                    :order_id
-                )
-            """),
-            purchase_values
-        )
-        
-        # Prepare ledger entries
-        for pv in purchase_values:
-            ledger_values.append({
-                "time_id": time_id,
-                "entry_type": 'BARREL_PURCHASE',
-                "gold_change": -pv['total_cost'],
-                "ml_change": pv['ml_added'],
-                "color_name": pv['color_name']
-            })
-        
-        # Batch insert into ledger_entries
-        conn.execute(
-            sqlalchemy.text("""
-                INSERT INTO ledger_entries (
-                    time_id,
-                    entry_type,
-                    gold_change,
-                    ml_change,
-                    color_id
-                )
-                VALUES (
-                    :time_id,
-                    :entry_type,
-                    :gold_change,
-                    :ml_change,
-                    (SELECT color_id FROM color_definitions WHERE color_name = :color_name)
-                )
-            """),
-            ledger_values
-        )
+        if purchase_values:
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO barrel_purchases (
+                        visit_id,
+                        barrel_id,
+                        time_id,
+                        quantity,
+                        total_cost,
+                        ml_added,
+                        color_id,
+                        purchase_success,
+                        order_id
+                    )
+                    VALUES (
+                        :visit_id,
+                        :barrel_id,
+                        :time_id,
+                        :quantity,
+                        :total_cost,
+                        :ml_added,
+                        (SELECT color_id FROM color_definitions WHERE color_name = :color_name),
+                        true,
+                        :order_id
+                    )
+                """),
+                purchase_values
+            )
+
+            # Prepare ledger entries
+            for pv in purchase_values:
+                ledger_values.append({
+                    "time_id": time_id,
+                    "entry_type": 'BARREL_PURCHASE',
+                    "gold_change": -pv['total_cost'],
+                    "ml_change": pv['ml_added'],
+                    "color_name": pv['color_name']
+                })
+
+            # Batch insert into ledger_entries
+            conn.execute(
+                sqlalchemy.text("""
+                    INSERT INTO ledger_entries (
+                        time_id,
+                        entry_type,
+                        gold_change,
+                        ml_change,
+                        color_id
+                    )
+                    VALUES (
+                        :time_id,
+                        :entry_type,
+                        :gold_change,
+                        :ml_change,
+                        (SELECT color_id FROM color_definitions WHERE color_name = :color_name)
+                    )
+                """),
+                ledger_values
+            )
 
 class BottlerManager:
     """Handles potion bottling planning and processing."""
