@@ -1459,6 +1459,24 @@ class CartManager:
     def process_checkout(cls, conn, cart_id: int, payment: str, time_id: int) -> dict:
         """Process cart checkout with retry logic and basic concurrency handling."""
         
+        # Check if payment was already processed
+        existing_checkout = conn.execute(
+            sqlalchemy.text("""
+                SELECT total_potions, total_gold
+                FROM carts
+                WHERE payment_id = :payment_id
+                AND checked_out = true
+            """),
+            {"payment_id": payment}
+        ).mappings().first()
+
+        if existing_checkout:
+            logger.info(f"Payment {payment} was already processed, returning cached result")
+            return {
+                "total_potions_bought": existing_checkout['total_potions'],
+                "total_gold_paid": existing_checkout['total_gold']
+            }
+
         # Lock cart and items in one query
         cart_items = conn.execute(
             sqlalchemy.text("""
@@ -1466,6 +1484,7 @@ class CartManager:
                     SELECT cart_id, checked_out 
                     FROM carts 
                     WHERE cart_id = :cart_id
+                    AND payment_id IS NULL
                     FOR UPDATE
                 )
                 SELECT 
@@ -1542,20 +1561,23 @@ class CartManager:
                 }
             )
 
-        # Mark cart as checked out
+        # Mark cart as checked out with payment_id
         conn.execute(
             sqlalchemy.text("""
                 UPDATE carts
                 SET 
                     checked_out = true,
                     checked_out_at = CURRENT_TIMESTAMP,
+                    payment_id = :payment_id,
                     payment = :payment,
                     total_potions = :total_potions,
                     total_gold = :total_gold,
                     purchase_success = true
                 WHERE cart_id = :cart_id
+                AND payment_id IS NULL
             """),
             {
+                "payment_id": payment,
                 "payment": payment,
                 "total_potions": total_potions,
                 "total_gold": total_gold,
