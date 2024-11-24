@@ -683,19 +683,21 @@ class BarrelManager:
     @with_retry
     def process_barrel_purchases(cls, conn, barrels: List[dict], time_id: int, visit_id: int, order_id: int) -> None:
         """Records a barrel purchase with ledger entry, handling idempotency using order_id."""
-        # Check if the order has already been processed
-        existing_order = conn.execute(
+        # Check if this delivery was already processed successfully
+        existing_purchase = conn.execute(
             sqlalchemy.text("""
-                SELECT 1 FROM barrel_purchases WHERE order_id = :order_id
+                SELECT 1 FROM barrel_purchases 
+                WHERE visit_id = :visit_id 
+                AND purchase_success = true
             """),
-            {"order_id": order_id}
+            {"visit_id": visit_id}
         ).fetchone()
 
-        if existing_order:
-            logger.info(f"Order {order_id} has already been processed.")
-            return  # Order already processed, do nothing
+        if existing_purchase:
+            logger.info(f"Delivery for visit {visit_id} was already processed successfully.")
+            return  
 
-        logger.info(f"Processing new delivery order {order_id}.")
+        logger.info(f"Processing new delivery for visit {visit_id}")
 
         # Prepare data for batch insert
         purchase_values = []
@@ -710,6 +712,7 @@ class BarrelManager:
                 SELECT sku, barrel_id
                 FROM barrel_details
                 WHERE visit_id = :visit_id AND sku = ANY(:sku_list)
+                FOR UPDATE
             """),
             {
                 "visit_id": visit_id,
@@ -739,8 +742,7 @@ class BarrelManager:
                 "quantity": barrel['quantity'],
                 "total_cost": barrel_total_cost,
                 "ml_added": barrel_total_ml,
-                "color_name": color_name,
-                "order_id": order_id
+                "color_name": color_name
             })
 
         # Validate resources (gold)
@@ -772,8 +774,7 @@ class BarrelManager:
                         total_cost,
                         ml_added,
                         color_id,
-                        purchase_success,
-                        order_id
+                        purchase_success
                     )
                     VALUES (
                         :visit_id,
@@ -783,8 +784,7 @@ class BarrelManager:
                         :total_cost,
                         :ml_added,
                         (SELECT color_id FROM color_definitions WHERE color_name = :color_name),
-                        true,
-                        :order_id
+                        true
                     )
                 """),
                 purchase_values
